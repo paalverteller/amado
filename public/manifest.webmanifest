@@ -1,0 +1,37 @@
+{
+  "name": "Пишем как Янка Купала",
+  "short_name": "Kupala",
+  "description": "Контент-фабрика для мониторинга рынка и генерации материалов на русском языке.",
+  "lang": "ru",
+  "start_url": "/generate?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#1E3A8A",
+  "theme_color": "#1E3A8A",
+  "categories": ["productivity", "business", "news"],
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Генерация",
+      "short_name": "Генерация",
+      "description": "Создать новый материал",
+      "url": "/generate",
+      "icons": [{ "src": "/pwa-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Анализ рынка",
+      "short_name": "Рынок",
+      "description": "Открыть свежие рыночные сигналы",
+      "url": "/market",
+      "icons": [{ "src": "/pwa-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ]
+}

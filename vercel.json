@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/ping",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/auto-generate",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/market-refresh",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}

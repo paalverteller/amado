@@ -1,0 +1,19 @@
+:root {
+  --color-primary: #FED141;
+  --color-primary-hover: #F59E0B;
+  --color-secondary: #8BC540;
+  --color-brand-dark: #1A2B3C;
+  --color-brand-blue: #0072C9;
+  --color-brand-teal: #4A9E8C;
+  --color-surface: #F6F4F1;
+  --color-surface-card: #FFFFFF;
+  --color-surface-border: #E8E4DF;
+  --color-text-primary: #1A2B3C;
+  --color-text-muted: #6B7280;
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --radius-card: 20px;
+  --radius-button: 12px;
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-card-hover: 0 8px 24px rgba(0,114,201,0.10);
+}
