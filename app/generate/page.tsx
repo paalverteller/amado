@@ -1,0 +1,610 @@
+/* eslint-disable react-hooks/set-state-in-effect */
+'use client'
+
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import Layout from '@/components/Layout'
+import { PromptTemplate, BrandProfile } from '@/lib/supabase'
+
+const FORMATS = [
+  { value: 'article', label: 'Artigo (~2500 caracteres)' },
+  { value: 'note', label: 'Nota (~1200 caracteres)' },
+  { value: 'social_post', label: 'Post social (<600 caracteres)' },
+  { value: 'thread', label: 'Thread (sequência de posts)' },
+  { value: 'carousel', label: 'Carrossel (slides)' },
+]
+
+type ThreadSegment = string
+type CarouselSegment = { title: string; body: string }
+
+function parseAIChunk(raw: string): string {
+  let out = ''
+  for (const line of raw.split('\n')) {
+    if (line.startsWith('0:')) {
+      try { out += JSON.parse(line.slice(2)) as string } catch { /* skip */ }
+    }
+  }
+  return out
+}
+
+function SegmentedOutput({ contentType, raw }: { contentType: string; raw: string }) {
+  let segments: (ThreadSegment | CarouselSegment)[] = []
+  let parseError = false
+
+  try {
+    const cleaned = raw.trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '')
+    segments = JSON.parse(cleaned)
+    if (!Array.isArray(segments)) throw new Error('not array')
+  } catch {
+    parseError = true
+  }
+
+  if (parseError) {
+    return (
+      <div className="text-base leading-relaxed text-on-surface whitespace-pre-wrap">
+        {raw}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {segments.map((seg, i) => (
+        <div
+          key={i}
+          className="rounded-xl p-4"
+          style={{ background: 'var(--color-surface-container-low)', border: '1px solid rgba(74,111,212,0.12)' }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <span
+              style={{
+                width: 22, height: 22, borderRadius: '50%',
+                background: 'var(--color-primary)', color: '#fff',
+                fontSize: 11, fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              {i + 1}
+            </span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-on-surface-variant)' }}>
+              {contentType === 'thread' ? `Post ${i + 1}/${segments.length}` : `Slide ${i + 1}/${segments.length}`}
+            </span>
+          </div>
+          {typeof seg === 'string' ? (
+            <p className="m-0 text-sm leading-relaxed text-on-surface">{seg}</p>
+          ) : (
+            <>
+              <p className="m-0 font-bold text-sm mb-1 text-on-surface">{seg.title}</p>
+              {seg.body && <p className="m-0 text-sm leading-relaxed text-on-surface-variant">{seg.body}</p>}
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function GenerateContent() {
+  const searchParams = useSearchParams()
+  const abortRef = useRef<AbortController | null>(null)
+
+  const [topic, setTopic] = useState(() => {
+    const t = searchParams.get('topic')
+    return t ? decodeURIComponent(t) : ''
+  })
+  const [promptContext] = useState(() => {
+    const c = searchParams.get('context')
+    return c ? decodeURIComponent(c) : ''
+  })
+
+  const [contentType, setContentType] = useState('article')
+  const [templateId, setTemplateId] = useState('')
+  const [brandProfileId, setBrandProfileId] = useState('')
+
+  const [templates, setTemplates] = useState<PromptTemplate[]>([])
+  const [brandProfiles, setBrandProfiles] = useState<BrandProfile[]>([])
+
+  const [loading, setLoading] = useState(false)
+  const [output, setOutput] = useState('')
+  const [error, setError] = useState('')
+  const [articleId, setArticleId] = useState<string | null>(null)
+  const [rating, setRating] = useState(0)
+  const [copied, setCopied] = useState(false)
+  const [aiCheck, setAiCheck] = useState<{
+    score: number; verdictLabel: string;
+    flags: { type: string; excerpt: string; suggestion: string }[];
+    summary: string;
+  } | null>(null)
+  const [aiCheckLoading, setAiCheckLoading] = useState(false)
+  const [aiCheckError, setAiCheckError] = useState('')
+  const [seoMode, setSeoMode] = useState(false)
+  const [localizationNotes, setLocalizationNotes] = useState('')
+
+  // Hydrate local storage states
+  useEffect(() => {
+    const savedFmt = localStorage.getItem('amado_format')
+    if (savedFmt) setContentType(savedFmt)
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem('amado_format', contentType)
+  }, [contentType])
+
+  useEffect(() => {
+    if (templateId) localStorage.setItem('amado_template', templateId)
+  }, [templateId])
+
+  useEffect(() => {
+    if (brandProfileId) localStorage.setItem('amado_brand_profile', brandProfileId)
+  }, [brandProfileId])
+
+  useEffect(() => {
+    fetch('/api/brand-profiles')
+      .then((r) => r.json() as Promise<{ profiles: BrandProfile[] }>)
+      .then((d) => {
+        setBrandProfiles(d.profiles ?? [])
+        const savedBp = localStorage.getItem('amado_brand_profile')
+        if (savedBp && d.profiles?.some((p: BrandProfile) => p.id === savedBp)) {
+          setBrandProfileId(savedBp)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/templates')
+      .then((r) => r.json() as Promise<{ templates: PromptTemplate[] }>)
+      .then((d) => {
+        setTemplates(d.templates ?? [])
+        const savedTpl = localStorage.getItem('amado_template')
+        if (savedTpl && d.templates?.some((t: PromptTemplate) => t.id === savedTpl)) {
+          setTemplateId(savedTpl)
+        } else {
+          const def = d.templates?.find((t: PromptTemplate) => t.is_default)
+          if (def) setTemplateId(def.id)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  async function handleGenerate(e?: React.FormEvent) {
+    if (e) e.preventDefault()
+    if (!topic.trim() || loading) return
+
+    if (abortRef.current) abortRef.current.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    setLoading(true)
+    setOutput('')
+    setError('')
+    setArticleId(null)
+    setRating(0)
+    setLocalizationNotes('')
+
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic,
+          context: promptContext || undefined,
+          contentType,
+          templateId,
+          brandProfileId: brandProfileId || undefined,
+          seoMode,
+        }),
+        signal: controller.signal,
+      })
+
+      if (!res.ok) {
+        const err = await res.json() as { error: string }
+        throw new Error(err.error ?? 'Erro de geração')
+      }
+
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (line.startsWith('0:')) {
+            try { setOutput((prev) => prev + (JSON.parse(line.slice(2)) as string)) } catch { /* skip */ }
+          } else if (line.trim() && !line.startsWith('d:') && !line.startsWith('e:')) {
+            setOutput((prev) => prev + line + '\n')
+          }
+        }
+      }
+
+      if (buffer) {
+        const parsed = parseAIChunk(buffer)
+        if (parsed) setOutput((prev) => prev + parsed)
+        else if (buffer.trim()) setOutput((prev) => prev + buffer)
+      }
+
+      try {
+        const h = await fetch('/api/articles?limit=1')
+        if (h.ok) {
+          const d = await h.json() as { articles: { id: string; source_context: string | null }[] }
+          if (d.articles[0]) {
+            setArticleId(d.articles[0].id)
+            if (d.articles[0].source_context) {
+              setLocalizationNotes(d.articles[0].source_context)
+            }
+          }
+        }
+      } catch { /* non-critical */ }
+    } catch (err) {
+      const e = err as Error
+      if (e.name !== 'AbortError') setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleRate(score: number) {
+    setRating(score)
+    if (!articleId) return
+    await fetch(`/api/articles/${articleId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating: score }),
+    }).catch(() => {})
+  }
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(output).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleAiCheck() {
+    setAiCheckError('')
+    setAiCheck(null)
+    setAiCheckLoading(true)
+    try {
+      const selectedBrand = brandProfiles.find((p) => p.id === brandProfileId)
+      const res = await fetch('/api/ai-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: output,
+          brandVoice: selectedBrand?.voice_description,
+          forbiddenWords: selectedBrand?.forbidden_words,
+          examples: selectedBrand?.example_posts,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Erro de verificação')
+      setAiCheck(data)
+    } catch (e) {
+      setAiCheckError(e instanceof Error ? e.message : 'Erro desconhecido')
+    } finally {
+      setAiCheckLoading(false)
+    }
+  }
+
+  const selectedTemplate = templates.find((t) => t.id === templateId)
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-on-background">
+          Geração de conteúdo
+        </h1>
+        <p className="mt-1 text-base text-on-surface-variant">
+          Insira o tema — o AI escreve o rascunho em português (Brasil)
+        </p>
+      </div>
+
+      <form onSubmit={handleGenerate} className="m3-card p-6 space-y-5 shadow-sm">
+
+        {/* Topic */}
+        <div>
+          <label className="block text-sm font-medium mb-1.5 text-on-surface-variant">
+            Tema do material
+          </label>
+          <textarea
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            placeholder="Ex: Como aumentar conversão no e-commerce brasileiro usando WhatsApp"
+            rows={3}
+            disabled={loading}
+            className="m3-input-outlined w-full resize-none min-h-[80px]"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Format */}
+          <div>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5 text-on-surface-variant">
+              Formato
+            </label>
+            <select
+              value={contentType}
+              onChange={(e) => setContentType(e.target.value)}
+              disabled={loading}
+              className="m3-input-outlined w-full appearance-none cursor-pointer"
+            >
+              {FORMATS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+            </select>
+          </div>
+
+          {/* Profile */}
+          <div>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5 text-on-surface-variant">
+              Perfil de prompt
+            </label>
+            <select
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              disabled={loading}
+              className="m3-input-outlined w-full appearance-none cursor-pointer"
+            >
+              <option value="">— Sem perfil —</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            {selectedTemplate && (
+              <p className="text-[11px] mt-1.5 line-clamp-1 text-on-surface-variant/80 font-medium">
+                {(selectedTemplate.tone_description || '').split(/\s+/).slice(0, 3).join(' ') + (selectedTemplate.tone_description.split(/\s+/).length > 3 ? '...' : '')}
+              </p>
+            )}
+            {templates.length === 0 && (
+              <p className="text-[11px] mt-1.5 text-error font-medium">
+                Templates não carregados (migração SQL)
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Brand Profile */}
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5 text-on-surface-variant">
+            Marca (Brand Profile)
+          </label>
+          <select
+            value={brandProfileId}
+            onChange={(e) => setBrandProfileId(e.target.value)}
+            disabled={loading}
+            className="m3-input-outlined w-full appearance-none cursor-pointer"
+          >
+            <option value="">— Sem marca —</option>
+            {brandProfiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.brand_name}
+              </option>
+            ))}
+          </select>
+          {brandProfiles.length === 0 && (
+            <p className="text-[11px] mt-1.5 text-error font-medium">
+              Nenhuma marca cadastrada. Adicione em Configurações.
+            </p>
+          )}
+        </div>
+
+        {/* SEO Toggle */}
+        <button
+          type="button"
+          onClick={() => setSeoMode((v) => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.625rem',
+            width: '100%', padding: '0.6rem 1rem', borderRadius: 12,
+            border: seoMode ? '1.5px solid #4A6FD4' : '1.5px solid rgba(74,111,212,0.2)',
+            background: seoMode ? 'rgba(74,111,212,0.08)' : 'transparent',
+            cursor: 'pointer', transition: 'all 180ms ease',
+            fontSize: 13, fontWeight: 600,
+            color: seoMode ? 'var(--color-primary)' : 'var(--color-on-surface-variant)',
+          }}
+        >
+          <div style={{
+            width: 36, height: 20, borderRadius: 10, flexShrink: 0,
+            position: 'relative',
+            background: seoMode ? '#4A6FD4' : 'rgba(0,0,0,0.15)',
+            transition: 'background 180ms ease',
+          }}>
+            <div style={{
+              position: 'absolute', top: 2,
+              left: seoMode ? 18 : 2,
+              width: 16, height: 16, borderRadius: '50%',
+              background: '#fff', transition: 'left 180ms ease',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+            }} />
+          </div>
+          <span>Modo SEO</span>
+          {seoMode && (
+            <span style={{
+              marginLeft: 'auto', fontSize: 10, fontWeight: 700,
+              padding: '2px 7px', borderRadius: 6,
+              background: '#4A6FD4', color: '#fff',
+            }}>ON</span>
+          )}
+        </button>
+
+        <button
+          type="submit"
+          disabled={loading || !topic.trim()}
+          className={`w-full m3-button-filled mt-2 text-base h-12 ${loading || !topic.trim() ? 'opacity-50 cursor-not-allowed bg-surface-variant text-on-surface-variant hover:shadow-none hover:bg-surface-variant' : ''}`}
+        >
+          {loading ? 'Gerando...' : 'Criar material'}
+        </button>
+      </form>
+
+      {error && (
+        <div className="p-4 rounded-xl text-sm bg-error-container text-on-error-container font-medium">
+          {error}
+        </div>
+      )}
+
+      {(output || loading) && (
+        <div className="m3-card p-8 shadow-sm">
+
+          {/* Output: segmented (thread/carousel) vs plain text */}
+          {!loading && (contentType === 'thread' || contentType === 'carousel') && output ? (
+            <SegmentedOutput contentType={contentType} raw={output} />
+          ) : (
+            <div className="text-base leading-relaxed text-on-surface whitespace-pre-wrap">
+              {output}
+              {loading && (
+                <span className="inline-block w-0.5 h-4 ml-0.5 align-middle bg-primary animate-blink" />
+              )}
+            </div>
+          )}
+
+          {output && (
+            <div className="mt-4 text-xs font-medium text-on-surface-variant text-right">
+              Caracteres: {output.length}
+            </div>
+          )}
+
+          {/* Localization Notes */}
+          {!loading && localizationNotes && (
+            <div className="mt-6 pt-6 border-t border-surface-variant/50">
+              <div className="flex items-center gap-2 mb-3">
+                <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-primary">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.383a14.406 14.406 0 0 1-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 1 0-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
+                </svg>
+                <span className="text-sm font-bold" style={{ color: 'var(--color-on-surface)' }}>
+                  Notas de localização
+                </span>
+              </div>
+              <p className="text-sm m-0" style={{ color: 'var(--color-on-surface-variant)', lineHeight: 1.6 }}>
+                {localizationNotes}
+              </p>
+            </div>
+          )}
+
+          {!loading && output && (
+            <div className="mt-8 pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 border-t border-surface-variant/50">
+
+              {/* Stars */}
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-on-surface-variant">Avaliar:</span>
+                <div className="flex gap-0.5">
+                  {[1, 2, 3, 4, 5].map((st) => (
+                    <button
+                      key={st}
+                      onClick={() => handleRate(st)}
+                      className="text-2xl transition-transform duration-200 ease-m3-emphasized hover:scale-110 active:scale-75 bg-transparent border-none cursor-pointer focus:outline-none"
+                      style={{ color: rating >= st ? '#e5b513' : 'var(--color-surface-variant)' }}
+                      aria-label={`${st} estrela`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto">
+                <button onClick={handleCopy} title="Copiar" className="flex items-center justify-center p-2 rounded-full w-10 h-10 bg-surface-container-high text-on-surface hover:bg-surface-variant border-none cursor-pointer transition-colors">
+                  {copied ? (
+                    <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                  ) : (
+                    <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" /></svg>
+                  )}
+                </button>
+                <button onClick={() => handleGenerate()} title="Repetir" className="flex items-center justify-center p-2 rounded-full w-10 h-10 bg-surface-container-high text-on-surface hover:bg-surface-variant border-none cursor-pointer transition-colors">
+                  <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                </button>
+                <button
+                  onClick={handleAiCheck}
+                  disabled={aiCheckLoading}
+                  title="Verificar AI"
+                  className="flex items-center justify-center p-2 rounded-full w-10 h-10 bg-surface-container-high text-on-surface hover:bg-surface-variant border-none cursor-pointer transition-colors disabled:opacity-50"
+                >
+                  {aiCheckLoading ? (
+                    <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"/></svg>
+                  ) : (
+                    <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z"/><path strokeLinecap="round" strokeLinejoin="round" d="M18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z"/></svg>
+                  )}
+                </button>
+                {articleId && (
+                  <a href={`/history/${articleId}`} title="Histórico" className="flex items-center justify-center p-2 rounded-full w-10 h-10 bg-surface-container-high text-on-surface hover:bg-surface-variant border-none cursor-pointer text-inherit transition-colors">
+                    <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {aiCheckError && (
+            <div className="mt-4 p-4 rounded-xl text-sm font-medium bg-error-container text-on-error-container">
+              {aiCheckError}
+            </div>
+          )}
+
+          {aiCheck && (
+            <div className="mt-6 pt-6 border-t border-surface-variant/50">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-bold" style={{ color: 'var(--color-on-surface)' }}>
+                  Verificação AI
+                </span>
+                <span
+                  style={{
+                    fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 999,
+                    background: aiCheck.score < 35
+                      ? 'rgba(22,163,74,0.12)'
+                      : aiCheck.score < 65
+                        ? 'rgba(249,115,22,0.12)'
+                        : 'rgba(220,38,38,0.12)',
+                    color: aiCheck.score < 35 ? '#16A34A' : aiCheck.score < 65 ? '#F97316' : '#DC2626',
+                  }}
+                >
+                  {aiCheck.verdictLabel} · {aiCheck.score}/100
+                </span>
+              </div>
+
+              <p className="text-sm m-0 mb-3" style={{ color: 'var(--color-on-surface-variant)', lineHeight: 1.6 }}>
+                {aiCheck.summary}
+              </p>
+
+              {aiCheck.flags.length > 0 && (
+                <div className="space-y-2">
+                  {aiCheck.flags.map((flag, i) => (
+                    <div
+                      key={i}
+                      className="p-3 rounded-xl text-sm"
+                      style={{ background: 'var(--color-surface-container-low)' }}
+                    >
+                      <div className="font-semibold mb-1" style={{ fontSize: 12, color: 'var(--color-primary)' }}>
+                        {flag.type}
+                      </div>
+                      <div className="italic mb-1" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        «{flag.excerpt}»
+                      </div>
+                      <div style={{ color: 'var(--color-on-surface)' }}>
+                        {flag.suggestion}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function GeneratePage() {
+  return (
+    <Layout>
+      <Suspense fallback={<div className="p-8 text-on-surface-variant font-medium">Carregando workspace...</div>}>
+        <GenerateContent />
+      </Suspense>
+    </Layout>
+  )
+}
