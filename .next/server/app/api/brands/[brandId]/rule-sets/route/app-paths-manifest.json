@@ -1,0 +1,3 @@
+{
+  "/api/brands/[brandId]/rule-sets/route": "app/api/brands/[brandId]/rule-sets/route.js"
+}

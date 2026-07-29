@@ -1,0 +1,3 @@
+{
+  "/api/admin/readiness/route": "app/api/admin/readiness/route.js"
+}

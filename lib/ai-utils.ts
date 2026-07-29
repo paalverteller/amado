@@ -12,6 +12,14 @@ export type PipelineEntry = {
 }
 
 const DEFAULT_QUOTA_COOLDOWN_MS = 2 * 60 * 1000
+/**
+ * In-memory, per-process cooldown tracker for rate-limited AI providers.
+ *
+ * ⚠️ State is NOT shared across serverless function instances or cold
+ * starts — this is a best-effort, same-process optimization only, not a
+ * distributed rate limiter. Don't rely on it for correctness, only for
+ * reducing wasted calls within a single warm instance.
+ */
 const modelCooldownUntil = new Map<string, number>()
 
 export function hashSeed(seed: string): number {

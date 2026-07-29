@@ -1,8 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Article } from '@/lib/supabase'
-
+import { Article } from '@/lib/domain/article'
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })
 }

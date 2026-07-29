@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
-
+import { getSupabase } from '@/lib/supabase/client'
 export interface BrandListConfig {
   /** Supabase table to query. */
   table: string

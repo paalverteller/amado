@@ -10,7 +10,7 @@
  */
 
 import Parser from 'rss-parser'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { readUrlAsText } from '@/lib/web-reader'
 import { isFeatureEnabled } from '@/lib/amado-config'
 import { saveEvidence, recordSourceHealth, recordIngestionRun } from '@/lib/evidence'

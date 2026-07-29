@@ -1,0 +1,3 @@
+{
+  "/api/brands/[brandId]/guidelines/import/[runId]/route": "app/api/brands/[brandId]/guidelines/import/[runId]/route.js"
+}

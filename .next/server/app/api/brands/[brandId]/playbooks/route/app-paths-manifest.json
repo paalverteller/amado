@@ -1,0 +1,3 @@
+{
+  "/api/brands/[brandId]/playbooks/route": "app/api/brands/[brandId]/playbooks/route.js"
+}

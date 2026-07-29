@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase/client'
 import { buildUserPrompt } from '@/lib/prompts'
 import { generateArticleWithFallback } from '@/lib/ai'
 import type { ContentFormat } from '@/lib/content-formats'

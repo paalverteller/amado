@@ -1,0 +1,3 @@
+{
+  "/api/cron/market-refresh/route": "app/api/cron/market-refresh/route.js"
+}

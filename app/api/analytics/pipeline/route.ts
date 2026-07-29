@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'

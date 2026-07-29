@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { fetchAndSaveRss } from '@/lib/rss'
 import { requireCronAuth } from '@/lib/cron-auth'
 import { buildSourceConnector } from '@/lib/ingestion/types'

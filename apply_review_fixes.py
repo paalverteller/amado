@@ -673,50 +673,304 @@ export function createModel(entry: PipelineEntry) {
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# TODO file for what wasn't automated
+# Fix 6 — document the module-level cooldown map's statefulness
 # ─────────────────────────────────────────────────────────────────────────
+
+def fix_document_cooldown_map(root: Path, dry_run: bool, report: Report):
+    path = root / "lib" / "ai-utils.ts"
+    if not path.exists():
+        report.skip("lib/ai-utils.ts — not found")
+        return
+    content = path.read_text(encoding="utf-8")
+
+    if "State is NOT shared across serverless function instances" in content:
+        report.skip("lib/ai-utils.ts — cooldown map already documented")
+        return
+
+    old = "const modelCooldownUntil = new Map<string, number>()"
+    if old not in content:
+        report.err("lib/ai-utils.ts — modelCooldownUntil declaration not found as expected, skipping")
+        return
+
+    new = """/**
+ * In-memory, per-process cooldown tracker for rate-limited AI providers.
+ *
+ * \u26a0\ufe0f State is NOT shared across serverless function instances or cold
+ * starts — this is a best-effort, same-process optimization only, not a
+ * distributed rate limiter. Don't rely on it for correctness, only for
+ * reducing wasted calls within a single warm instance.
+ */
+const modelCooldownUntil = new Map<string, number>()"""
+
+    content = content.replace(old, new)
+    write(path, content, dry_run, report)
+    report.ok("lib/ai-utils.ts — documented the cooldown map's per-process statefulness (AI-friendly-code fix)")
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Fix 7 — split lib/supabase.ts into client.ts + one file per domain type,
+# and rewrite every import site accordingly
+# ─────────────────────────────────────────────────────────────────────────
+
+DOMAIN_FILES = {
+    "lib/domain/article.ts": """export interface Article {
+  id: string; created_at: string; topic: string; content_type: string | null;
+  draft_content: string | null; final_content: string | null;
+  status: 'draft' | 'reviewed' | 'published'; rating: number | null;
+  comment: string | null; generation_model: string | null;
+  prompt_version: string | null; book_source: string | null;
+  source_context: string | null; word_count: number | null;
+  char_count: number | null; template_id: string | null;
+  region_id: string | null; locale: string | null;
+  content_request_id: string | null;
+}
+""",
+    "lib/domain/brand-profile.ts": """export interface BrandProfile {
+  id: string; created_at: string; updated_at: string;
+  brand_name: string; voice_description: string;
+  forbidden_words: string; example_posts: string;
+  target_audience: string; competitors: string;
+  is_active: boolean; region_id: string | null;
+  positioning: string; value_propositions: string;
+  strategic_themes: string; product_facts: string;
+  proof_points: string; cta_library: string;
+  legal_disclaimers: string; glossary: string;
+  sensitive_topics: string; default_platform_rules: string;
+  is_default: boolean;
+}
+""",
+    "lib/domain/rss.ts": """export interface RssSource {
+  id: string; name: string; url: string;
+  source_type: string; active: boolean;
+  created_at?: string; country?: string | null;
+  region_id?: string | null; language_code?: string | null;
+  parser_config?: Record<string, unknown> | null;
+  last_fetched_at?: string | null;
+  consecutive_failures?: number;
+  health_status?: string;
+}
+
+export interface RssItem {
+  id: string; source_id: string | null;
+  title: string | null; title_ru: string | null;
+  description: string | null; summary_ru: string | null;
+  link: string | null; published_at: string | null;
+  collected_at: string; source?: { name: string; url: string } | null;
+  source_language?: string | null;
+  source_title?: string | null;
+  source_summary?: string | null;
+}
+""",
+    "lib/domain/prompt-template.ts": """export interface PromptTemplate {
+  id: string; created_at: string; name: string;
+  tone_description: string; system_prompt: string;
+  content_types: string[]; is_default: boolean;
+  is_active: boolean; usage_count: number; version: string;
+}
+""",
+    "lib/domain/region.ts": """export interface Region {
+  id: string; code: string; name: string;
+  default_language_code: string; locale_code: string;
+  currency_code: string; timezone: string;
+  active: boolean;
+}
+""",
+    "lib/domain/content-request.ts": """export interface ContentRequest {
+  id: string; status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  priority: number; topic: string; content_format: string; locale: string;
+  seo_mode: boolean; context: string | null; evidence_item_ids: string[] | null;
+  rss_context: string | null; brand_profile_id: string | null;
+  region_id: string | null; template_id: string | null;
+  article_id: string | null; generated_content: string | null;
+  generation_model: string | null; prompt_version: string | null;
+  word_count: number | null; char_count: number | null;
+  error_message: string | null; retry_count: number; max_retries: number;
+  scheduled_at: string | null; processed_at: string | null;
+  created_by: string | null; created_at: string; updated_at: string;
+}
+""",
+}
+
+SUPABASE_CLIENT_TS = """import { createClient as _supabaseCreateClient, SupabaseClient } from '@supabase/supabase-js'
+
+let _client: SupabaseClient | null = null
+let _admin: SupabaseClient | null = null
+
+/**
+ * Browser/anon-key Supabase client (singleton, lazily created).
+ *
+ * NOTE: the singleton is per-process. In a serverless environment this
+ * means it is NOT shared across concurrent function instances or cold
+ * starts — each cold start builds its own client. That's fine for the
+ * client itself (cheap to construct), just don't rely on any assumption
+ * of a single shared instance across requests.
+ */
+export function getSupabase(): SupabaseClient {
+  if (!_client) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !key) throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or ANON_KEY')
+    _client = _supabaseCreateClient(url, key)
+  }
+  return _client
+}
+
+/**
+ * Service-role (or anon-key fallback) Supabase client for server-side/admin
+ * operations. Same per-process singleton caveat as {@link getSupabase}.
+ */
+export function getSupabaseAdmin(): SupabaseClient {
+  if (!_admin) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const roleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url) throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL')
+
+    const key = roleKey ?? anonKey
+    if (!key) throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY or ANON_KEY')
+
+    _admin = roleKey
+      ? _supabaseCreateClient(url, roleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : _supabaseCreateClient(url, key)
+  }
+  return _admin
+}
+"""
+
+SUPABASE_SYMBOL_MODULE = {
+    "getSupabase": "@/lib/supabase/client",
+    "getSupabaseAdmin": "@/lib/supabase/client",
+    "Article": "@/lib/domain/article",
+    "BrandProfile": "@/lib/domain/brand-profile",
+    "RssSource": "@/lib/domain/rss",
+    "RssItem": "@/lib/domain/rss",
+    "PromptTemplate": "@/lib/domain/prompt-template",
+    "Region": "@/lib/domain/region",
+    "ContentRequest": "@/lib/domain/content-request",
+}
+
+SUPABASE_IMPORT_RE = re.compile(
+    r"^(?P<indent>[ \t]*)import(?P<typeKw>\s+type)?\s*\{\s*(?P<names>[^}]+?)\s*\}\s*from\s*'@/lib/supabase'\s*$",
+    re.MULTILINE,
+)
+
+
+def fix_split_supabase_module(root: Path, dry_run: bool, report: Report):
+    old_barrel = root / "lib" / "supabase.ts"
+    client_path = root / "lib" / "supabase" / "client.ts"
+
+    if exists_or_planned(client_path, report) and not old_barrel.exists():
+        report.skip("lib/supabase.ts — already split into lib/supabase/client.ts + lib/domain/*.ts")
+        return
+
+    if not old_barrel.exists():
+        report.err(
+            "lib/supabase.ts not found and lib/supabase/client.ts doesn't exist either — "
+            "nothing to split, skipping"
+        )
+        return
+
+    barrel_content = old_barrel.read_text(encoding="utf-8")
+    for expected in ["export function getSupabase", "export function getSupabaseAdmin", "export interface Article"]:
+        if expected not in barrel_content:
+            report.err(
+                f"lib/supabase.ts doesn't contain expected `{expected}` — file has diverged from the "
+                f"reviewed snapshot, skipping the split entirely (nothing written) to avoid data loss"
+            )
+            return
+
+    # 1. Write the new domain files + client.ts
+    for rel_path, content in DOMAIN_FILES.items():
+        write(root / rel_path, content, dry_run, report)
+    write(root / "lib" / "supabase" / "client.ts", SUPABASE_CLIENT_TS, dry_run, report)
+
+    # 2. Rewrite every `from '@/lib/supabase'` import site across the repo
+    candidates = (
+        list(root.glob("app/**/*.ts"))
+        + list(root.glob("app/**/*.tsx"))
+        + list(root.glob("lib/**/*.ts"))
+        + list(root.glob("components/**/*.tsx"))
+    )
+    rewritten = 0
+    for f in candidates:
+        text = f.read_text(encoding="utf-8")
+        if "from '@/lib/supabase'" not in text:
+            continue
+
+        def replace(m, _path=f):
+            indent = m.group("indent")
+            type_kw = m.group("typeKw") or ""
+            names = [n.strip() for n in m.group("names").split(",") if n.strip()]
+            unknown = [n for n in names if n not in SUPABASE_SYMBOL_MODULE]
+            if unknown:
+                raise ValueError(f"{_path}: unknown symbol(s) {unknown} imported from '@/lib/supabase'")
+            by_module: dict = {}
+            for n in names:
+                by_module.setdefault(SUPABASE_SYMBOL_MODULE[n], []).append(n)
+            out_lines = [
+                f"{indent}import{type_kw} {{ {', '.join(syms)} }} from '{module}'"
+                for module, syms in by_module.items()
+            ]
+            return "\n".join(out_lines)
+
+        try:
+            new_text, count = SUPABASE_IMPORT_RE.subn(replace, text)
+        except ValueError as e:
+            report.err(f"{e} — left this file's import untouched, please fix manually")
+            continue
+        if count == 0:
+            report.err(
+                f"{rel(root, f)} references '@/lib/supabase' but didn't match the expected import "
+                f"pattern (e.g. a dynamic `require`, or a non-standard import shape) — please check manually"
+            )
+            continue
+
+        write(f, new_text, dry_run, report)
+        rewritten += 1
+
+    report.ok(
+        f"split lib/supabase.ts into lib/supabase/client.ts + 6 files under lib/domain/, "
+        f"and rewrote {rewritten} import site(s) accordingly (SRP + DIP fix)"
+    )
+
+    # 3. Delete the old barrel file now that nothing references it
+    if not dry_run:
+        old_barrel.unlink()
+    report.ok("removed lib/supabase.ts (superseded by lib/supabase/client.ts + lib/domain/*.ts)")
 
 TODO_MD = """# Remaining manual follow-ups from the Deep Code Review
 
-The rest of this list requires design decisions that `apply_review_fixes.py`
-deliberately did not automate. Recommended order:
+`apply_review_fixes.py` now also handles splitting `lib/supabase.ts` and
+documenting the AI cooldown map's statefulness. The items below still
+require design decisions the script deliberately does not automate.
+Recommended order:
 
-1. **Split `lib/supabase.ts`** into `lib/supabase/client.ts` (client
-   bootstrapping only) and one file per domain type under `lib/domain/`
-   (Article, BrandProfile, RssSource, RssItem, PromptTemplate, Region,
-   ContentRequest). Update imports across the codebase. (Review §2.9)
-
-2. **Introduce a repository layer** for `content_requests` and `articles`,
+1. **Introduce a repository layer** for `content_requests` and `articles`,
    and refactor `app/api/generate/route.ts` around it so the route becomes
    validate → call service → respond, with the 3-step persistence workflow
    (create → generate → complete/fail) wrapped in one testable function.
-   (Review §2.7, §2.8)
+   This is now easier since `lib/supabase/client.ts` and `lib/domain/*.ts`
+   are already separated out. (Review §2.7, §2.8)
 
-3. **Build `lib/api-client/*`** (one typed client module per REST resource)
+2. **Build `lib/api-client/*`** (one typed client module per REST resource)
    and migrate the raw `fetch()` calls in `app/settings/page.tsx`,
    `app/market/page.tsx`, `app/generate/page.tsx`, `app/history/page.tsx`,
    and `app/ideas/page.tsx` onto it. This also fixes the current gap where
    failed requests (non-2xx) are parsed as JSON and silently become empty
    arrays instead of surfacing an error. (Review §2.10)
 
-4. **Extract the Quick Create widget** out of `components/Layout.tsx` into
+3. **Extract the Quick Create widget** out of `components/Layout.tsx` into
    its own component + hook, shared with (or replacing the duplicate logic
    in) `app/generate/page.tsx`. (Review §2.11)
 
-5. **Merge the two text sanitizers** — `lib/text-cleanup.ts`'s
+4. **Merge the two text sanitizers** — `lib/text-cleanup.ts`'s
    `cleanPlainTextOutput` and the local `nws`/`stripThinkBlocks` in
    `app/api/market/refresh/route.ts`. Not automated because
    `cleanPlainTextOutput` also strips markdown/meta-commentary patterns that
    may not be safe to apply inside `parseBlock()`'s title/summary parsing —
    verify behavior before merging. (Review §2.3)
 
-6. Optional hygiene: document the module-level singletons in
-   `lib/supabase.ts` (`_client`/`_admin`) and the cooldown `Map` in
-   `lib/ai-utils.ts` so their statefulness (and its limits in a serverless
-   environment) is visible at the definition site, not just inferred.
-   (Review §2.14)
-
-7. Audit the `select('*')` call sites once the repository layer exists and
+5. Audit the `select('*')` call sites once the repository layer exists and
    replace with explicit column lists per method.
 """
 
@@ -754,6 +1008,8 @@ def main():
         ("P1.4a Create brand-scoped-list factory", fix_create_brand_list_factory),
         ("P1.4b Rewrite 9 duplicate brand list routes", fix_dedupe_brand_list_routes),
         ("P2.5  Provider registry for AI model dispatch", fix_ai_provider_registry),
+        ("P1.7  Split lib/supabase.ts into client.ts + lib/domain/*.ts", fix_split_supabase_module),
+        ("P3.6  Document cooldown map statefulness", fix_document_cooldown_map),
     ]
 
     for label, fn in steps:

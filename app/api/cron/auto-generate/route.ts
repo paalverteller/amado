@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { buildSystemPrompt, buildUserPrompt } from '@/lib/prompts'
 import { generateArticleWithFallback } from '@/lib/ai'
 import { cleanPlainTextOutput } from '@/lib/text-cleanup'

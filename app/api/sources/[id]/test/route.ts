@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { fetchAndSaveRss } from '@/lib/rss'
 import { normalizeConnectorType } from '@/lib/ingestion/types'
 import { recordSourceHealth } from '@/lib/evidence'

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, Article } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
+import { Article } from '@/lib/domain/article'
 import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'

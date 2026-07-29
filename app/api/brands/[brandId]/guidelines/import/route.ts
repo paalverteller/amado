@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { extractGuidelineRules, calculateExtractionStats } from '@/lib/brand-os/guideline-extractor'
 import { getErrorMessage } from '@/lib/api/error-message'
 

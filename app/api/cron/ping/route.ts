@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { requireCronAuth } from '@/lib/cron-auth'
 import { getErrorMessage } from '@/lib/api/error-message'
 

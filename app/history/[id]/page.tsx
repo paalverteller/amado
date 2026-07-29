@@ -4,7 +4,7 @@ import { useState, useEffect, use } from 'react'
 import Link from 'next/link'
 import Layout from '@/components/Layout'
 import RatingWidget from '@/components/RatingWidget'
-import { Article } from '@/lib/supabase'
+import { Article } from '@/lib/domain/article'
 import { getErrorMessage } from '@/lib/api/error-message'
 
 type Tab = 'draft' | 'final'

@@ -1,0 +1,3 @@
+{
+  "/api/brands/[brandId]/format-playbooks/route": "app/api/brands/[brandId]/format-playbooks/route.js"
+}
