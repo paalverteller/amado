@@ -1,8 +1,8 @@
 import { streamText, generateText } from 'ai'
 import { cleanPlainTextOutput } from '@/lib/text-cleanup'
 import {
-  AiTask, PipelineEntry, rotateGroup, createModel, modelLabel,
-  isCoolingDown, setCooldown, getErrorMessage, isQuotaError, retryDelayMs,
+  AiTask, PipelineEntry, rotateGroup, createModel, modelLabel, eligiblePipeline,
+  setCooldown, getErrorMessage, isQuotaError, retryDelayMs,
   generateDeepSeekText, withTimeout, nextWithTimeout
 } from './ai-utils'
 
@@ -87,23 +87,13 @@ async function* streamFromProbedIterator(firstChunk: IteratorResult<string>, ite
 // ─── Task: Utility / Translation (Streamed Fallback) ──────────────────────────
 
 export async function generateWithFallback(params: GenerateParams): Promise<GenerateResult> {
-  const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
-  const groqKey   = process.env.GROQ_API_KEY
-  const openaiKey = process.env.OPENAI_API_KEY
   const task = params.task ?? 'utility'
-  
+
   const seed = params.userPrompt || params.systemPrompt || task
   const pipeline = buildPipelines(seed)[task]
   const errors: string[] = []
 
-  for (const entry of pipeline) {
-    if (entry.provider === 'google'   && !googleKey) continue
-    if (entry.provider === 'groq'     && !groqKey)   continue
-    if (entry.provider === 'openai'   && !openaiKey) continue
-    if (entry.provider === 'deepseek' && !process.env.DEEPSEEK_API_KEY) continue
-
-    if (isCoolingDown(entry)) continue
-
+  for (const entry of eligiblePipeline(pipeline)) {
     try {
       const label = modelLabel(entry)
       if (entry.provider === 'deepseek') {
@@ -111,7 +101,7 @@ export async function generateWithFallback(params: GenerateParams): Promise<Gene
         return { model: label, textStream: streamFromText(text) }
       }
       
-      const model = createModel(entry, googleKey, groqKey, openaiKey)
+      const model = createModel(entry)
       if (!model) continue
 
       const result = streamText({ model, system: params.systemPrompt, prompt: params.userPrompt, maxRetries: 0, ...(params.maxTokens ? { maxTokens: params.maxTokens } : {}) })
@@ -131,22 +121,11 @@ export async function generateWithFallback(params: GenerateParams): Promise<Gene
 // ─── Task: Generation (Article Drafting) ──────────────────────────────────────
 
 export async function generateArticleWithFallback(params: GenerateParams): Promise<GenerateAttemptResult> {
-  const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
-  const groqKey   = process.env.GROQ_API_KEY
-  const openaiKey = process.env.OPENAI_API_KEY
-  
   const pipeline = buildPipelines(params.userPrompt || 'default')['generation']
   const errors: string[] = []
   const startedAt = Date.now()
 
-  for (const entry of pipeline) {
-    if (entry.provider === 'google'   && !googleKey) continue
-    if (entry.provider === 'groq'     && !groqKey)   continue
-    if (entry.provider === 'openai'   && !openaiKey) continue
-    if (entry.provider === 'deepseek' && !process.env.DEEPSEEK_API_KEY) continue
-
-    if (isCoolingDown(entry)) continue
-
+  for (const entry of eligiblePipeline(pipeline)) {
     const elapsed = Date.now() - startedAt
     const remaining = FUNCTION_DEADLINE_MS - elapsed - SAFETY_MARGIN_MS
     
@@ -170,7 +149,7 @@ export async function generateArticleWithFallback(params: GenerateParams): Promi
         return { text, model: modelLabel(entry) }
       }
 
-      const model = createModel(entry, googleKey, groqKey, openaiKey)
+      const model = createModel(entry)
       if (!model) continue
 
       const result = await withTimeout(

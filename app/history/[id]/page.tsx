@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Layout from '@/components/Layout'
 import RatingWidget from '@/components/RatingWidget'
 import { Article } from '@/lib/supabase'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 type Tab = 'draft' | 'final'
 
@@ -70,7 +71,7 @@ export default function ArticlePage({ params }: PageProps) {
       setSavedMsg('Salvo ✓')
       setTimeout(() => setSavedMsg(''), 2000)
     } catch (err) {
-      setSavedMsg(`Erro: ${(err as Error).message}`)
+      setSavedMsg(`Erro: ${getErrorMessage(err)}`)
     } finally {
       setSavingFinal(false)
     }

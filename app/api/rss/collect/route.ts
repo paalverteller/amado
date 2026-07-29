@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { fetchAndSaveRss } from '@/lib/rss'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +26,7 @@ export async function POST(): Promise<NextResponse> {
         totalNew += newItems
         results.push({ name: source.name, newItems })
       } catch (err) {
-        const msg = (err as Error).message
+        const msg = getErrorMessage(err)
         console.error(`[rss/collect] ${source.name}:`, msg)
         results.push({ name: source.name, newItems: 0, error: msg })
       }
@@ -33,6 +34,6 @@ export async function POST(): Promise<NextResponse> {
 
     return NextResponse.json({ processed: sources.length, newItems: totalNew, results })
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }

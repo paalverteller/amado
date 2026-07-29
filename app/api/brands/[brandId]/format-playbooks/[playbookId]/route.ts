@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 export async function GET(
   request: NextRequest,
@@ -23,7 +24,7 @@ export async function GET(
     return NextResponse.json({ playbook })
   } catch (err) {
     console.error('[format-playbook-get] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
@@ -56,7 +57,7 @@ export async function PATCH(
     return NextResponse.json({ playbook })
   } catch (err) {
     console.error('[format-playbook-update] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
@@ -79,6 +80,6 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('[format-playbook-delete] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }

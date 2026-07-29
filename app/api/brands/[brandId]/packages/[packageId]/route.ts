@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 /**
  * GET /api/brands/[brandId]/packages/[packageId]
@@ -41,7 +42,7 @@ export async function GET(
     })
   } catch (err) {
     console.error('[package-get] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
@@ -96,7 +97,7 @@ export async function PATCH(
     return NextResponse.json({ package: pkg })
   } catch (err) {
     console.error('[package-update] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
@@ -129,6 +130,6 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('[package-delete] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }

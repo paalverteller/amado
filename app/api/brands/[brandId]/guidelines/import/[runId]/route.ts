@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,7 +81,7 @@ export async function GET(
     })
   } catch (err) {
     console.error('[guideline-import-status] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
@@ -225,6 +226,6 @@ export async function PATCH(
     })
   } catch (err) {
     console.error('[guideline-import-patch] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }

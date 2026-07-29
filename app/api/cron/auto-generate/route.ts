@@ -6,6 +6,7 @@ import { cleanPlainTextOutput } from '@/lib/text-cleanup'
 import { requireCronAuth } from '@/lib/cron-auth'
 import { CRON_CONFIG } from '@/lib/amado-config'
 import { mapToLegacyContentType } from '@/lib/content-formats'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -93,6 +94,6 @@ export async function GET(request: Request): Promise<NextResponse> {
     })
   } catch (err) {
     console.error('[cron/auto-generate] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }

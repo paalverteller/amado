@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,7 +78,7 @@ export async function GET(): Promise<NextResponse> {
     })
   } catch (err) {
     return NextResponse.json(
-      { error: (err as Error).message },
+      { error: getErrorMessage(err) },
       { status: 500 }
     )
   }

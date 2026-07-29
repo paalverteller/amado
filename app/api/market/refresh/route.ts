@@ -13,6 +13,7 @@ import { requireCronAuth } from '@/lib/cron-auth'
 import { buildSourceConnector } from '@/lib/ingestion/types'
 import { generateWithFallback } from '@/lib/ai'
 import { isFeatureEnabled } from '@/lib/amado-config'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -44,11 +45,6 @@ function stripThinkBlocks(raw: string): string {
   let s = raw.replace(/<think>[\s\S]*?<\/think>/gi, '')
   s = s.replace(/<think>[\s\S]*/i, '')
   return s.trim()
-}
-
-function hasCyrillic(text: string): boolean {
-  // Stage 2: No longer validating Cyrillic. Source content is displayed directly.
-  return false
 }
 
 function hasChinese(text: string): boolean {
@@ -83,9 +79,8 @@ async function translateOne(item: CandidateRow): Promise<(TResult & { id: string
   const srcTitle = trunc(item.title ?? 'Untitled', 220)
   const srcDesc = trunc(item.description ?? srcTitle, 300)
 
-  if (hasCyrillic(`${srcTitle} ${srcDesc}`)) {
-    return { id: item.id, title_ru: trunc(srcTitle, 220), summary_ru: trunc(srcDesc, 500) }
-  }
+  // Cyrillic passthrough short-circuit was retired in Stage 2 (source content
+  // is now always translated, regardless of input script) — removed here.
 
   try {
     const { textStream } = await generateWithFallback({
@@ -120,7 +115,7 @@ async function translateOne(item: CandidateRow): Promise<(TResult & { id: string
     }
     return { id: item.id, ...parsed }
   } catch (err) {
-    console.error(`[refresh] translation error item ${item.id}:`, (err as Error).message)
+    console.error(`[refresh] translation error item ${item.id}:`, getErrorMessage(err))
     return null
   }
 }
@@ -213,7 +208,7 @@ export async function POST(): Promise<NextResponse> {
       fetchSummary,
     })
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 

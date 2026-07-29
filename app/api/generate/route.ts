@@ -6,6 +6,7 @@ import { generateArticleWithFallback, generateWithFallback } from '@/lib/ai'
 import { cleanPlainTextOutput } from '@/lib/text-cleanup'
 import { isValidContentFormat, mapToLegacyContentType } from '@/lib/content-formats'
 import type { ContentFormat } from '@/lib/content-formats'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -132,7 +133,7 @@ Write only the final clean text for publication. No think tags. No Markdown.`
       console.warn('[generate] localization notes failed:', e)
     }
 
-    await getSupabaseAdmin().from('articles').insert({
+    const { error: articleInsertError } = await getSupabaseAdmin().from('articles').insert({
       topic: trimmedTopic,
       content_type: mapToLegacyContentType(contentType),
       draft_content: cleanText,
@@ -148,6 +149,18 @@ Write only the final clean text for publication. No think tags. No Markdown.`
       locale: 'pt-BR',
       region_id: regionId || null,
     })
+
+    if (articleInsertError) {
+      // Persisting the generated article failed — don't silently report
+      // success. Mark the content request as failed and surface the error.
+      if (contentRequestId) {
+        await getSupabaseAdmin()
+          .from('content_requests')
+          .update({ status: 'failed', error_message: articleInsertError.message })
+          .eq('id', contentRequestId)
+      }
+      throw new Error(`Failed to persist article: ${articleInsertError.message}`)
+    }
 
     // Update content request to completed
     if (contentRequestId) {
@@ -166,6 +179,6 @@ Write only the final clean text for publication. No think tags. No Markdown.`
       },
     })
   } catch (error) {
-    return NextResponse.json({ error: (error as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 })
   }
 }

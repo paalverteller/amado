@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 /**
  * GET /api/brands/[brandId]/packages/[packageId]/assets
@@ -24,7 +25,7 @@ export async function GET(
     return NextResponse.json({ assets: assets || [] })
   } catch (err) {
     console.error('[assets-list] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
@@ -76,6 +77,6 @@ export async function POST(
     return NextResponse.json({ asset }, { status: 201 })
   } catch (err) {
     console.error('[asset-create] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }

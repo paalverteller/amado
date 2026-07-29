@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 /**
  * GET /api/brands/[brandId]/learning
@@ -51,7 +52,7 @@ export async function GET(
     return NextResponse.json(result)
   } catch (err) {
     console.error('[learning-get] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
@@ -189,7 +190,7 @@ export async function POST(
     })
   } catch (err) {
     console.error('[learning-post] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 

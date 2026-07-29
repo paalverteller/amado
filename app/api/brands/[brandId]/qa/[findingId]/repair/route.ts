@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { generateArticleWithFallback } from '@/lib/ai'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 /**
  * POST /api/brands/[brandId]/qa/[findingId]/repair
@@ -100,7 +101,7 @@ REPAIRED CONTENT:`
     })
   } catch (err) {
     console.error('[repair-run] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
@@ -160,6 +161,6 @@ export async function PATCH(
     return NextResponse.json({ repairRun })
   } catch (err) {
     console.error('[repair-review] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
