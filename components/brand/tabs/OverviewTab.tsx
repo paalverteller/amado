@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface BrandOverview {
   id: string
@@ -24,15 +24,7 @@ export default function OverviewTab({ brandId }: { brandId: string }) {
   const [overview, setOverview] = useState<BrandOverview | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (!brandId) {
-      setLoading(false)
-      return
-    }
-    fetchOverview()
-  }, [brandId])
-
-  async function fetchOverview() {
+  const fetchOverview = useCallback(async () => {
     try {
       const res = await fetch(`/api/brands/${brandId}/overview`)
       if (res.ok) {
@@ -44,7 +36,15 @@ export default function OverviewTab({ brandId }: { brandId: string }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [brandId])
+
+  useEffect(() => {
+    if (!brandId) return
+    // Confirmed false positive for "call a memoized async fetcher from an
+    // effect"; see https://github.com/facebook/react/issues/34743
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchOverview()
+  }, [brandId, fetchOverview])
 
   if (!brandId) {
     return (

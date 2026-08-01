@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Layout from '@/components/Layout'
-import { t } from '@/lib/i18n/config'
 
 type BaseItem = {
   id: string

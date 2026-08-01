@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "functions": {
+    "/_middleware": {
+      "runtime": "nodejs",
+      "matchers": [
+        {
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?(?:\\/((?!_next\\/static|_next\\/image|favicon.ico).*))(\\.json|\\.rsc|\\.segments\\/.+\\.segment\\.rsc)?[\\/#\\?]?$",
+          "originalSource": "/((?!_next/static|_next/image|favicon.ico).*)"
+        }
+      ]
+    },
+    "/api/ai-check": {
+      "maxDuration": 45
+    },
+    "/api/cron/auto-generate": {
+      "maxDuration": 60
+    },
+    "/api/cron/market-refresh": {
+      "maxDuration": 60
+    },
+    "/api/generate": {
+      "maxDuration": 60
+    },
+    "/api/generate/batch": {
+      "maxDuration": 300
+    },
+    "/api/market/refresh": {
+      "maxDuration": 60
+    },
+    "/api/rewrite": {
+      "maxDuration": 60
+    }
+  }
+}

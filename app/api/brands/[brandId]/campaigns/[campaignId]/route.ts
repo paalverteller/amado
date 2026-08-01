@@ -40,7 +40,7 @@ export async function PATCH(
     const body = await request.json()
     const admin = getSupabaseAdmin()
 
-    const updates: any = {}
+    const updates: Record<string, unknown> = {}
     const fields = ['name', 'description', 'objective', 'target_audience', 'key_messages', 'duration_days', 'budget_range', 'kpi_targets', 'active']
     
     for (const field of fields) {

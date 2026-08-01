@@ -37,7 +37,7 @@ export async function PATCH(
     const body = await request.json()
     const admin = getSupabaseAdmin()
 
-    const updates: any = {}
+    const updates: Record<string, unknown> = {}
     const fields = ['format', 'structure_template', 'section_guidance', 'length_guidance', 'visual_guidance', 'example_structure', 'active']
     
     for (const field of fields) {

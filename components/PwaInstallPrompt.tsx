@@ -148,8 +148,8 @@ export default function PwaInstallPrompt() {
 
             {showHelp && (
               <p className="mt-2 rounded-2xl bg-surface-container px-3 py-2 text-xs leading-5 text-on-surface-variant">
-                No iPhone: Safari → "Compartilhar" → "Adicionar à Tela de Início".
-                No Android: Menu do navegador → "Adicionar à tela inicial".
+                No iPhone: Safari → &quot;Compartilhar&quot; → &quot;Adicionar à Tela de Início&quot;.
+                No Android: Menu do navegador → &quot;Adicionar à tela inicial&quot;.
               </p>
             )}
 

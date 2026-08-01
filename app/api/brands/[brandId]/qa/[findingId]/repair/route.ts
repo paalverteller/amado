@@ -63,7 +63,7 @@ PLATFORM: ${asset.platform}
 FORMAT: ${asset.format}
 
 RELEVANT BRAND RULES:
-${(rules || []).map((r: any) => `- ${r.value_json?.instruction || r.rule_key}`).join('\n')}
+${(rules || []).map((r: { value_json?: { instruction?: string }; rule_key: string }) => `- ${r.value_json?.instruction || r.rule_key}`).join('\n')}
 
 INSTRUCTIONS:
 1. Fix the issue while preserving the original message and tone

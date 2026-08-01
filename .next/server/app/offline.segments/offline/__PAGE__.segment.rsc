@@ -1,0 +1,5 @@
+1:"$Sreact.fragment"
+2:I[97367,["/_next/static/chunks/0r6msg_6.v7pi.js","/_next/static/chunks/0d3shmwh5_nmn.js"],"OutletBoundary"]
+3:"$Sreact.suspense"
+0:{"rsc":["$","$1","c",{"children":[["$","main",null,{"className":"min-h-dvh bg-background px-5 py-10 text-on-background","children":["$","div",null,{"className":"mx-auto max-w-md rounded-[28px] bg-surface-container-low p-6 shadow-sm","children":[["$","h1",null,{"className":"text-2xl font-semibold tracking-tight text-on-surface","children":"Sem conexão"}],["$","p",null,{"className":"mt-3 text-sm leading-6 text-on-surface-variant","children":"Amado está aberto no modo PWA, mas é necessário internet para geração, RSS e histórico. Verifique a conexão e atualize a página."}],["$","a",null,{"href":"/generate","className":"mt-5 inline-flex rounded-full bg-primary px-5 py-3 text-sm font-semibold text-on-primary no-underline","children":"Voltar para geração"}]]}]}],null,["$","$L2",null,{"children":["$","$3",null,{"name":"Next.MetadataOutlet","children":"$@4"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"2PF3XJ2GJvcraaxjbuD0R"}
+4:null

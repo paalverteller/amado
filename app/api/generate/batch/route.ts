@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { buildSystemPrompt, buildUserPrompt, buildBrandVoiceLayer, buildRegionContextLayer, buildEvidenceContext } from '@/lib/prompts'
-import { getRecentEvidenceItems } from '@/lib/evidence'
 import { generateArticleWithFallback } from '@/lib/ai'
 import { cleanPlainTextOutput } from '@/lib/text-cleanup'
 import { isValidContentFormat, mapToLegacyContentType } from '@/lib/content-formats'

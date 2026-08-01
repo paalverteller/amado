@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface Example {
   id: string
@@ -17,18 +17,21 @@ export default function ExamplesTab({ brandId }: { brandId: string }) {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<{ platform?: string; format?: string }>({})
 
-  useEffect(() => {
-    if (!brandId) { setLoading(false); return }
-    fetchExamples()
-  }, [brandId])
-
-  async function fetchExamples() {
+  const fetchExamples = useCallback(async () => {
     try {
       const res = await fetch(`/api/brands/${brandId}/examples`)
       if (res.ok) setExamples((await res.json()).examples || [])
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
-  }
+  }, [brandId])
+
+  useEffect(() => {
+    if (!brandId) return
+    // Confirmed false positive for "call a memoized async fetcher from an
+    // effect"; see https://github.com/facebook/react/issues/34743
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchExamples()
+  }, [brandId, fetchExamples])
 
   const platforms = Array.from(new Set(examples.map(e => e.platform)))
   const formats = Array.from(new Set(examples.map(e => e.format)))

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface Audience {
   id: string
@@ -28,15 +28,7 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
   const [loading, setLoading] = useState(true)
   const [activeSection, setActiveSection] = useState<'audiences' | 'pains'>('audiences')
 
-  useEffect(() => {
-    if (!brandId) {
-      setLoading(false)
-      return
-    }
-    fetchData()
-  }, [brandId])
-
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     try {
       const [audiencesRes, painsRes] = await Promise.all([
         fetch(`/api/brands/${brandId}/audiences`),
@@ -56,7 +48,15 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [brandId])
+
+  useEffect(() => {
+    if (!brandId) return
+    // Confirmed false positive for "call a memoized async fetcher from an
+    // effect"; see https://github.com/facebook/react/issues/34743
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchData()
+  }, [brandId, fetchData])
 
   if (!brandId) {
     return (

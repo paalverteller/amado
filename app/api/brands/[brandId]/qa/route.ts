@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { getErrorMessage } from '@/lib/api/error-message'
 
+/** A finding row as constructed by the checks below, before insertion. */
+interface QaFindingDraft {
+  brand_id: string
+  asset_id: string
+  severity: 'critical' | 'high' | 'medium'
+  category: string
+  description: string
+  status: 'open'
+}
+
 /**
  * GET /api/brands/[brandId]/qa
  * List QA findings with filtering
@@ -65,7 +75,7 @@ export async function POST(
     }
 
     const admin = getSupabaseAdmin()
-    const findings: any[] = []
+    const findings: QaFindingDraft[] = []
 
     // 1. Claim verification
     if (checks.includes('claims')) {
@@ -154,9 +164,9 @@ export async function POST(
       passed: findings.length === 0,
       summary: {
         total: findings.length,
-        critical: findings.filter((f: any) => f.severity === 'critical').length,
-        high: findings.filter((f: any) => f.severity === 'high').length,
-        medium: findings.filter((f: any) => f.severity === 'medium').length,
+        critical: findings.filter((f: QaFindingDraft) => f.severity === 'critical').length,
+        high: findings.filter((f: QaFindingDraft) => f.severity === 'high').length,
+        medium: findings.filter((f: QaFindingDraft) => f.severity === 'medium').length,
       },
     })
   } catch (err) {

@@ -10,10 +10,6 @@ function safeText(value: string | null | undefined): string {
   return value?.trim() || 'Sem tema'
 }
 
-function stripText(text: string): string {
-  return text.replace(/\s+/g, ' ').trim()
-}
-
 /**
  * Splits article content into { title, firstParagraph }.
  * Content is plain text; the model is instructed to put the headline

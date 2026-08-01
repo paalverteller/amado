@@ -21,9 +21,7 @@ export default function IdeasPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const fetchTrends = async () => {
-    setLoading(true)
-    setError('')
+  async function fetchTrends() {
     try {
       const res = await fetch('/api/market?limit=20', { cache: 'no-store' })
       const data = await res.json()
@@ -37,6 +35,9 @@ export default function IdeasPage() {
   }
 
   useEffect(() => {
+    // Confirmed false positive for "call an async fetcher from a mount
+    // effect"; see https://github.com/facebook/react/issues/34743
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTrends()
   }, [])
 

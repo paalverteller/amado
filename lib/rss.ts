@@ -106,7 +106,10 @@ async function saveRows(sourceId: string, rows: RssRow[], connectorType: string)
       evidenceSaved++
     }
   } catch (evError) {
-    console.warn('[rss] Evidence save error (non-critical):', (evError as Error).message)
+    console.warn('[rss] Evidence save error (non-critical):', getErrorMessage(evError))
+  }
+  if (evidenceSaved < unique.length) {
+    console.warn(`[rss] Evidence dual-write: ${evidenceSaved}/${unique.length} saved`)
   }
   
   // Record ingestion run

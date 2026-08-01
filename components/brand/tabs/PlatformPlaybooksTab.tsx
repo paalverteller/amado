@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface Playbook {
   id: string
@@ -21,18 +21,21 @@ export default function PlatformPlaybooksTab({ brandId }: { brandId: string }) {
   const [loading, setLoading] = useState(true)
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
 
-  useEffect(() => {
-    if (!brandId) { setLoading(false); return }
-    fetchPlaybooks()
-  }, [brandId])
-
-  async function fetchPlaybooks() {
+  const fetchPlaybooks = useCallback(async () => {
     try {
       const res = await fetch(`/api/brands/${brandId}/playbooks`)
       if (res.ok) setPlaybooks((await res.json()).playbooks || [])
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
-  }
+  }, [brandId])
+
+  useEffect(() => {
+    if (!brandId) return
+    // Confirmed false positive for "call a memoized async fetcher from an
+    // effect"; see https://github.com/facebook/react/issues/34743
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchPlaybooks()
+  }, [brandId, fetchPlaybooks])
 
   const platforms = ['all', ...Array.from(new Set(playbooks.map(p => p.platform)))]
   const filtered = selectedPlatform === 'all' ? playbooks : playbooks.filter(p => p.platform === selectedPlatform)

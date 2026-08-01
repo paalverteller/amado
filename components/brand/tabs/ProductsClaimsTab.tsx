@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface Product {
   id: string
@@ -25,12 +25,7 @@ export default function ProductsClaimsTab({ brandId }: { brandId: string }) {
   const [loading, setLoading] = useState(true)
   const [activeSection, setActiveSection] = useState<'products' | 'claims'>('products')
 
-  useEffect(() => {
-    if (!brandId) { setLoading(false); return }
-    fetchData()
-  }, [brandId])
-
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     try {
       const [productsRes, claimsRes] = await Promise.all([
         fetch(`/api/brands/${brandId}/products`),
@@ -40,7 +35,15 @@ export default function ProductsClaimsTab({ brandId }: { brandId: string }) {
       if (claimsRes.ok) setClaims((await claimsRes.json()).claims || [])
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
-  }
+  }, [brandId])
+
+  useEffect(() => {
+    if (!brandId) return
+    // Confirmed false positive for "call a memoized async fetcher from an
+    // effect"; see https://github.com/facebook/react/issues/34743
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchData()
+  }, [brandId, fetchData])
 
   if (!brandId) return <div className="text-center py-12 text-gray-500">Selecione uma marca</div>
   if (loading) return <div className="text-center py-12">Carregando...</div>

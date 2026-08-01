@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/market/layout,_N_T_/market/base/layout,_N_T_/market/base/page,_N_T_/market/base"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/market/base/__PAGE__",
+    "/market/base",
+    "/market",
+    "/_index",
+    "/_head"
+  ]
+}

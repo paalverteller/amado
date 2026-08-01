@@ -34,7 +34,7 @@ export async function GET(
     const { data: relations } = await admin
       .from('content_asset_relations')
       .select('*')
-      .in('from_asset_id', (pkg.assets || []).map((a: any) => a.id))
+      .in('from_asset_id', (pkg.assets || []).map((a: { id: string }) => a.id))
 
     return NextResponse.json({
       package: pkg,
@@ -72,7 +72,7 @@ export async function PATCH(
 
     const admin = getSupabaseAdmin()
 
-    const updates: any = {}
+    const updates: Record<string, unknown> = {}
     if (name !== undefined) updates.name = name
     if (description !== undefined) updates.description = description
     if (status !== undefined) updates.status = status

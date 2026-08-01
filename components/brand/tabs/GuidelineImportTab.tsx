@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 interface ImportRun {
   id: string
@@ -47,8 +48,8 @@ export default function GuidelineImportTab({ brandId }: { brandId: string }) {
         rejectedCount: 0,
         conflictCount: data.importRun.stats?.conflicts || 0,
       })
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err) {
+      setError(getErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -68,8 +69,8 @@ export default function GuidelineImportTab({ brandId }: { brandId: string }) {
       if (data.success) {
         setActiveImport(prev => prev ? { ...prev, status: 'published' } : null)
       }
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err) {
+      setError(getErrorMessage(err))
     } finally {
       setLoading(false)
     }

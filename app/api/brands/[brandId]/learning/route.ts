@@ -17,7 +17,7 @@ export async function GET(
     const limit = parseInt(searchParams.get('limit') || '50')
 
     const admin = getSupabaseAdmin()
-    const result: any = {}
+    const result: Record<string, unknown[]> = {}
 
     if (type === 'all' || type === 'performance') {
       const { data: snapshots } = await admin
@@ -116,11 +116,11 @@ export async function POST(
     if (existingPattern) {
       // Update existing pattern
       const newUsageCount = existingPattern.usage_count + 1
-      const currentAvg = existingPattern.avg_performance || {}
-      const newAvg: any = {}
+      const currentAvg: Record<string, number> = existingPattern.avg_performance || {}
+      const newAvg: Record<string, number> = {}
       
       for (const [key, value] of Object.entries(metrics)) {
-        const currentVal = (currentAvg as any)[key] || 0
+        const currentVal = currentAvg[key] || 0
         newAvg[key] = (currentVal * existingPattern.usage_count + (value as number)) / newUsageCount
       }
 
@@ -194,7 +194,7 @@ export async function POST(
   }
 }
 
-function calculatePerformanceScore(metrics: any): number {
+function calculatePerformanceScore(metrics: Record<string, number>): number {
   // Simple weighted score based on common metrics
   const weights: Record<string, number> = {
     engagement_rate: 0.3,
