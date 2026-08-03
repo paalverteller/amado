@@ -37,12 +37,17 @@ decision explicitly before any sprint that would delete existing tables.
   `m3-card`/`m3-button-*`, and no separate desktop topbar row (logout
   lives in the sidebar footer instead). Both are fair follow-ups, not gaps.
 
-- [ ] **Sprint 3 — Text-first knowledge library (Phase 2)**
-  Migrate `books`/`book_chunks` → `knowledge_assets`/`knowledge_chunks`
-  (additive, old tables kept until verified), TXT/Markdown/paste upload,
-  chunking + embeddings, semantic search, wire real content into
-  `/knowledge` (replacing the Sprint-1 stub), retrieval modes
-  (`idea`/`evidence`/`brand`), collections, reindex/archive.
+- [x] **Sprint 3 — Text-first knowledge library (Phase 2)**
+  `knowledge_assets`/`knowledge_chunks` + pgvector + match_knowledge_chunks
+  RPC (migration 038, additive — books/book_chunks untouched, existing
+  books migrated in as 'pending'). Chunking/language-detection logic was
+  executed and tested, not just written. Embeddings gated behind the
+  pre-existing `hybridSearchEnabled` flag — keyword search works even
+  without OPENAI_API_KEY configured. `/knowledge` now has a real upload/
+  search/list UI. NOT wired into `/generate` yet — that's Sprint 8.
+  ⚠️ pgvector migration needs verification against a real Supabase
+  instance — it's the one part of this sprint that couldn't be executed
+  locally.
 
 - [ ] **Sprint 4 — Editable Brand workspace touch-up (Phase 3)**
   `/brand` already exists (9 tabs) — gap is against the plan's specific
