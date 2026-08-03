@@ -215,135 +215,100 @@ export default function Layout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-dvh font-sans flex flex-col" style={{ background: 'var(--color-background)', color: 'var(--color-on-background)' }}>
+    <div className="min-h-dvh font-sans" style={{ background: 'var(--color-background)', color: 'var(--color-on-background)' }}>
 
-      {/* ── Premium Glassmorphic Header ── */}
-      <header
+      {/* ── Desktop sidebar (lg+) — fixed left, 240px, per design.md §3 ── */}
+      <aside
+        className="hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:w-60 lg:flex-col"
         style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 40,
-          width: '100%',
-          height: 56,
-          display: 'flex',
-          alignItems: 'center',
-          willChange: 'transform',
-          transform: navVisible ? 'translateY(0)' : 'translateY(-100%)',
-          transition: 'transform 280ms cubic-bezier(0.4,0,0.2,1)',
-          background:
-            
-              'linear-gradient(135deg, #1E3A8A 0%, #2D55B0 60%, #4A6FD4 100%)',
-          backdropFilter: 'none',
-          WebkitBackdropFilter: 'none',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '0 2px 12px rgba(30,58,138,0.25)',
+          background: 'linear-gradient(180deg, #1E3A8A 0%, #2D55B0 55%, #1E3A8A 100%)',
+          borderRight: '1px solid rgba(255,255,255,0.08)',
         }}
       >
-        {/* Accent gradient line at very top */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 2,
-            background: 'linear-gradient(90deg, #F97316 0%, #4A6FD4 50%, #7C3AED 100%)',
-            opacity: 1,
-            transition: 'opacity 300ms ease',
-          }}
-        />
+        <div style={{ padding: '1.25rem 1rem 1.25rem' }}>
+          <Brand />
+        </div>
 
-        <div
-          style={{
-            margin: '0 auto',
-            maxWidth: '1200px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 1rem',
-            gap: '1.5rem',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-            <Brand />
+        <nav className="flex flex-col" style={{ flex: 1, padding: '0.25rem 0.75rem', gap: '0.15rem', overflowY: 'auto' }}>
+          {NAV_PRIMARY.map(({ href, label }) => {
+            const active = isActive(href)
+            return (
+              <Link
+                key={href} href={href}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0.55rem 0.75rem',
+                  borderRadius: 10,
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  letterSpacing: '0.01em',
+                  transition: 'all 180ms ease',
+                  background: active ? 'rgba(255,255,255,0.16)' : 'transparent',
+                  color: active ? '#ffffff' : 'rgba(255,255,255,0.65)',
+                  boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.12)' : 'none',
+                }}
+                onMouseEnter={e => {
+                  if (!active) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.10)'
+                }}
+                onMouseLeave={e => {
+                  if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'
+                }}
+              >
+                {label}
+              </Link>
+            )
+          })}
 
-            {/* Desktop Nav — hidden on mobile */}
-            <nav className="hidden lg:flex" style={{ alignItems: 'center', gap: '0.25rem' }}>
-              {NAV_PRIMARY.map(({ href, label }) => {
-                const active = isActive(href)
-                return (
-                  <Link
-                    key={href} href={href}
-                    style={{
-                      padding: '0.4rem 1rem',
-                      borderRadius: 999,
-                      fontSize: 13.5,
-                      fontWeight: 600,
-                      textDecoration: 'none',
-                      letterSpacing: '0.01em',
-                      transition: 'all 180ms ease',
-                      background: active ? 'rgba(255,255,255,0.16)' : 'transparent',
-                      color: active ? '#ffffff' : 'rgba(255,255,255,0.65)',
-                      boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.12)' : 'none',
-                    }}
-                    onMouseEnter={e => {
-                      if (!active) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.10)'
-                    }}
-                    onMouseLeave={e => {
-                      if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'
-                    }}
-                  >
-                    {label}
-                  </Link>
-                )
-              })}
+          <div aria-hidden style={{ height: 1, background: 'rgba(255,255,255,0.12)', margin: '0.6rem 0.25rem' }} />
 
-              <span aria-hidden style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.18)', margin: '0 0.5rem' }} />
+          {NAV_UTILITY.map(({ href, label }) => {
+            const active = isActive(href)
+            return (
+              <Link
+                key={href} href={href}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0.45rem 0.75rem',
+                  borderRadius: 10,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  textDecoration: 'none',
+                  letterSpacing: '0.01em',
+                  transition: 'all 180ms ease',
+                  background: active ? 'rgba(255,255,255,0.12)' : 'transparent',
+                  color: active ? '#ffffff' : 'rgba(255,255,255,0.45)',
+                }}
+                onMouseEnter={e => {
+                  if (!active) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.7)'
+                }}
+                onMouseLeave={e => {
+                  if (!active) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.45)'
+                }}
+              >
+                {label}
+              </Link>
+            )
+          })}
+        </nav>
 
-              {NAV_UTILITY.map(({ href, label }) => {
-                const active = isActive(href)
-                return (
-                  <Link
-                    key={href} href={href}
-                    style={{
-                      padding: '0.4rem 0.75rem',
-                      borderRadius: 999,
-                      fontSize: 12,
-                      fontWeight: 500,
-                      textDecoration: 'none',
-                      letterSpacing: '0.01em',
-                      transition: 'all 180ms ease',
-                      background: active ? 'rgba(255,255,255,0.12)' : 'transparent',
-                      color: active ? '#ffffff' : 'rgba(255,255,255,0.45)',
-                    }}
-                    onMouseEnter={e => {
-                      if (!active) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.7)'
-                    }}
-                    onMouseLeave={e => {
-                      if (!active) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.45)'
-                    }}
-                  >
-                    {label}
-                  </Link>
-                )
-              })}
-            </nav>
-          </div>
-
-          {/* Logout */}
+        <div style={{ padding: '0.75rem' }}>
           <button
             onClick={handleLogout}
             style={{
-              display: 'inline-flex',
+              display: 'flex',
+              width: '100%',
               alignItems: 'center',
-              gap: '0.375rem',
-              padding: '0.4rem 1rem',
-              borderRadius: 999,
+              gap: '0.5rem',
+              padding: '0.55rem 0.75rem',
+              borderRadius: 10,
               fontSize: 13,
               fontWeight: 600,
-              border: '1px solid rgba(255,255,255,0.18)',
-              background: 'rgba(255,255,255,0.08)',
-              color: 'rgba(255,255,255,0.70)',
+              border: '1px solid rgba(255,255,255,0.14)',
+              background: 'rgba(255,255,255,0.06)',
+              color: 'rgba(255,255,255,0.65)',
               cursor: 'pointer',
               transition: 'all 180ms ease',
               letterSpacing: '0.01em',
@@ -356,9 +321,9 @@ export default function Layout({ children }: { children: ReactNode }) {
             }}
             onMouseLeave={e => {
               const el = e.currentTarget as HTMLElement
-              el.style.background = 'rgba(255,255,255,0.08)'
-              el.style.borderColor = 'rgba(255,255,255,0.18)'
-              el.style.color = 'rgba(255,255,255,0.70)'
+              el.style.background = 'rgba(255,255,255,0.06)'
+              el.style.borderColor = 'rgba(255,255,255,0.14)'
+              el.style.color = 'rgba(255,255,255,0.65)'
             }}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -366,26 +331,114 @@ export default function Layout({ children }: { children: ReactNode }) {
               <polyline points="16 17 21 12 16 7"/>
               <line x1="21" y1="12" x2="9" y2="12"/>
             </svg>
-            <span className="hidden sm:inline">Выйти</span>
+            {t('action.logout')}
           </button>
         </div>
-      </header>
+      </aside>
 
-      {/* ── Main Content ── */}
-      <main
-        style={{
-          flex: 1,
-          width: '100%',
-          maxWidth: 1200,
-          margin: '0 auto',
-          padding: '1.5rem 1rem 2rem',
-        }}
-        className="sm:px-6 sm:py-10"
-      >
-        <div className="animate-fade-in">
-          {children}
-        </div>
-      </main>
+      {/* ── Content column, offset past the fixed sidebar on desktop ── */}
+      <div className="flex flex-col min-h-dvh lg:pl-60">
+
+        {/* ── Mobile sticky header — hidden on desktop, sidebar replaces it there ── */}
+        <header
+          className="lg:hidden"
+          style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 40,
+            width: '100%',
+            height: 56,
+            display: 'flex',
+            alignItems: 'center',
+            willChange: 'transform',
+            transform: navVisible ? 'translateY(0)' : 'translateY(-100%)',
+            transition: 'transform 280ms cubic-bezier(0.4,0,0.2,1)',
+            background: 'linear-gradient(135deg, #1E3A8A 0%, #2D55B0 60%, #4A6FD4 100%)',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 2px 12px rgba(30,58,138,0.25)',
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 2,
+              background: 'linear-gradient(90deg, #F97316 0%, #4A6FD4 50%, #7C3AED 100%)',
+            }}
+          />
+
+          <div
+            style={{
+              margin: '0 auto',
+              maxWidth: '1200px',
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0 1rem',
+              gap: '1.5rem',
+            }}
+          >
+            <Brand />
+
+            <button
+              onClick={handleLogout}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.375rem',
+                padding: '0.4rem 1rem',
+                borderRadius: 999,
+                fontSize: 13,
+                fontWeight: 600,
+                border: '1px solid rgba(255,255,255,0.18)',
+                background: 'rgba(255,255,255,0.08)',
+                color: 'rgba(255,255,255,0.70)',
+                cursor: 'pointer',
+                transition: 'all 180ms ease',
+                letterSpacing: '0.01em',
+              }}
+              onMouseEnter={e => {
+                const el = e.currentTarget as HTMLElement
+                el.style.background = 'rgba(220,38,38,0.20)'
+                el.style.borderColor = 'rgba(220,38,38,0.40)'
+                el.style.color = '#FCA5A5'
+              }}
+              onMouseLeave={e => {
+                const el = e.currentTarget as HTMLElement
+                el.style.background = 'rgba(255,255,255,0.08)'
+                el.style.borderColor = 'rgba(255,255,255,0.18)'
+                el.style.color = 'rgba(255,255,255,0.70)'
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+              <span className="hidden sm:inline">{t('action.logout')}</span>
+            </button>
+          </div>
+        </header>
+
+        {/* ── Main Content ── */}
+        <main
+          style={{
+            flex: 1,
+            width: '100%',
+            maxWidth: 1200,
+            margin: '0 auto',
+            padding: '1.5rem 1rem 2rem',
+          }}
+          className="sm:px-6 sm:py-10"
+        >
+          <div className="animate-fade-in">
+            {children}
+          </div>
+        </main>
+      </div>
 
       {/* ── Mobile Bottom Nav Bar (PWA-native, hidden on desktop) ── */}
       <nav className="bottom-nav lg:hidden" aria-label="Основная навигация">

@@ -26,12 +26,16 @@ decision explicitly before any sprint that would delete existing tables.
   → `/overview`, vitest + a real Russian-parity regression test,
   `docs/SCHEMA.md` schema audit. No deletions, no data migrations.
 
-- [ ] **Sprint 2 — Design system migration**
-  Adopt `design.md` tokens as the *only* system (retire the old warm/serif
-  palette in `styles/design-tokens.css`), import Inter, reskin `Layout.tsx`
-  header/nav chrome and the pages touched in Sprint 1 to the dashboard-dense
-  aesthetic (tabular-nums for numeric tables, 240px sidebar consideration
-  vs. current top-nav — needs a decision, see design.md §6 layout rules).
+- [x] **Sprint 2 — Design system migration**
+  Decision made: left sidebar (240px, design.md §3), structural rewrite of
+  `components/Layout.tsx`. Fixed a Sprint-1 bug along the way — the --v2-
+  tokens had been written to `styles/design-tokens.css`, which nothing
+  imports; moved into `app/globals.css` (live) and deleted the dead file.
+  Inter was already the active `--font-sans` pre-Sprint-1, no font work
+  needed. Deliberately NOT done: recoloring the M3 tokens
+  (`--color-primary` etc.) that every pre-Sprint-1 page still uses via
+  `m3-card`/`m3-button-*`, and no separate desktop topbar row (logout
+  lives in the sidebar footer instead). Both are fair follow-ups, not gaps.
 
 - [ ] **Sprint 3 — Text-first knowledge library (Phase 2)**
   Migrate `books`/`book_chunks` → `knowledge_assets`/`knowledge_chunks`

@@ -55,6 +55,36 @@
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1.0);
 }
 
+/* ── v2 design tokens (design.md target system) ──────────────────────────
+   Namespaced with --v2- so they never collide with the M3 tokens above,
+   which are still used by every pre-Sprint-1 page via m3-card/m3-button-*.
+   Moved here in Sprint 2 from styles/design-tokens.css, which is never
+   imported anywhere — those tokens were dead CSS until this fix. */
+:root {
+  --v2-color-brand-primary: #2563EB;
+  --v2-color-brand-primary-hover: #1D4ED8;
+  --v2-color-success: #16A34A;
+  --v2-color-warning: #D97706;
+  --v2-color-danger: #DC2626;
+  --v2-color-info: #0EA5E9;
+  --v2-color-text-primary: #0F172A;
+  --v2-color-text-secondary: #64748B;
+  --v2-color-text-disabled: #94A3B8;
+  --v2-color-text-inverse: #FFFFFF;
+  --v2-color-surface-base: #FFFFFF;
+  --v2-color-surface-muted: #F1F5F9;
+  --v2-color-surface-alt: #F8FAFC;
+  --v2-color-surface-dark: #0F172A;
+  --v2-color-border-default: #E2E8F0;
+  --v2-color-border-strong: #CBD5E1;
+  --v2-color-border-focus: #3B82F6;
+  --v2-radius-sm: 4px;
+  --v2-radius-md: 6px;
+  --v2-radius-lg: 8px;
+  --v2-radius-pill: 999px;
+}
+
+
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
   html { color-scheme: light; background: var(--color-background); }
