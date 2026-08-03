@@ -69,8 +69,15 @@ export async function POST(
     }
 
     // Fetch brand context
+    // Bug fix: queried a `brands` table that doesn't exist in this schema
+    // (same bug as app/api/brands/[brandId]/overview/route.ts) —
+    // brand_profiles is correct. This was previously always undefined,
+    // silently dropping brand voice/tone from playbook generation.
+    // Note: `cultural_notes` still isn't a real column on brand_profiles —
+    // brand?.cultural_notes below stays undefined; flagging rather than
+    // inventing a column that was never actually added anywhere.
     const { data: brand } = await supabase
-      .from('brands')
+      .from('brand_profiles')
       .select('*')
       .eq('id', brandId)
       .single()

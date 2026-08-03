@@ -49,12 +49,32 @@ decision explicitly before any sprint that would delete existing tables.
   instance — it's the one part of this sprint that couldn't be executed
   locally.
 
-- [ ] **Sprint 4 — Editable Brand workspace touch-up (Phase 3)**
-  `/brand` already exists (9 tabs) — gap is against the plan's specific
-  sections (Основа бренда, Аудитория, Продукт, Тон и стиль, Разрешённые
-  утверждения, Запрещённые формулировки, Правила площадок, Источники
-  бренда, История изменений) and brand snapshot/version restore UI. Audit
-  tab-by-tab against this list before writing code.
+- [ ] **Sprint 4 — Editable Brand workspace (Phase 3) — part 1 done, part 2 open**
+  Actual tab count is 10, not 9. Part 1 (done): fixed two real bugs
+  (`overview` route and `playbooks/generate` route both queried a
+  `brands` table that has never existed — `brand_profiles` is real;
+  the Overview tab 404'd on every load until this fix), added the
+  missing `GET /api/brands` list endpoint (brand selector was
+  hardcoded to one option), added rule-set publish/restore
+  (`POST .../rule-sets/[id]/publish` — previously impossible through
+  either the API or UI, confirmed by reading the route), wrapped
+  `/brand` in `<Layout>` (it never was, invisible to the sidebar nav
+  even after Sprint 1 added it to NAV_PRIMARY), translated the shell
+  + Overview + Versions tabs to Russian.
+  Part 2 (open, needs a product decision before coding): the other 7
+  tabs (AudiencePains, ProductsClaims, VoiceVocabulary, ContentPillars,
+  PlatformPlaybooks, Examples, Compliance) still need Russian
+  translation + a write-capability audit (confirmed several are
+  read-only display today, same as Versions was). Also open: whether
+  to restructure/merge the current 10 tabs into the plan's exact 9
+  named sections — two of those names (Разрешённые утверждения /
+  Запрещённые формулировки) are ambiguous against whether they mean
+  claims (ProductsClaimsTab) or vocabulary (VoiceVocabularyTab), and 3
+  current tabs (content-pillars, examples, compliance) have no obvious
+  home in the plan's list — deliberately not guessed at.
+  Also open: brand_documents / brand-vs-knowledge-base linking (plan
+  §8.2) — doesn't exist yet, natural pairing with Sprint 3's
+  knowledge_assets now that it exists.
 
 - [ ] **Sprint 5 — Safer source ingestion hardening (Phase 4)**
   RSS already exists; add source health surfaced in UI, manual

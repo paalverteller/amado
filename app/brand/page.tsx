@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import Layout from '@/components/Layout'
+import { t } from '@/lib/i18n/config'
 import OverviewTab from '@/components/brand/tabs/OverviewTab'
 import AudiencePainsTab from '@/components/brand/tabs/AudiencePainsTab'
 import ProductsClaimsTab from '@/components/brand/tabs/ProductsClaimsTab'
@@ -12,11 +14,11 @@ import ComplianceTab from '@/components/brand/tabs/ComplianceTab'
 import VersionsTab from '@/components/brand/tabs/VersionsTab'
 import GuidelineImportTab from '@/components/brand/tabs/GuidelineImportTab'
 
-type TabId = 
-  | 'overview' 
-  | 'audience-pains' 
-  | 'products-claims' 
-  | 'voice-vocabulary' 
+type TabId =
+  | 'overview'
+  | 'audience-pains'
+  | 'products-claims'
+  | 'voice-vocabulary'
   | 'content-pillars'
   | 'platform-playbooks'
   | 'examples'
@@ -30,22 +32,61 @@ interface Tab {
   icon: string
 }
 
+interface BrandListItem {
+  id: string
+  brand_name: string
+  is_default: boolean
+  is_active: boolean
+}
+
+// Russian labels for the tabs as they exist today. NOT yet remapped to the
+// plan's exact 9 named sections (Основа бренда/Аудитория/Продукт/Тон и
+// стиль/Разрешённые утверждения/Запрещённые формулировки/Правила площадок/
+// Источники бренда/История изменений) — two of those names are ambiguous
+// against the current 10-tab structure (claims vs. vocabulary both touch
+// "forbidden wording") and this tab set also has 3 tabs (content-pillars,
+// examples, compliance) with no obvious home in that list. Restructuring
+// needs an explicit decision, not a guess — see docs/AMADO_ROADMAP.md.
 const TABS: Tab[] = [
-  { id: 'overview', label: 'Visão Geral', icon: '🏠' },
-  { id: 'audience-pains', label: 'Público & Dores', icon: '👥' },
-  { id: 'products-claims', label: 'Produtos & Claims', icon: '📦' },
-  { id: 'voice-vocabulary', label: 'Voz & Vocabulário', icon: '🎙️' },
-  { id: 'content-pillars', label: 'Pilares de Conteúdo', icon: '🏛️' },
-  { id: 'platform-playbooks', label: 'Playbooks de Plataforma', icon: '📱' },
-  { id: 'examples', label: 'Exemplos', icon: '✨' },
-  { id: 'compliance', label: 'Compliance', icon: '🛡️' },
-  { id: 'versions', label: 'Versões', icon: '📋' },
-  { id: 'guideline-import', label: 'Importar Guidelines', icon: '📥' },
+  { id: 'overview', label: 'Обзор', icon: '🏠' },
+  { id: 'audience-pains', label: 'Аудитория и боли', icon: '👥' },
+  { id: 'products-claims', label: 'Продукты и утверждения', icon: '📦' },
+  { id: 'voice-vocabulary', label: 'Голос и словарь', icon: '🎙️' },
+  { id: 'content-pillars', label: 'Контент-пилары', icon: '🏛️' },
+  { id: 'platform-playbooks', label: 'Правила площадок', icon: '📱' },
+  { id: 'examples', label: 'Примеры', icon: '✨' },
+  { id: 'compliance', label: 'Проверка', icon: '🛡️' },
+  { id: 'versions', label: 'История изменений', icon: '📋' },
+  { id: 'guideline-import', label: 'Импорт гайдлайнов', icon: '📥' },
 ]
 
 export default function BrandBrainPage() {
   const [activeTab, setActiveTab] = useState<TabId>('overview')
+  const [brands, setBrands] = useState<BrandListItem[]>([])
   const [brandId, setBrandId] = useState<string>('')
+  const [brandsLoading, setBrandsLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/brands')
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('request failed'))))
+      .then((data: { items?: BrandListItem[] }) => {
+        if (cancelled) return
+        const items = data.items ?? []
+        setBrands(items)
+        const preferred = items.find((b) => b.is_default) ?? items[0]
+        if (preferred) setBrandId(preferred.id)
+      })
+      .catch(() => {
+        if (!cancelled) setBrands([])
+      })
+      .finally(() => {
+        if (!cancelled) setBrandsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const renderTab = () => {
     switch (activeTab) {
@@ -75,60 +116,52 @@ export default function BrandBrainPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Brand Brain</h1>
-              <p className="text-gray-600 mt-1">Sistema operacional da marca Bitrix24 Brasil</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <select
-                value={brandId}
-                onChange={(e) => setBrandId(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Selecionar marca...</option>
-                <option value="bitrix24-brasil">Bitrix24 Brasil</option>
-              </select>
-              <div className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-                v1.0-draft
-              </div>
-            </div>
+    <Layout>
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--v2-color-text-primary)' }}>{t('nav.brand')}</h1>
+            <p className="text-sm mt-1" style={{ color: 'var(--v2-color-text-secondary)' }}>
+              Операционная система бренда
+            </p>
           </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4">
-          <nav className="flex space-x-1 overflow-x-auto" aria-label="Tabs">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`
-                  px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors
-                  ${activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }
-                `}
-              >
-                <span className="mr-2">{tab.icon}</span>
-                {tab.label}
-              </button>
+          <select
+            value={brandId}
+            onChange={(e) => setBrandId(e.target.value)}
+            className="rounded border px-3 py-2 text-sm"
+            style={{ borderColor: 'var(--v2-color-border-strong)' }}
+          >
+            {brandsLoading && <option value="">Загрузка...</option>}
+            {!brandsLoading && brands.length === 0 && <option value="">Бренды не найдены</option>}
+            {brands.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.brand_name}{b.is_default ? ' · по умолчанию' : ''}
+              </option>
             ))}
-          </nav>
+          </select>
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {renderTab()}
+        <nav className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: 'var(--v2-color-border-default)' }}>
+          {TABS.map((tabItem) => (
+            <button
+              key={tabItem.id}
+              type="button"
+              onClick={() => setActiveTab(tabItem.id)}
+              className="px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors"
+              style={{
+                borderColor: activeTab === tabItem.id ? 'var(--v2-color-brand-primary)' : 'transparent',
+                color: activeTab === tabItem.id ? 'var(--v2-color-brand-primary)' : 'var(--v2-color-text-secondary)',
+                background: 'transparent',
+              }}
+            >
+              <span className="mr-2">{tabItem.icon}</span>
+              {tabItem.label}
+            </button>
+          ))}
+        </nav>
+
+        <div>{renderTab()}</div>
       </div>
-    </div>
+    </Layout>
   )
 }
