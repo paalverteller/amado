@@ -3,3 +3,9 @@ node_modules
 tsconfig.tsbuildinfo
 repomix-output*.xml
 apply_sprint*.py
+
+# Local generated and temporary files
+.turbo/
+coverage/
+fix*.sh
+finalize_amado_main.py
