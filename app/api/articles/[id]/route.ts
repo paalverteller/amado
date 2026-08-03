@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 interface Ctx { params: Promise<{ id: string }> }
 
@@ -14,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: Ctx): Promise<NextRespo
     }
     return NextResponse.json(data)
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
@@ -40,6 +41,6 @@ export async function PATCH(req: NextRequest, { params }: Ctx): Promise<NextResp
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(data)
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }

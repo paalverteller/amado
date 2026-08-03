@@ -1,11 +1,12 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 'use client'
 
 import { useState, useEffect } from 'react'
 import Layout from '@/components/Layout'
 import TemplateCard from '@/components/settings/TemplateCard'
 import SourceCard from '@/components/settings/SourceCard'
-import { PromptTemplate, RssSource, BrandProfile } from '@/lib/supabase'
+import { PromptTemplate } from '@/lib/domain/prompt-template'
+import { RssSource } from '@/lib/domain/rss'
+import { BrandProfile } from '@/lib/domain/brand-profile'
 import { t } from '@/lib/i18n/config'
 
 export default function SettingsPage() {

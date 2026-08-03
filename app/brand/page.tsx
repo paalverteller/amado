@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { t } from '@/lib/i18n/config'
 import OverviewTab from '@/components/brand/tabs/OverviewTab'
 import AudiencePainsTab from '@/components/brand/tabs/AudiencePainsTab'
 import ProductsClaimsTab from '@/components/brand/tabs/ProductsClaimsTab'

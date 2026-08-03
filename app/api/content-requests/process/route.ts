@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { requireCronAuth } from '@/lib/cron-auth'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
         results.push({ id: request.id, status: 'completed' })
       } catch (err) {
-        const errorMessage = (err as Error).message
+        const errorMessage = getErrorMessage(err)
         const shouldRetry = (request.retry_count ?? 0) < (request.max_retries ?? 3)
 
         await getSupabaseAdmin()
@@ -80,6 +81,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       results,
     })
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }

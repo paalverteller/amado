@@ -4,8 +4,8 @@
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Layout from '@/components/Layout'
-import { PromptTemplate, BrandProfile } from '@/lib/supabase'
-
+import { PromptTemplate } from '@/lib/domain/prompt-template'
+import { BrandProfile } from '@/lib/domain/brand-profile'
 const FORMATS = [
   { value: 'article', label: 'Artigo (~2500 caracteres)' },
   { value: 'note', label: 'Nota (~1200 caracteres)' },

@@ -12,6 +12,14 @@ export type PipelineEntry = {
 }
 
 const DEFAULT_QUOTA_COOLDOWN_MS = 2 * 60 * 1000
+/**
+ * In-memory, per-process cooldown tracker for rate-limited AI providers.
+ *
+ * ⚠️ State is NOT shared across serverless function instances or cold
+ * starts — this is a best-effort, same-process optimization only, not a
+ * distributed rate limiter. Don't rely on it for correctness, only for
+ * reducing wasted calls within a single warm instance.
+ */
 const modelCooldownUntil = new Map<string, number>()
 
 export function hashSeed(seed: string): number {
@@ -88,17 +96,47 @@ export function setCooldown(entry: PipelineEntry, ms: number): void {
   modelCooldownUntil.set(modelKey(entry), Date.now() + ms)
 }
 
-export function modelLabel(entry: PipelineEntry): string {
-  if (entry.provider === 'google') return `Gemini ${entry.model}`
-  if (entry.provider === 'groq')   return `Groq ${entry.model}`
-  if (entry.provider === 'openai') return `OpenAI ${entry.model}`
-  return `DeepSeek ${entry.model}`
+const PROVIDER_LABELS: Record<Provider, string> = {
+  google: 'Gemini',
+  groq: 'Groq',
+  openai: 'OpenAI',
+  deepseek: 'DeepSeek',
 }
 
-export function createModel(entry: PipelineEntry, googleKey?: string, groqKey?: string, openaiKey?: string) {
-  if (entry.provider === 'google' && googleKey) return createGoogleGenerativeAI({ apiKey: googleKey })(entry.model)
-  if (entry.provider === 'groq' && groqKey) return createGroq({ apiKey: groqKey })(entry.model)
-  if (entry.provider === 'openai' && openaiKey) return createOpenAI({ apiKey: openaiKey })(entry.model)
+export function modelLabel(entry: PipelineEntry): string {
+  return `${PROVIDER_LABELS[entry.provider]} ${entry.model}`
+}
+
+const PROVIDER_ENV_KEYS: Record<Provider, string> = {
+  google: 'GOOGLE_GENERATIVE_AI_API_KEY',
+  groq: 'GROQ_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  deepseek: 'DEEPSEEK_API_KEY',
+}
+
+/** Whether the given provider has an API key configured in the environment. */
+export function isProviderConfigured(provider: Provider): boolean {
+  return Boolean(process.env[PROVIDER_ENV_KEYS[provider]])
+}
+
+/** Filter a pipeline down to entries whose provider is configured and not cooling down. */
+export function eligiblePipeline(pipeline: PipelineEntry[]): PipelineEntry[] {
+  return pipeline.filter((entry) => isProviderConfigured(entry.provider) && !isCoolingDown(entry))
+}
+
+/**
+ * Construct an ai-sdk LanguageModel for a pipeline entry using whichever
+ * provider key is configured in the environment. Returns null for providers
+ * not backed by the ai-sdk (e.g. deepseek, handled via generateDeepSeekText).
+ * Adding a new ai-sdk provider only requires adding one entry to
+ * PROVIDER_ENV_KEYS/PROVIDER_LABELS plus one line here.
+ */
+export function createModel(entry: PipelineEntry) {
+  const apiKey = process.env[PROVIDER_ENV_KEYS[entry.provider]]
+  if (!apiKey) return null
+  if (entry.provider === 'google') return createGoogleGenerativeAI({ apiKey })(entry.model)
+  if (entry.provider === 'groq') return createGroq({ apiKey })(entry.model)
+  if (entry.provider === 'openai') return createOpenAI({ apiKey })(entry.model)
   return null
 }
 

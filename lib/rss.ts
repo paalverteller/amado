@@ -10,11 +10,12 @@
  */
 
 import Parser from 'rss-parser'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { readUrlAsText } from '@/lib/web-reader'
 import { isFeatureEnabled } from '@/lib/amado-config'
 import { saveEvidence, recordSourceHealth, recordIngestionRun } from '@/lib/evidence'
 import type { ConnectorType } from '@/lib/ingestion/types'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 const RSS_TIMEOUT_MS = 15_000
 const MAX_ITEMS_PER_SOURCE = 6
@@ -105,7 +106,10 @@ async function saveRows(sourceId: string, rows: RssRow[], connectorType: string)
       evidenceSaved++
     }
   } catch (evError) {
-    console.warn('[rss] Evidence save error (non-critical):', (evError as Error).message)
+    console.warn('[rss] Evidence save error (non-critical):', getErrorMessage(evError))
+  }
+  if (evidenceSaved < unique.length) {
+    console.warn(`[rss] Evidence dual-write: ${evidenceSaved}/${unique.length} saved`)
   }
   
   // Record ingestion run
@@ -177,11 +181,11 @@ async function fetchPubMed(sourceId: string, queryHint = 'mental_health'): Promi
     }
     return saveRows(sourceId, rows, 'api')
   } catch (err) {
-    console.warn('[rss] PubMed error:', (err as Error).message)
+    console.warn('[rss] PubMed error:', getErrorMessage(err))
     await recordSourceHealth({
       sourceId,
       eventType: 'failure',
-      errorMessage: (err as Error).message,
+      errorMessage: getErrorMessage(err),
     })
     return 0
   }
@@ -350,11 +354,11 @@ async function fetchHtmlFallback(sourceId: string, indexUrl: string): Promise<nu
 
     return saveRows(sourceId, rows, 'html_index')
   } catch (err) {
-    console.warn(`[rss] HTML fallback failed for ${indexUrl}:`, (err as Error).message)
+    console.warn(`[rss] HTML fallback failed for ${indexUrl}:`, getErrorMessage(err))
     await recordSourceHealth({
       sourceId,
       eventType: 'failure',
-      errorMessage: (err as Error).message,
+      errorMessage: getErrorMessage(err),
       responseTimeMs: Date.now() - startMs,
     })
     return 0
@@ -422,11 +426,11 @@ export async function fetchAndSaveRss(
     console.warn(`[rss] RSS empty for ${url} — skipping HTML fallback`)
     return 0
   } catch (err) {
-    console.warn(`[rss] RSS parse failed for ${url}: ${(err as Error).message}`)
+    console.warn(`[rss] RSS parse failed for ${url}: ${getErrorMessage(err)}`)
     await recordSourceHealth({
       sourceId,
       eventType: 'failure',
-      errorMessage: (err as Error).message,
+      errorMessage: getErrorMessage(err),
       responseTimeMs: Date.now() - startMs,
     })
     return fetchHtmlFallback(sourceId, url)

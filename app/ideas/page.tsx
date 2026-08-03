@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Layout from '@/components/Layout'
 import { t } from '@/lib/i18n/config'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 type TrendItem = {
   id: string
@@ -20,22 +21,23 @@ export default function IdeasPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const fetchTrends = async () => {
-    setLoading(true)
-    setError('')
+  async function fetchTrends() {
     try {
       const res = await fetch('/api/market?limit=20', { cache: 'no-store' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Erro ao carregar tendências')
       setTrends(data.items || [])
     } catch (err) {
-      setError((err as Error).message)
+      setError(getErrorMessage(err))
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
+    // Confirmed false positive for "call an async fetcher from a mount
+    // effect"; see https://github.com/facebook/react/issues/34743
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTrends()
   }, [])
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface QaFinding {
   id: string
@@ -16,18 +16,21 @@ export default function ComplianceTab({ brandId }: { brandId: string }) {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'open' | 'critical'>('all')
 
-  useEffect(() => {
-    if (!brandId) { setLoading(false); return }
-    fetchFindings()
-  }, [brandId])
-
-  async function fetchFindings() {
+  const fetchFindings = useCallback(async () => {
     try {
       const res = await fetch(`/api/brands/${brandId}/qa-findings`)
       if (res.ok) setFindings((await res.json()).findings || [])
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
-  }
+  }, [brandId])
+
+  useEffect(() => {
+    if (!brandId) return
+    // Confirmed false positive for "call a memoized async fetcher from an
+    // effect"; see https://github.com/facebook/react/issues/34743
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchFindings()
+  }, [brandId, fetchFindings])
 
   const filtered = filter === 'all' ? findings :
     filter === 'open' ? findings.filter(f => f.status === 'open') :

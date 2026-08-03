@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { requireCronAuth } from '@/lib/cron-auth'
 import { CRON_CONFIG } from '@/lib/amado-config'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -47,6 +48,6 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ status: 'ok', marketRefreshResult: data })
   } catch (err) {
     console.error('[cron/market-refresh] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { t } from '@/lib/i18n/config'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 interface SourceHealth {
   id: string
@@ -65,7 +66,7 @@ export default function AnalyticsPage() {
         setPipeline(pipelineData.metrics || null)
       }
     } catch (err) {
-      setError((err as Error).message)
+      setError(getErrorMessage(err))
     } finally {
       setLoading(false)
     }

@@ -1,3 +1,4 @@
+import { getErrorMessage } from '@/lib/api/error-message'
 /**
  * app/api/market/route.ts
  * 
@@ -6,8 +7,7 @@
  * Backward compatible: UI expects title_ru/summary_ru fields.
  */
  import { NextResponse } from 'next/server'
- import { getSupabaseAdmin } from '@/lib/supabase'
-
+ import { getSupabaseAdmin } from '@/lib/supabase/client'
  export const dynamic = 'force-dynamic'
 
  const MAX_TOTAL = 100
@@ -101,6 +101,6 @@
        },
      })
    } catch (err) {
-     return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+     return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
    }
  }

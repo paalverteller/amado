@@ -103,7 +103,8 @@ export function scopeMatches(ruleScope: RuleScope, context: CompileContext): boo
  * Sort rules by precedence for compilation.
  * Lower number = higher precedence (applied first).
  */
-export function sortByPrecedence(rules: BrandRule[], context: CompileContext): BrandRule[] {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- reserved for future context-aware sorting; kept in the signature since compileRules already passes a real context through
+export function sortByPrecedence(rules: BrandRule[], _context: CompileContext): BrandRule[] {
   return [...rules].sort((a, b) => {
     // Layer precedence
     const layerA = RULE_CLASS_LAYER[a.ruleClass] ?? 99

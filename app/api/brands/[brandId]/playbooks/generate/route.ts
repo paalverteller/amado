@@ -1,8 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase/client'
 import { buildUserPrompt } from '@/lib/prompts'
 import { generateArticleWithFallback } from '@/lib/ai'
 import type { ContentFormat } from '@/lib/content-formats'
+
+/** Row shape actually read from `evidence_items` in this route. */
+interface EvidenceItemRow {
+  title: string | null
+  source_name: string | null
+  summary: string | null
+  source_url: string | null
+}
+
+/**
+ * Row shape actually read from `platform_playbooks` in this route.
+ * NOTE: this does not match `lib/brand-os/types.ts`'s `PlatformPlaybook`
+ * (that one is camelCase and describes a different, newer schema) — the
+ * fields below reflect what's actually queried/used here.
+ */
+interface PlaybookRow {
+  platform: string
+  format: string
+  tone: string | null
+  structure: string | null
+  cta_style: string | null
+  max_length: number | null
+  hashtag_strategy: string | null
+  emoji_policy: string | null
+  link_policy: string | null
+  visual_guidance: string | null
+}
 
 /**
  * POST /api/brands/[brandId]/playbooks/generate
@@ -49,18 +76,19 @@ export async function POST(
       .single()
 
     // Fetch pillar if specified
-    let pillar = null
+    // NOTE: fetched but not currently passed into buildUserPrompt() below —
+    // looks like pillar context was meant to inform the prompt but was
+    // never wired in. Flagging rather than guessing at the intended usage.
     if (pillarId) {
-      const { data: p } = await supabase
+      await supabase
         .from('brand_content_pillars')
         .select('*')
         .eq('id', pillarId)
         .single()
-      pillar = p
     }
 
     // Fetch evidence items
-    let evidenceItems: any[] = []
+    let evidenceItems: EvidenceItemRow[] = []
     if (evidenceIds && evidenceIds.length > 0) {
       const { data: items } = await supabase
         .from('evidence_items')
@@ -80,10 +108,10 @@ export async function POST(
         culturalNotes: brand?.cultural_notes,
       },
       evidenceItems: evidenceItems.map(e => ({
-        title: e.title,
-        source: e.source_name,
-        summary: e.summary,
-        url: e.source_url,
+        title: e.title ?? undefined,
+        source: e.source_name ?? undefined,
+        summary: e.summary ?? undefined,
+        url: e.source_url ?? undefined,
       })),
       brandVoice: {
         tone: playbook.tone,
@@ -131,7 +159,7 @@ export async function POST(
   }
 }
 
-function buildPlatformInstructions(playbook: any): string {
+function buildPlatformInstructions(playbook: PlaybookRow): string {
   const parts: string[] = []
   
   parts.push(`Platform: ${playbook.platform}`)

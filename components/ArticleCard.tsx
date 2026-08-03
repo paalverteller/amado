@@ -1,18 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { Article } from '@/lib/supabase'
-
+import { Article } from '@/lib/domain/article'
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })
 }
 
 function safeText(value: string | null | undefined): string {
   return value?.trim() || 'Sem tema'
-}
-
-function stripText(text: string): string {
-  return text.replace(/\s+/g, ' ').trim()
 }
 
 /**

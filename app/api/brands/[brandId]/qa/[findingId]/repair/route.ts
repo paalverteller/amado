@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { generateArticleWithFallback } from '@/lib/ai'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 /**
  * POST /api/brands/[brandId]/qa/[findingId]/repair
@@ -62,7 +63,7 @@ PLATFORM: ${asset.platform}
 FORMAT: ${asset.format}
 
 RELEVANT BRAND RULES:
-${(rules || []).map((r: any) => `- ${r.value_json?.instruction || r.rule_key}`).join('\n')}
+${(rules || []).map((r: { value_json?: { instruction?: string }; rule_key: string }) => `- ${r.value_json?.instruction || r.rule_key}`).join('\n')}
 
 INSTRUCTIONS:
 1. Fix the issue while preserving the original message and tone
@@ -100,7 +101,7 @@ REPAIRED CONTENT:`
     })
   } catch (err) {
     console.error('[repair-run] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
@@ -160,6 +161,6 @@ export async function PATCH(
     return NextResponse.json({ repairRun })
   } catch (err) {
     console.error('[repair-review] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }

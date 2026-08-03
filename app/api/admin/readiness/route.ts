@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'
 
@@ -126,7 +127,7 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json(
       {
         ...report,
-        blockers: [...report.blockers, `Readiness check failed: ${(err as Error).message}`],
+        blockers: [...report.blockers, `Readiness check failed: ${getErrorMessage(err)}`],
       },
       { status: 500 }
     )

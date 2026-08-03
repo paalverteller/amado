@@ -1,6 +1,7 @@
 // Firecrawl integration for scraping web articles into clean text.
 // Falls back to native fetch + basic HTML stripping if no API key is set.
 
+import { getErrorMessage } from '@/lib/api/error-message'
 const FIRECRAWL_API = 'https://api.firecrawl.dev/v1/scrape'
 const TIMEOUT_MS = 15000
 
@@ -134,7 +135,7 @@ export async function scrapeUrl(url: string): Promise<ScrapeResult> {
     try {
       return await scrapeWithFirecrawl(url, apiKey)
     } catch (err) {
-      console.error('[firecrawl] primary failed, falling back to native:', (err as Error).message)
+      console.error('[firecrawl] primary failed, falling back to native:', getErrorMessage(err))
     }
   }
 

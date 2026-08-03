@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { PromptTemplate } from '@/lib/supabase'
+import type { PromptTemplate } from '@/lib/domain/prompt-template'
 import Link from 'next/link'
 import Layout from '@/components/Layout'
 import { t } from '@/lib/i18n/config'

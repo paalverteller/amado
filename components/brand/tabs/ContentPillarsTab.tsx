@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface Pillar {
   id: string
@@ -15,18 +15,21 @@ export default function ContentPillarsTab({ brandId }: { brandId: string }) {
   const [pillars, setPillars] = useState<Pillar[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (!brandId) { setLoading(false); return }
-    fetchPillars()
-  }, [brandId])
-
-  async function fetchPillars() {
+  const fetchPillars = useCallback(async () => {
     try {
       const res = await fetch(`/api/brands/${brandId}/pillars`)
       if (res.ok) setPillars((await res.json()).pillars || [])
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
-  }
+  }, [brandId])
+
+  useEffect(() => {
+    if (!brandId) return
+    // Confirmed false positive for "call a memoized async fetcher from an
+    // effect"; see https://github.com/facebook/react/issues/34743
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchPillars()
+  }, [brandId, fetchPillars])
 
   if (!brandId) return <div className="text-center py-12 text-gray-500">Selecione uma marca</div>
   if (loading) return <div className="text-center py-12">Carregando...</div>

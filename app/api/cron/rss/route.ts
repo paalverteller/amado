@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { fetchAndSaveRss } from '@/lib/rss'
 import { requireCronAuth } from '@/lib/cron-auth'
 import { buildSourceConnector } from '@/lib/ingestion/types'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       totalNew += newItems
       results.push({ name: source.name, newItems })
     } catch (err) {
-      const msg = (err as Error).message
+      const msg = getErrorMessage(err)
       console.error(`[cron/rss] ${source.name}:`, msg)
       results.push({ name: source.name, newItems: 0, error: msg })
     }

@@ -4,7 +4,7 @@
  * §9.3: Evidence layer — normalized records with source/ localization separation.
  */
 
-import { getSupabaseAdmin } from './supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import crypto from 'crypto'
 
 export interface EvidenceInput {

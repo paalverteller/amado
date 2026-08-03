@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface Term {
   id: string
@@ -15,18 +15,21 @@ export default function VoiceVocabularyTab({ brandId }: { brandId: string }) {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'forbidden' | 'preferred' | 'discouraged'>('all')
 
-  useEffect(() => {
-    if (!brandId) { setLoading(false); return }
-    fetchTerms()
-  }, [brandId])
-
-  async function fetchTerms() {
+  const fetchTerms = useCallback(async () => {
     try {
       const res = await fetch(`/api/brands/${brandId}/terms`)
       if (res.ok) setTerms((await res.json()).terms || [])
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
-  }
+  }, [brandId])
+
+  useEffect(() => {
+    if (!brandId) return
+    // Confirmed false positive for "call a memoized async fetcher from an
+    // effect"; see https://github.com/facebook/react/issues/34743
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchTerms()
+  }, [brandId, fetchTerms])
 
   const filtered = filter === 'all' ? terms : terms.filter(t => t.policy === filter)
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 export async function GET(
   request: NextRequest,
@@ -26,7 +27,7 @@ export async function GET(
     return NextResponse.json({ campaign })
   } catch (err) {
     console.error('[campaign-get] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
@@ -39,7 +40,7 @@ export async function PATCH(
     const body = await request.json()
     const admin = getSupabaseAdmin()
 
-    const updates: any = {}
+    const updates: Record<string, unknown> = {}
     const fields = ['name', 'description', 'objective', 'target_audience', 'key_messages', 'duration_days', 'budget_range', 'kpi_targets', 'active']
     
     for (const field of fields) {
@@ -59,7 +60,7 @@ export async function PATCH(
     return NextResponse.json({ campaign })
   } catch (err) {
     console.error('[campaign-update] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
@@ -82,6 +83,6 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('[campaign-delete] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }

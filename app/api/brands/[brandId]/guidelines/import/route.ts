@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { extractGuidelineRules, calculateExtractionStats } from '@/lib/brand-os/guideline-extractor'
+import type { ExtractionInput } from '@/lib/brand-os/guideline-extractor'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,7 +77,7 @@ export async function POST(
     // 3. Run extraction agent
     try {
       const extractionResult = await extractGuidelineRules({
-        sourceType: sourceType as any,
+        sourceType: sourceType as ExtractionInput['sourceType'],
         sourceUrl,
         sourceText: content,
         brandId,
@@ -142,7 +144,7 @@ export async function POST(
         .from('guideline_import_runs')
         .update({
           status: 'failed',
-          error_summary: { message: (extractError as Error).message },
+          error_summary: { message: getErrorMessage(extractError) },
         })
         .eq('id', importRun.id)
 
@@ -153,11 +155,11 @@ export async function POST(
           documentType: importRun.document_type,
           createdAt: importRun.created_at,
         },
-        error: 'Extraction failed: ' + (extractError as Error).message,
+        error: 'Extraction failed: ' + getErrorMessage(extractError),
       }, { status: 500 })
     }
   } catch (err) {
     console.error('[guideline-import] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }

@@ -10,7 +10,7 @@
  *   - Structured prompt from single content spec object
  */
 
-import { getSupabaseAdmin } from './supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { isShortFormat, isSegmentedFormat, getFormatMeta, type ContentFormat } from './content-formats'
 import { DEFAULT_LOCALE } from './locale'
 
@@ -93,7 +93,7 @@ function resolveLengthConstraints(spec: ContentSpec): { minChars: number; maxCha
   
   // Base constraints from format metadata
   let maxChars = meta?.maxChars ?? 2500
-  let minChars = 200
+  const minChars = 200
   let minWords: number | null = null
   let maxWords: number | null = null
   
@@ -116,7 +116,7 @@ function resolveLengthConstraints(spec: ContentSpec): { minChars: number; maxCha
 }
 
 function buildFormatInstruction(spec: ContentSpec): string {
-  const { minChars, maxChars, minWords, maxWords } = resolveLengthConstraints(spec)
+  const { maxChars, minWords, maxWords } = resolveLengthConstraints(spec)
   const meta = getFormatMeta(spec.format)
   
   const parts: string[] = []
@@ -248,7 +248,10 @@ export async function buildEvidenceContext(evidenceItemIds?: string[] | null): P
 }
 
 export function buildUserPrompt(spec: ContentSpec): string {
-  const { topic, format, locale = DEFAULT_LOCALE } = spec
+  // NOTE: `locale` is accepted here but every template below hardcodes
+  // Portuguese (Brazil) directly — multi-locale support isn't actually
+  // wired into these prompts yet. Flagging rather than silently guessing.
+  const { topic, format } = spec
   
   if (format === 'quick_note') {
     return `<task>Raw user text:

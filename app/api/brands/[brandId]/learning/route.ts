@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 /**
  * GET /api/brands/[brandId]/learning
@@ -16,7 +17,7 @@ export async function GET(
     const limit = parseInt(searchParams.get('limit') || '50')
 
     const admin = getSupabaseAdmin()
-    const result: any = {}
+    const result: Record<string, unknown[]> = {}
 
     if (type === 'all' || type === 'performance') {
       const { data: snapshots } = await admin
@@ -51,7 +52,7 @@ export async function GET(
     return NextResponse.json(result)
   } catch (err) {
     console.error('[learning-get] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
@@ -115,11 +116,11 @@ export async function POST(
     if (existingPattern) {
       // Update existing pattern
       const newUsageCount = existingPattern.usage_count + 1
-      const currentAvg = existingPattern.avg_performance || {}
-      const newAvg: any = {}
+      const currentAvg: Record<string, number> = existingPattern.avg_performance || {}
+      const newAvg: Record<string, number> = {}
       
       for (const [key, value] of Object.entries(metrics)) {
-        const currentVal = (currentAvg as any)[key] || 0
+        const currentVal = currentAvg[key] || 0
         newAvg[key] = (currentVal * existingPattern.usage_count + (value as number)) / newUsageCount
       }
 
@@ -189,11 +190,11 @@ export async function POST(
     })
   } catch (err) {
     console.error('[learning-post] error:', err)
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
-function calculatePerformanceScore(metrics: any): number {
+function calculatePerformanceScore(metrics: Record<string, number>): number {
   // Simple weighted score based on common metrics
   const weights: Record<string, number> = {
     engagement_rate: 0.3,

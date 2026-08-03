@@ -1,24 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { createBrandListHandler } from '@/lib/api/brand-scoped-list'
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ brandId: string }> }
-) {
-  const { brandId } = await params
-  try {
-    const supabase = getSupabase()
-    const { data: audiences, error } = await supabase
-      .from('brand_audiences')
-      .select('*')
-      .eq('brand_id', brandId)
-      .eq('active', true)
-      .order('created_at', { ascending: true })
-
-    if (error) throw error
-    return NextResponse.json({ audiences: audiences || [] })
-  } catch (error) {
-    console.error('Audiences API error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
-}
+export const GET = createBrandListHandler({
+  table: 'brand_audiences',
+  responseKey: 'audiences',
+  orderBy: 'created_at',
+  onlyActive: true,
+})

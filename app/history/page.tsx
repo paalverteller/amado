@@ -4,8 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import Layout from '@/components/Layout'
 import ArticleCard from '@/components/ArticleCard'
-import { Article } from '@/lib/supabase'
-
+import { Article } from '@/lib/domain/article'
 function SkeletonCard() {
   return (
     <div className="bg-white border border-surface-variant/30 rounded-2xl p-5 animate-pulse">

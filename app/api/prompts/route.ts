@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
-
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Internal Server Error'
 }

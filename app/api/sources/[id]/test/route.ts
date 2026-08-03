@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { fetchAndSaveRss } from '@/lib/rss'
 import { normalizeConnectorType } from '@/lib/ingestion/types'
 import { recordSourceHealth } from '@/lib/evidence'
+import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,7 +69,7 @@ export async function POST(
       // It will save to both rss_items and evidence_items
       itemsFetched = await fetchAndSaveRss(source.id, source.url, connectorType)
     } catch (err) {
-      ingestionError = (err as Error).message
+      ingestionError = getErrorMessage(err)
       await recordSourceHealth({
         sourceId: source.id,
         eventType: 'failure',
@@ -116,7 +117,7 @@ export async function POST(
       {
         sourceId: id,
         status: 'error',
-        error: (err as Error).message,
+        error: getErrorMessage(err),
         durationMs,
       },
       { status: 500 }
