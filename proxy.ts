@@ -35,9 +35,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Authenticated user on login page -> send to app
+  // Authenticated user on login page -> send to the Overview landing page
   if (isAuthenticated && isPublicPage) {
-    return NextResponse.redirect(new URL('/generate', request.url))
+    return NextResponse.redirect(new URL('/overview', request.url))
   }
 
   return NextResponse.next()

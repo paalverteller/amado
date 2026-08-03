@@ -4,45 +4,56 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { type ReactNode, useState, useEffect, useRef } from 'react'
+import { t } from '@/lib/i18n/config'
 
-// Desktop nav — all 6 items
-const NAV_DESKTOP = [
-  { href: '/generate', label: 'Geração' },
-  { href: '/ideas',    label: 'Local Pulse' },
-  { href: '/rewrite',  label: 'Rewrite' },
-  { href: '/market',   label: 'Mercado' },
-  { href: '/history',  label: 'Histórico' },
-  { href: '/settings', label: 'Configurações' },
+// Primary nav — matches the target IA from the lean plan:
+// Обзор → Рынок → Генерация → База знаний → Бренд → Конкуренты
+const NAV_PRIMARY = [
+  { href: '/overview',    label: t('nav.overview') },
+  { href: '/market',      label: t('nav.market') },
+  { href: '/generate',    label: t('nav.generate') },
+  { href: '/knowledge',   label: t('nav.knowledge') },
+  { href: '/brand',       label: t('nav.brand') },
+  { href: '/competitors', label: t('nav.competitors') },
+]
+
+// Utility nav — secondary destinations. Nothing was deleted: /ideas and
+// /rewrite keep working, they're just de-prioritized per the plan's IA.
+const NAV_UTILITY = [
+  { href: '/ideas',    label: t('nav.ideas') },
+  { href: '/rewrite',  label: t('nav.rewrite') },
+  { href: '/history',  label: t('nav.history') },
+  { href: '/settings', label: t('nav.settings') },
 ]
 
 // Mobile bottom nav — 6 icon-only destinations split around center FAB
 const NAV_MOBILE = [
-  { href: '/generate', label: 'Criar',  icon: (
+  { href: '/generate', label: 'Создать',  icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 5v14M5 12h14"/>
     </svg>
   )},
-  { href: '/market',   label: 'Mercado',    icon: (
+  { href: '/market',   label: 'Рынок',    icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 12h20M2 6h20M2 18h12"/>
     </svg>
   )},
-  { href: '/ideas',    label: 'Pulse',     icon: (
+  { href: '/ideas',    label: 'Идеи',     icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.29-1.22 4.3-3 5.42V16a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1.58A6 6 0 0 1 12 3z"/>
     </svg>
   )},
-  { href: '/rewrite',  label: 'Rewrite',  icon: (
+  { href: '/rewrite',  label: 'Переписать',  icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
     </svg>
   )},
-  { href: '/history',  label: 'Histórico',  icon: (
+  { href: '/history',  label: 'История',  icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 8v4l3 3M3.05 11a9 9 0 1 0 .5-3M3 4v4h4"/>
     </svg>
   )},
-  { href: '/settings', label: 'Mais',      icon: (
+  { href: '/settings', label: 'Ещё',      icon: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
     </svg>
@@ -51,7 +62,7 @@ const NAV_MOBILE = [
 
 function Brand() {
   return (
-    <Link href="/generate" className="min-w-0 no-underline group flex items-center gap-3">
+    <Link href="/overview" className="min-w-0 no-underline group flex items-center gap-3">
       <div
         className="shrink-0 flex items-center justify-center overflow-hidden"
         style={{
@@ -198,7 +209,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   }
 
   function isActive(href: string) {
-    return href === '/generate'
+    return href === '/generate' || href === '/overview'
       ? pathname === href
       : pathname === href || pathname.startsWith(href + '/')
   }
@@ -258,7 +269,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
             {/* Desktop Nav — hidden on mobile */}
             <nav className="hidden lg:flex" style={{ alignItems: 'center', gap: '0.25rem' }}>
-              {NAV_DESKTOP.map(({ href, label }) => {
+              {NAV_PRIMARY.map(({ href, label }) => {
                 const active = isActive(href)
                 return (
                   <Link
@@ -280,6 +291,36 @@ export default function Layout({ children }: { children: ReactNode }) {
                     }}
                     onMouseLeave={e => {
                       if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'
+                    }}
+                  >
+                    {label}
+                  </Link>
+                )
+              })}
+
+              <span aria-hidden style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.18)', margin: '0 0.5rem' }} />
+
+              {NAV_UTILITY.map(({ href, label }) => {
+                const active = isActive(href)
+                return (
+                  <Link
+                    key={href} href={href}
+                    style={{
+                      padding: '0.4rem 0.75rem',
+                      borderRadius: 999,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      textDecoration: 'none',
+                      letterSpacing: '0.01em',
+                      transition: 'all 180ms ease',
+                      background: active ? 'rgba(255,255,255,0.12)' : 'transparent',
+                      color: active ? '#ffffff' : 'rgba(255,255,255,0.45)',
+                    }}
+                    onMouseEnter={e => {
+                      if (!active) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.7)'
+                    }}
+                    onMouseLeave={e => {
+                      if (!active) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.45)'
                     }}
                   >
                     {label}
@@ -325,7 +366,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               <polyline points="16 17 21 12 16 7"/>
               <line x1="21" y1="12" x2="9" y2="12"/>
             </svg>
-            <span className="hidden sm:inline">Sair</span>
+            <span className="hidden sm:inline">Выйти</span>
           </button>
         </div>
       </header>
@@ -347,7 +388,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       </main>
 
       {/* ── Mobile Bottom Nav Bar (PWA-native, hidden on desktop) ── */}
-      <nav className="bottom-nav lg:hidden" aria-label="Navegação principal">
+      <nav className="bottom-nav lg:hidden" aria-label="Основная навигация">
         <div className="bottom-nav-inner">
           {NAV_MOBILE.slice(0, 3).map(({ href, label, icon }) => {
             const active = isActive(href)
@@ -367,8 +408,8 @@ export default function Layout({ children }: { children: ReactNode }) {
           <button
             type="button"
             className="bottom-nav-fab"
-            aria-label="Conteúdo rápido"
-            title="Conteúdo rápido"
+            aria-label="Быстрое создание"
+            title="Быстрое создание"
             onClick={() => setQuickCreateOpen(true)}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">

@@ -7,8 +7,8 @@
 
 export type Locale = 'pt-BR' | 'en' | 'ru'
 
-export const DEFAULT_LOCALE: Locale = 'pt-BR'
-export const SUPPORTED_LOCALES: Locale[] = ['pt-BR', 'en']
+export const DEFAULT_LOCALE: Locale = 'ru'
+export const SUPPORTED_LOCALES: Locale[] = ['ru', 'pt-BR', 'en']
 
 export const LOCALE_NAMES: Record<Locale, string> = {
   'pt-BR': 'Português (Brasil)',
@@ -66,13 +66,15 @@ function getDictionary(locale: Locale): MessageDictionary {
   switch (locale) {
     case 'en':
       return EN_DICT
+    case 'ru':
+      return RU_DICT
     case 'pt-BR':
     default:
       return PT_BR_DICT
   }
 }
 
-// ─── Portuguese (Brazil) — Primary ──────────────────────────────────────────
+// ─── Portuguese (Brazil) — generated-content language + UI fallback ────────
 
 const PT_BR_DICT: MessageDictionary = {
   // Navigation
@@ -218,6 +220,179 @@ const PT_BR_DICT: MessageDictionary = {
     'name': 'Amado',
     'tagline': 'Inteligência e Produção de Conteúdo com IA',
     'description': 'Sistema de inteligência de conteúdo para equipes de marketing regional',
+  },
+}
+
+// ─── Russian — Primary UI language ──────────────────────────────────────────
+// §4 of the lean plan: the product interface is fully Russian. Generated
+// market content stays pt-BR (see DEFAULT_LOCALE in lib/locale.ts, which is
+// a separate, deliberately-unchanged concept from the UI locale here).
+
+const RU_DICT: MessageDictionary = {
+  'nav': {
+    'overview': 'Обзор',
+    'brief': 'Обзор',
+    'signals': 'Рынок',
+    'opportunities': 'Идеи',
+    'studio': 'Генерация',
+    'pipeline': 'История',
+    'library': 'База знаний',
+    'settings': 'Настройки',
+    'generate': 'Генерация',
+    'market': 'Рынок',
+    'ideas': 'Идеи',
+    'rewrite': 'Переписать',
+    'history': 'История',
+    'knowledge': 'База знаний',
+    'brand': 'Бренд',
+    'competitors': 'Конкуренты',
+    'sources': 'Источники',
+    'analytics': 'Аналитика',
+  },
+
+  'action': {
+    'create': 'Создать',
+    'save': 'Сохранить',
+    'delete': 'Удалить',
+    'edit': 'Изменить',
+    'cancel': 'Отмена',
+    'confirm': 'Подтвердить',
+    'generate': 'Сгенерировать',
+    'approve': 'Утвердить',
+    'reject': 'Отклонить',
+    'export': 'Экспортировать',
+    'publish': 'Опубликовать',
+    'schedule': 'Запланировать',
+    'dismiss': 'Скрыть',
+    'watch': 'Отслеживать',
+    'refresh': 'Обновить',
+    'test': 'Проверить',
+    'add': 'Добавить',
+    'remove': 'Убрать',
+    'search': 'Поиск',
+    'filter': 'Фильтр',
+    'sort': 'Сортировка',
+    'logout': 'Выйти',
+  },
+
+  'format': {
+    'article': 'Статья',
+    'linkedin_post': 'Пост LinkedIn',
+    'instagram_caption': 'Подпись Instagram',
+    'instagram_carousel': 'Карусель Instagram',
+    'x_thread': 'Тред X',
+    'facebook_post': 'Пост Facebook',
+    'telegram_post': 'Пост Telegram',
+    'short_video_script': 'Сценарий короткого видео',
+    'email': 'Email',
+    'quick_note': 'Быстрая заметка',
+    'rewrite': 'Переписанный текст',
+  },
+
+  'status': {
+    'draft': 'Черновик',
+    'review': 'На проверке',
+    'approved': 'Утверждено',
+    'scheduled': 'Запланировано',
+    'published': 'Опубликовано',
+    'dismissed': 'Отклонено',
+    'active': 'Активно',
+    'inactive': 'Неактивно',
+  },
+
+  'settings': {
+    'title': 'Настройки',
+    'subtitle': 'Управление брендами, источниками и шаблонами',
+    'sources': 'Источники данных',
+    'templates': 'Профили генерации',
+    'brands': 'Бренды',
+    'regions': 'Регионы',
+    'language': 'Язык',
+    'source_name': 'Название источника',
+    'source_url': 'URL источника',
+    'source_type': 'Тип коннектора',
+    'source_country': 'Страна',
+    'brand_name': 'Название бренда',
+    'brand_voice': 'Голос бренда',
+    'brand_audience': 'Целевая аудитория',
+    'brand_forbidden': 'Запрещённые слова',
+    'brand_examples': 'Примеры постов',
+    'brand_competitors': 'Конкуренты',
+    'add_source': 'Добавить источник',
+    'add_brand': 'Добавить бренд',
+    'source_health': 'Статус источника',
+    'last_sync': 'Последняя синхронизация',
+    'manual': 'Вручную',
+  },
+
+  'market': {
+    'title': 'Рынок',
+    'signals': 'Сигналы',
+    'rising': 'В тренде',
+    'breaking': 'Срочно',
+    'category': 'Категория',
+    'competitors': 'Конкуренты',
+    'platform_updates': 'Обновления платформ',
+    'campaign_inspiration': 'Идеи для кампаний',
+    'saved': 'Сохранённые',
+    'no_items': 'Ничего не найдено',
+    'source': 'Источник',
+    'published': 'Опубликовано',
+    'collected': 'Собрано',
+  },
+
+  'generate': {
+    'title': 'Генерация',
+    'topic': 'Тема',
+    'context': 'Контекст',
+    'content_type': 'Тип контента',
+    'template': 'Шаблон',
+    'brand_profile': 'Профиль бренда',
+    'seo_mode': 'Режим SEO',
+    'placeholder_topic': 'Введите тему материала...',
+    'placeholder_context': 'Дополнительный контекст (необязательно)...',
+    'generating': 'Генерация...',
+    'regenerate': 'Сгенерировать заново',
+    'copy': 'Скопировать',
+    'download': 'Скачать',
+  },
+
+  'error': {
+    'generic': 'Что-то пошло не так',
+    'network': 'Ошибка соединения',
+    'unauthorized': 'Нет доступа',
+    'not_found': 'Не найдено',
+    'validation': 'Некорректные данные',
+    'server': 'Ошибка сервера',
+  },
+
+  'product': {
+    'name': 'Amado',
+    'tagline': 'AI-платформа для рыночной аналитики и контента',
+    'description': 'Система рыночной аналитики и генерации контента для маркетинговых команд',
+  },
+
+  // ── New workspace shells added in Sprint 1 (Phase 1) ──
+  'overview': {
+    'title': 'Обзор',
+    'subtitle': 'Главное за сегодня',
+    'freshness_label': 'Данные обновлены',
+    'no_briefing_title': 'Свежих данных пока нет',
+    'no_briefing_body': 'Как только появятся важные материалы с рынка, они будут показаны здесь.',
+    'active_brand': 'Активный бренд',
+    'go_to_market': 'Открыть Рынок',
+  },
+  'knowledge': {
+    'title': 'База знаний',
+    'subtitle': 'Внутренние документы, заметки и гайдлайны бренда',
+    'coming_soon_title': 'Раздел в разработке',
+    'coming_soon_body': 'Загрузка текстов, поиск по базе знаний и использование фрагментов в генерации появятся в одном из ближайших спринтов.',
+  },
+  'competitors': {
+    'title': 'Конкуренты',
+    'subtitle': 'Отслеживание обновлений конкурентов',
+    'coming_soon_title': 'Раздел в разработке',
+    'coming_soon_body': 'Список конкурентов, их источники и сводки обновлений появятся в одном из ближайших спринтов.',
   },
 }
 
