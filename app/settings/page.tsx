@@ -12,6 +12,14 @@ import { t } from '@/lib/i18n/config'
 export default function SettingsPage() {
   const [templates, setTemplates] = useState<PromptTemplate[]>([])
   const [sources, setSources] = useState<RssSource[]>([])
+  const [sourceHealth, setSourceHealth] = useState<Record<string, {
+    status: string
+    consecutiveFailures: number
+    lastSuccess: string | null
+    lastFailure: string | null
+    lastErrorMessage: string | null
+    successRate24h: number | null
+  }>>({})
   const [brandProfiles, setBrandProfiles] = useState<BrandProfile[]>([])
   const [regions, setRegions] = useState<{ id: string; code: string; name: string }[]>([])
   
@@ -36,6 +44,13 @@ export default function SettingsPage() {
     fetch('/api/rss').then(res => res.json()).then(data => setSources(data.sources || []))
     fetch('/api/brand-profiles').then(res => res.json()).then(data => setBrandProfiles(data.profiles || []))
     fetch('/api/regions').then(res => res.json()).then(data => setRegions(data.regions || []))
+    fetch('/api/sources/health').then(res => res.json()).then(data => {
+      const bySourceId: typeof sourceHealth = {}
+      for (const s of data.sources || []) {
+        bySourceId[s.id] = s.health
+      }
+      setSourceHealth(bySourceId)
+    })
   }
 
   useEffect(() => reloadData(), [])
@@ -157,6 +172,7 @@ export default function SettingsPage() {
             {sources.map(s => (
               <SourceCard 
                 key={s.id} source={s} 
+                health={sourceHealth[s.id]}
                 onToggleActive={async (id, a) => {
                   await fetch(`/api/rss/${id}`, { method: 'PATCH', body: JSON.stringify({ active: !a }) })
                   reloadData()

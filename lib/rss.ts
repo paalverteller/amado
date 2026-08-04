@@ -10,6 +10,7 @@
  */
 
 import Parser from 'rss-parser'
+import crypto from 'crypto'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { readUrlAsText } from '@/lib/web-reader'
 import { isFeatureEnabled } from '@/lib/amado-config'
@@ -365,6 +366,69 @@ async function fetchHtmlFallback(sourceId: string, indexUrl: string): Promise<nu
   }
 }
 
+// ─── Manual sources (pasted text, no feed to poll) ─────────────────────────
+
+export interface ManualItemInput {
+  title: string
+  content: string
+  url?: string | null
+}
+
+/**
+ * Save a manually-pasted item for a source with source_type = 'manual'.
+ * Unlike saveRows (RSS/HTML path), this never calls out to the network:
+ * the person supplied the full text directly, so there's nothing to fetch
+ * and no snippet-vs-full-text tradeoff — it's full_text from the start.
+ */
+export async function saveManualItem(sourceId: string, input: ManualItemInput): Promise<{ id: string }> {
+  const title = input.title.trim().slice(0, 300)
+  const content = input.content.trim()
+  if (!title) throw new Error('title is required')
+  if (!content) throw new Error('content is required')
+
+  const snippet = content.slice(0, MAX_DESC_CHARS)
+  // rss_items.link is UNIQUE but nullable; without a real URL, use a
+  // synthetic one so this item still shows up in the legacy /api/market
+  // feed (which reads from rss_items) without colliding with a real URL.
+  const link = input.url?.trim() || `manual://${sourceId}/${crypto.randomUUID()}`
+
+  const { data: rssRow, error: rssError } = await getSupabaseAdmin()
+    .from('rss_items')
+    .insert({
+      source_id: sourceId,
+      title,
+      description: snippet,
+      link,
+      published_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single()
+
+  if (rssError) throw new Error(`Save failed: ${rssError.message}`)
+
+  const evidenceId = await saveEvidence({
+    sourceId,
+    canonicalUrl: link,
+    sourceTitle: title,
+    sourceSummary: snippet,
+    sourceLanguage: 'pt-BR',
+    publishedAt: new Date().toISOString(),
+    fullText: content,
+    hydrationStatus: 'full_text',
+  })
+
+  await recordIngestionRun({
+    sourceId,
+    connectorType: 'manual',
+    itemsDiscovered: 1,
+    itemsSaved: 1,
+    success: true,
+  })
+  await recordSourceHealth({ sourceId, eventType: 'success', itemsYielded: 1 })
+
+  return { id: rssRow?.id ?? evidenceId }
+}
+
 // ─── Public entry point ───────────────────────────────────────────────────────
 
 export async function fetchAndSaveRss(
@@ -373,7 +437,14 @@ export async function fetchAndSaveRss(
   sourceType: ConnectorType | string = 'rss',
 ): Promise<number> {
   const startMs = Date.now()
-  
+
+  // Manual sources have no feed to poll — content comes in via saveManualItem
+  // (POST /api/rss/[id]/manual-item). Treat as a no-op success, not a failure:
+  // there being zero *new* items from polling is expected, not a health event.
+  if (sourceType === 'manual') {
+    return 0
+  }
+
   // html_index goes directly to scraper
   if (sourceType === 'html_index') {
     return fetchHtmlFallback(sourceId, url)

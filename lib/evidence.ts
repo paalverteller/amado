@@ -19,6 +19,10 @@ export interface EvidenceInput {
   regionIds?: string[]
   topics?: string[]
   entities?: string[]
+  /** Full article/content text, when already known (e.g. manual paste). */
+  fullText?: string | null
+  /** Defaults to 'full_text' when fullText is provided, else 'snippet'. */
+  hydrationStatus?: 'snippet' | 'full_text' | 'failed'
 }
 
 export interface RawPayloadInput {
@@ -96,6 +100,7 @@ export async function saveRawPayload(input: RawPayloadInput): Promise<string> {
 export async function saveEvidence(input: EvidenceInput): Promise<string> {
   const canonicalUrl = canonicalizeUrl(input.canonicalUrl)
   const fingerprint = generateFingerprint(input.sourceTitle, input.sourceSummary)
+  const hydrationStatus = input.hydrationStatus ?? (input.fullText ? 'full_text' : 'snippet')
 
   const { data: existing } = await getSupabaseAdmin()
     .from('evidence_items')
@@ -118,6 +123,8 @@ export async function saveEvidence(input: EvidenceInput): Promise<string> {
         region_ids: input.regionIds ?? null,
         topics: input.topics ?? null,
         entities: input.entities ?? null,
+        full_text: input.fullText ?? null,
+        hydration_status: hydrationStatus,
         updated_at: new Date().toISOString(),
       })
       .eq('id', existing.id)
@@ -143,6 +150,8 @@ export async function saveEvidence(input: EvidenceInput): Promise<string> {
       region_ids: input.regionIds ?? null,
       topics: input.topics ?? null,
       entities: input.entities ?? null,
+      full_text: input.fullText ?? null,
+      hydration_status: hydrationStatus,
     })
     .select('id')
     .single()

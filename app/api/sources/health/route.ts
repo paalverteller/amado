@@ -9,7 +9,7 @@ export async function GET(): Promise<NextResponse> {
     // Aggregate health by source
     const { data: healthData, error: healthError } = await getSupabaseAdmin()
       .from('source_health_events')
-      .select('source_id, event_type, created_at')
+      .select('source_id, event_type, error_message, response_time_ms, created_at')
       .order('created_at', { ascending: false })
       .limit(1000)
 
@@ -38,7 +38,11 @@ export async function GET(): Promise<NextResponse> {
       const success24h = recentEvents.filter(e => e.event_type === 'success').length
       const failure24h = recentEvents.filter(e => e.event_type === 'failure').length
       const total24h = success24h + failure24h
-      
+
+      // healthData is already ordered created_at DESC, so the first failure
+      // event for this source is the most recent one.
+      const lastFailureEvent = sourceEvents.find(e => e.event_type === 'failure')
+
       return {
         id: source.id,
         name: source.name,
@@ -52,6 +56,8 @@ export async function GET(): Promise<NextResponse> {
           consecutiveFailures: source.consecutive_failures ?? 0,
           lastSuccess: source.last_success_at,
           lastFailure: source.last_failure_at,
+          lastErrorMessage: lastFailureEvent?.error_message ?? null,
+          lastResponseTimeMs: lastFailureEvent?.response_time_ms ?? null,
           successRate24h: total24h > 0 ? Math.round((success24h / total24h) * 100) : null,
           events24h: total24h,
         },
