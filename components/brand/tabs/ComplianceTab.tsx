@@ -42,22 +42,28 @@ export default function ComplianceTab({ brandId }: { brandId: string }) {
     critical: findings.filter(f => f.severity === 'critical').length,
   }
 
-  if (!brandId) return <div className="text-center py-12 text-gray-500">Selecione uma marca</div>
-  if (loading) return <div className="text-center py-12">Carregando...</div>
+  if (!brandId) return <div className="text-center py-12 text-gray-500">Выберите бренд</div>
+  if (loading) return <div className="text-center py-12">Загрузка...</div>
+
+  const severityLabel = (s: QaFinding['severity']) =>
+    s === 'critical' ? 'Критично' : s === 'high' ? 'Высокая' : s === 'medium' ? 'Средняя' : 'Низкая'
+
+  const statusLabel = (s: QaFinding['status']) =>
+    s === 'open' ? 'Открыто' : s === 'resolved' ? 'Решено' : s === 'in_review' ? 'На проверке' : 'Отклонено'
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm text-gray-500">Total de Achados</div>
+          <div className="text-sm text-gray-500">Всего замечаний</div>
           <div className="text-2xl font-bold">{stats.total}</div>
         </div>
         <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm text-gray-500">Abertos</div>
+          <div className="text-sm text-gray-500">Открыто</div>
           <div className="text-2xl font-bold text-yellow-600">{stats.open}</div>
         </div>
         <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm text-gray-500">Críticos</div>
+          <div className="text-sm text-gray-500">Критичных</div>
           <div className="text-2xl font-bold text-red-600">{stats.critical}</div>
         </div>
       </div>
@@ -65,7 +71,7 @@ export default function ComplianceTab({ brandId }: { brandId: string }) {
       <div className="flex space-x-2">
         {(['all', 'open', 'critical'] as const).map(f => (
           <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-lg text-sm font-medium ${filter === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>
-            {f === 'all' ? 'Todos' : f === 'open' ? 'Abertos' : 'Críticos'}
+            {f === 'all' ? 'Все' : f === 'open' ? 'Открытые' : 'Критичные'}
           </button>
         ))}
       </div>
@@ -84,17 +90,17 @@ export default function ComplianceTab({ brandId }: { brandId: string }) {
                   finding.severity === 'high' ? 'bg-orange-100 text-orange-800' :
                   finding.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
                   'bg-blue-100 text-blue-800'
-                }`}>{finding.severity}</span>
+                }`}>{severityLabel(finding.severity)}</span>
                 <span className="text-sm text-gray-500">{finding.category}</span>
               </div>
               <span className={`px-2 py-1 rounded text-xs ${
                 finding.status === 'open' ? 'bg-red-100 text-red-800' :
                 finding.status === 'resolved' ? 'bg-green-100 text-green-800' :
                 'bg-yellow-100 text-yellow-800'
-              }`}>{finding.status}</span>
+              }`}>{statusLabel(finding.status)}</span>
             </div>
             <p className="text-gray-700">{finding.description}</p>
-            <p className="text-xs text-gray-400 mt-2">{new Date(finding.createdAt).toLocaleDateString('pt-BR')}</p>
+            <p className="text-xs text-gray-400 mt-2">{new Date(finding.createdAt).toLocaleDateString('ru-RU')}</p>
           </div>
         ))}
       </div>

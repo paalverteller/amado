@@ -42,18 +42,18 @@ export default function ExamplesTab({ brandId }: { brandId: string }) {
     return true
   })
 
-  if (!brandId) return <div className="text-center py-12 text-gray-500">Selecione uma marca</div>
-  if (loading) return <div className="text-center py-12">Carregando...</div>
+  if (!brandId) return <div className="text-center py-12 text-gray-500">Выберите бренд</div>
+  if (loading) return <div className="text-center py-12">Загрузка...</div>
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2">
         <select onChange={e => setFilter(f => ({ ...f, platform: e.target.value || undefined }))} className="px-3 py-2 border rounded-lg text-sm">
-          <option value="">Todas as plataformas</option>
+          <option value="">Все платформы</option>
           {platforms.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
         <select onChange={e => setFilter(f => ({ ...f, format: e.target.value || undefined }))} className="px-3 py-2 border rounded-lg text-sm">
-          <option value="">Todos os formatos</option>
+          <option value="">Все форматы</option>
           {formats.map(f => <option key={f} value={f}>{f}</option>)}
         </select>
       </div>
@@ -67,13 +67,13 @@ export default function ExamplesTab({ brandId }: { brandId: string }) {
                 <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">{ex.format}</span>
                 <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs">{ex.pillarName}</span>
               </div>
-              <span className="text-xs text-gray-400">{new Date(ex.approvedAt).toLocaleDateString('pt-BR')}</span>
+              <span className="text-xs text-gray-400">{new Date(ex.approvedAt).toLocaleDateString('ru-RU')}</span>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-gray-800 whitespace-pre-wrap">{ex.content}</p>
             </div>
             <div className="mt-2 text-xs text-gray-500">
-              Produto: {ex.productExplicitness}
+              Продукт: {ex.productExplicitness}
             </div>
           </div>
         ))}

@@ -40,15 +40,15 @@ export default function PlatformPlaybooksTab({ brandId }: { brandId: string }) {
   const platforms = ['all', ...Array.from(new Set(playbooks.map(p => p.platform)))]
   const filtered = selectedPlatform === 'all' ? playbooks : playbooks.filter(p => p.platform === selectedPlatform)
 
-  if (!brandId) return <div className="text-center py-12 text-gray-500">Selecione uma marca</div>
-  if (loading) return <div className="text-center py-12">Carregando...</div>
+  if (!brandId) return <div className="text-center py-12 text-gray-500">Выберите бренд</div>
+  if (loading) return <div className="text-center py-12">Загрузка...</div>
 
   return (
     <div className="space-y-6">
       <div className="flex space-x-2">
         {platforms.map(p => (
           <button key={p} onClick={() => setSelectedPlatform(p)} className={`px-4 py-2 rounded-lg text-sm font-medium ${selectedPlatform === p ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-            {p === 'all' ? 'Todas' : p}
+            {p === 'all' ? 'Все' : p}
           </button>
         ))}
       </div>
@@ -62,14 +62,14 @@ export default function PlatformPlaybooksTab({ brandId }: { brandId: string }) {
                 <p className="text-sm text-gray-500">{pb.format}</p>
               </div>
               <span className={`px-2 py-1 rounded text-xs ${pb.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
-                {pb.active ? 'Ativo' : 'Inativo'}
+                {pb.active ? 'Активен' : 'Неактивен'}
               </span>
             </div>
 
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-gray-500">Tom:</span>
+                  <span className="text-gray-500">Тон:</span>
                   <p className="font-medium">{pb.tone}</p>
                 </div>
                 <div>
@@ -77,27 +77,27 @@ export default function PlatformPlaybooksTab({ brandId }: { brandId: string }) {
                   <p className="font-medium">{pb.ctaStyle}</p>
                 </div>
                 <div>
-                  <span className="text-gray-500">Máx. caracteres:</span>
+                  <span className="text-gray-500">Макс. символов:</span>
                   <p className="font-medium">{pb.maxLength}</p>
                 </div>
                 <div>
-                  <span className="text-gray-500">Emojis:</span>
+                  <span className="text-gray-500">Эмодзи:</span>
                   <p className="font-medium">{pb.emojiPolicy}</p>
                 </div>
               </div>
 
               <div>
-                <span className="text-gray-500 text-sm">Estrutura:</span>
+                <span className="text-gray-500 text-sm">Структура:</span>
                 <p className="text-sm text-gray-700 mt-1">{pb.structure}</p>
               </div>
 
               <div>
-                <span className="text-gray-500 text-sm">Hashtags:</span>
+                <span className="text-gray-500 text-sm">Хэштеги:</span>
                 <p className="text-sm text-gray-700 mt-1">{pb.hashtagStrategy}</p>
               </div>
 
               <div>
-                <span className="text-gray-500 text-sm">Links:</span>
+                <span className="text-gray-500 text-sm">Ссылки:</span>
                 <p className="text-sm text-gray-700 mt-1">{pb.linkPolicy}</p>
               </div>
             </div>

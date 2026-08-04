@@ -61,13 +61,13 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
   if (!brandId) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Selecione uma marca para visualizar os dados</p>
+        <p className="text-gray-500">Выберите бренд, чтобы увидеть данные</p>
       </div>
     )
   }
 
   if (loading) {
-    return <div className="text-center py-12">Carregando...</div>
+    return <div className="text-center py-12">Загрузка...</div>
   }
 
   return (
@@ -82,7 +82,7 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          Públicos ({audiences.length})
+          Аудитории ({audiences.length})
         </button>
         <button
           onClick={() => setActiveSection('pains')}
@@ -92,7 +92,7 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          Pontos de Dor ({painPoints.length})
+          Болевые точки ({painPoints.length})
         </button>
       </div>
 
@@ -109,7 +109,7 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
               
               <div className="space-y-4">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Funções</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Роли</h4>
                   <div className="flex flex-wrap gap-2">
                     {audience.roles?.map((role, i) => (
                       <span key={i} className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-sm">
@@ -120,7 +120,7 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Dores</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Боли</h4>
                   <ul className="space-y-1">
                     {audience.pains?.map((pain, i) => (
                       <li key={i} className="text-sm text-gray-600 flex items-start">
@@ -132,7 +132,7 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Objetivos Desejados</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Желаемые результаты</h4>
                   <ul className="space-y-1">
                     {audience.desiredOutcomes?.map((outcome, i) => (
                       <li key={i} className="text-sm text-gray-600 flex items-start">
@@ -145,7 +145,7 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
 
                 {audience.objections && audience.objections.length > 0 && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Objeções</h4>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Возражения</h4>
                     <ul className="space-y-1">
                       {audience.objections.map((obj, i) => (
                         <li key={i} className="text-sm text-gray-600 flex items-start">
@@ -171,7 +171,7 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Sintomas Observáveis</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Наблюдаемые симптомы</h4>
                   <ul className="space-y-1">
                     {pain.observableSymptoms?.map((symptom, i) => (
                       <li key={i} className="text-sm text-gray-600 flex items-start">
@@ -183,7 +183,7 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Consequências de Negócio</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Бизнес-последствия</h4>
                   <ul className="space-y-1">
                     {pain.businessConsequences?.map((consequence, i) => (
                       <li key={i} className="text-sm text-gray-600 flex items-start">
@@ -197,7 +197,7 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
 
               {pain.approvedBrazilianExamples && pain.approvedBrazilianExamples.length > 0 && (
                 <div className="mt-4 p-4 bg-yellow-50 rounded-lg">
-                  <h4 className="text-sm font-medium text-yellow-800 mb-2">Exemplos Brasileiros Aprovados</h4>
+                  <h4 className="text-sm font-medium text-yellow-800 mb-2">Одобренные бразильские примеры</h4>
                   <div className="flex flex-wrap gap-2">
                     {pain.approvedBrazilianExamples.map((example, i) => (
                       <span key={i} className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm">

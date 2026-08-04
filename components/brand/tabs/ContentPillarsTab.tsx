@@ -31,8 +31,11 @@ export default function ContentPillarsTab({ brandId }: { brandId: string }) {
     fetchPillars()
   }, [brandId, fetchPillars])
 
-  if (!brandId) return <div className="text-center py-12 text-gray-500">Selecione uma marca</div>
-  if (loading) return <div className="text-center py-12">Carregando...</div>
+  if (!brandId) return <div className="text-center py-12 text-gray-500">Выберите бренд</div>
+  if (loading) return <div className="text-center py-12">Загрузка...</div>
+
+  const riskLabel = (risk: string) =>
+    risk === 'high' ? 'Высокий риск' : risk === 'medium' ? 'Средний риск' : 'Низкий риск'
 
   return (
     <div className="space-y-4">
@@ -50,7 +53,7 @@ export default function ContentPillarsTab({ brandId }: { brandId: string }) {
                 pillar.riskLevel === 'high' ? 'bg-red-100 text-red-800' :
                 pillar.riskLevel === 'medium' ? 'bg-yellow-100 text-yellow-800' :
                 'bg-green-100 text-green-800'
-              }`}>{pillar.riskLevel}</span>
+              }`}>{riskLabel(pillar.riskLevel)}</span>
               <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">{pillar.defaultProductExplicitness}</span>
             </div>
           </div>

@@ -45,17 +45,22 @@ export default function ProductsClaimsTab({ brandId }: { brandId: string }) {
     fetchData()
   }, [brandId, fetchData])
 
-  if (!brandId) return <div className="text-center py-12 text-gray-500">Selecione uma marca</div>
-  if (loading) return <div className="text-center py-12">Carregando...</div>
+  if (!brandId) return <div className="text-center py-12 text-gray-500">Выберите бренд</div>
+  if (loading) return <div className="text-center py-12">Загрузка...</div>
+
+  const claimTypeLabel = (type: Claim['claimType']) =>
+    type === 'approved' ? 'Разрешено' :
+    type === 'forbidden' ? 'Запрещено' :
+    type === 'requires_proof' ? 'Требует доказательства' : 'С оговоркой'
 
   return (
     <div className="space-y-6">
       <div className="flex space-x-4 border-b border-gray-200">
         <button onClick={() => setActiveSection('products')} className={`pb-3 text-sm font-medium border-b-2 ${activeSection === 'products' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>
-          Produtos ({products.length})
+          Продукты ({products.length})
         </button>
         <button onClick={() => setActiveSection('claims')} className={`pb-3 text-sm font-medium border-b-2 ${activeSection === 'claims' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>
-          Claims ({claims.length})
+          Утверждения ({claims.length})
         </button>
       </div>
 
@@ -88,9 +93,9 @@ export default function ProductsClaimsTab({ brandId }: { brandId: string }) {
                   c.claimType === 'forbidden' ? 'bg-red-100 text-red-800' :
                   c.claimType === 'requires_proof' ? 'bg-yellow-100 text-yellow-800' :
                   'bg-blue-100 text-blue-800'
-                }`}>{c.claimType}</span>
+                }`}>{claimTypeLabel(c.claimType)}</span>
               </div>
-              {c.qualifier && <p className="text-sm text-gray-500 mt-1">Qualificador: {c.qualifier}</p>}
+              {c.qualifier && <p className="text-sm text-gray-500 mt-1">Оговорка: {c.qualifier}</p>}
             </div>
           ))}
         </div>

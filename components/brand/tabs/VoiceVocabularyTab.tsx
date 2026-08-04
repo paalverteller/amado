@@ -33,15 +33,20 @@ export default function VoiceVocabularyTab({ brandId }: { brandId: string }) {
 
   const filtered = filter === 'all' ? terms : terms.filter(t => t.policy === filter)
 
-  if (!brandId) return <div className="text-center py-12 text-gray-500">Selecione uma marca</div>
-  if (loading) return <div className="text-center py-12">Carregando...</div>
+  if (!brandId) return <div className="text-center py-12 text-gray-500">Выберите бренд</div>
+  if (loading) return <div className="text-center py-12">Загрузка...</div>
+
+  const policyLabel = (policy: Term['policy']) =>
+    policy === 'forbidden' ? 'Запрещено' :
+    policy === 'preferred' ? 'Рекомендовано' :
+    policy === 'discouraged' ? 'Нежелательно' : 'Допустимо'
 
   return (
     <div className="space-y-6">
       <div className="flex space-x-2">
         {(['all', 'forbidden', 'preferred', 'discouraged'] as const).map(f => (
           <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-lg text-sm font-medium ${filter === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-            {f === 'all' ? 'Todos' : f === 'forbidden' ? 'Proibidos' : f === 'preferred' ? 'Preferidos' : 'Desencorajados'}
+            {f === 'all' ? 'Все' : f === 'forbidden' ? 'Запрещённые' : f === 'preferred' ? 'Рекомендованные' : 'Нежелательные'}
           </button>
         ))}
       </div>
@@ -60,7 +65,7 @@ export default function VoiceVocabularyTab({ brandId }: { brandId: string }) {
                 term.policy === 'preferred' ? 'bg-green-100 text-green-800' :
                 term.policy === 'discouraged' ? 'bg-yellow-100 text-yellow-800' :
                 'bg-gray-100 text-gray-800'
-              }`}>{term.policy}</span>
+              }`}>{policyLabel(term.policy)}</span>
             </div>
             {term.replacement && <p className="text-sm text-blue-600">→ {term.replacement}</p>}
             {term.notes && <p className="text-sm text-gray-500 mt-1">{term.notes}</p>}
