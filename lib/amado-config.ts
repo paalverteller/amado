@@ -51,8 +51,20 @@ export const INGESTION_CONFIG = {
   // Tier 1: lightweight discovery
   discoveryIntervalMinutes: envNumber('AMADO_DISCOVERY_INTERVAL_MIN', 180), // 3h
   
-  // Tier 2: evidence hydration (on-demand)
-  hydrationEnabled: true,
+  // Tier 2: evidence hydration -- fetches full article text via
+  // lib/web-reader.ts (Firecrawl/Jina) for every item on every active
+  // source, every cron run. Only spends real API calls once
+  // FIRECRAWL_API_KEY or JINA_READER_MODE is actually configured -- until
+  // then this is a safe no-op regardless of the flag below. Emergency
+  // kill switch: set AMADO_HYDRATION_ENABLED=false, no redeploy needed.
+  hydrationEnabled: envBool('AMADO_HYDRATION_ENABLED', true),
+
+  // Hard ceiling on hydration calls in a single cron/collect run, across
+  // ALL sources combined -- protects against cost blowup and function
+  // timeout if the active-source count grows. Once hit, remaining items
+  // in that run save as hydration_status='snippet', same as if hydration
+  // were off; nothing fails.
+  maxHydrationPerRun: envNumber('AMADO_MAX_HYDRATION_PER_RUN', 40),
   
   // Max items per source per fetch
   maxItemsPerSource: envNumber('AMADO_MAX_ITEMS_PER_SOURCE', 6),

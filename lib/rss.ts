@@ -13,14 +13,25 @@ import Parser from 'rss-parser'
 import crypto from 'crypto'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { readUrlAsText } from '@/lib/web-reader'
-import { isFeatureEnabled } from '@/lib/amado-config'
+import { isFeatureEnabled, INGESTION_CONFIG } from '@/lib/amado-config'
 import { saveEvidence, recordSourceHealth, recordIngestionRun } from '@/lib/evidence'
 import type { ConnectorType } from '@/lib/ingestion/types'
 import { getErrorMessage } from '@/lib/api/error-message'
 
-const RSS_TIMEOUT_MS = 15_000
-const MAX_ITEMS_PER_SOURCE = 6
-const MAX_DESC_CHARS = 300
+const RSS_TIMEOUT_MS = INGESTION_CONFIG.sourceTimeoutMs
+const MAX_ITEMS_PER_SOURCE = INGESTION_CONFIG.maxItemsPerSource
+const MAX_DESC_CHARS = INGESTION_CONFIG.maxSnippetChars
+
+// Hydration budget: shared across every source processed within a single
+// cron/collect invocation. Reset explicitly at the top of each route
+// handler via resetHydrationBudget() -- see app/api/cron/rss/route.ts and
+// app/api/rss/collect/route.ts. Module-level state is correct here because
+// one request = one pass over all active sources = one budget.
+let hydrationBudgetRemaining = INGESTION_CONFIG.maxHydrationPerRun
+
+export function resetHydrationBudget(): void {
+  hydrationBudgetRemaining = INGESTION_CONFIG.maxHydrationPerRun
+}
 
 const parser = new Parser({
   timeout: RSS_TIMEOUT_MS,
@@ -43,6 +54,10 @@ type RssRow = {
   link: string
   published_at: string | null
   source_language?: string | null
+  /** Set when the caller already has full text (e.g. html_index already
+   *  called readUrlAsText to build the description) -- lets saveRows skip
+   *  a redundant second fetch of the same URL. */
+  fullText?: string | null
 }
 
 export function stripHtml(v: string | undefined | null): string {
@@ -92,22 +107,39 @@ async function saveRows(sourceId: string, rows: RssRow[], connectorType: string)
     .select('id')
   if (error) throw new Error(`Save failed: ${error.message}`)
   
-  // Stage 2: Dual-write to evidence_items (best-effort)
+  // Stage 2: Dual-write to evidence_items (best-effort), with full-text
+  // hydration when budget and config allow. Concurrent per source (rows is
+  // already capped upstream, worst case 15 for PubMed) rather than
+  // sequential, so one source's hydration can't multiply the outer
+  // per-source loop's wall-clock time by MAX_ITEMS_PER_SOURCE.
   let evidenceSaved = 0
-  try {
-    for (const row of unique) {
-      await saveEvidence({
-        sourceId: row.source_id,
-        canonicalUrl: row.link,
-        sourceTitle: row.title,
-        sourceSummary: row.description,
-        sourceLanguage: row.source_language ?? 'pt-BR',
-        publishedAt: row.published_at,
-      })
-      evidenceSaved++
+  const settled = await Promise.allSettled(unique.map(async (row) => {
+    let fullText: string | null = row.fullText ?? null
+    if (!fullText && INGESTION_CONFIG.hydrationEnabled && hydrationBudgetRemaining > 0) {
+      hydrationBudgetRemaining--
+      try {
+        fullText = await readUrlAsText(row.link)
+      } catch (hydrationError) {
+        console.warn(`[rss] Hydration failed for ${row.link}:`, getErrorMessage(hydrationError))
+      }
     }
-  } catch (evError) {
-    console.warn('[rss] Evidence save error (non-critical):', getErrorMessage(evError))
+
+    await saveEvidence({
+      sourceId: row.source_id,
+      canonicalUrl: row.link,
+      sourceTitle: row.title,
+      sourceSummary: row.description,
+      sourceLanguage: row.source_language ?? 'pt-BR',
+      publishedAt: row.published_at,
+      fullText,
+    })
+  }))
+  for (const outcome of settled) {
+    if (outcome.status === 'fulfilled') {
+      evidenceSaved++
+    } else {
+      console.warn('[rss] Evidence save error (non-critical):', getErrorMessage(outcome.reason))
+    }
   }
   if (evidenceSaved < unique.length) {
     console.warn(`[rss] Evidence dual-write: ${evidenceSaved}/${unique.length} saved`)
@@ -346,6 +378,7 @@ async function fetchHtmlFallback(sourceId: string, indexUrl: string): Promise<nu
             description,
             link,
             published_at: new Date().toISOString(),
+            fullText: readerText && readerText.length > 100 ? readerText : null,
           })
         } catch {
           // per-article timeout or error — skip

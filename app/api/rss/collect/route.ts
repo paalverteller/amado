@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
-import { fetchAndSaveRss } from '@/lib/rss'
+import { fetchAndSaveRss, resetHydrationBudget } from '@/lib/rss'
 import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(): Promise<NextResponse> {
   try {
+    resetHydrationBudget()
+
     const { data: sources, error } = await getSupabaseAdmin()
       .from('rss_sources')
       .select('id, name, url, source_type')

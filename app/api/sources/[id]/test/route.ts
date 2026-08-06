@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
-import { fetchAndSaveRss } from '@/lib/rss'
+import { fetchAndSaveRss, resetHydrationBudget } from '@/lib/rss'
 import { normalizeConnectorType } from '@/lib/ingestion/types'
 import { recordSourceHealth } from '@/lib/evidence'
 import { getErrorMessage } from '@/lib/api/error-message'
@@ -67,6 +67,7 @@ export async function POST(
     try {
       // We call fetchAndSaveRss which does the full pipeline
       // It will save to both rss_items and evidence_items
+      resetHydrationBudget()
       itemsFetched = await fetchAndSaveRss(source.id, source.url, connectorType)
     } catch (err) {
       ingestionError = getErrorMessage(err)

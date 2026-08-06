@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
-import { fetchAndSaveRss } from '@/lib/rss'
+import { fetchAndSaveRss, resetHydrationBudget } from '@/lib/rss'
 import { requireCronAuth } from '@/lib/cron-auth'
 import { buildSourceConnector } from '@/lib/ingestion/types'
 import { getErrorMessage } from '@/lib/api/error-message'
@@ -10,6 +10,8 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const denied = requireCronAuth(request)
   if (denied) return denied
+
+  resetHydrationBudget()
 
   const { data: sources, error } = await getSupabaseAdmin()
     .from('rss_sources')
