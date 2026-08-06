@@ -381,6 +381,13 @@ const RU_DICT: MessageDictionary = {
     'no_briefing_body': 'Как только появятся важные материалы с рынка, они будут показаны здесь.',
     'active_brand': 'Активный бренд',
     'go_to_market': 'Открыть Рынок',
+    'generating_title': 'Готовим сегодняшний обзор',
+    'generating_body': 'Обычно это занимает несколько минут. Загляните чуть позже.',
+    'why_matters': 'Почему это важно',
+    'mark_useful': 'Полезно',
+    'mark_irrelevant': 'Не важно',
+    'send_to_generation': 'Отправить в генерацию',
+    'source_link': 'Источник',
   },
   'knowledge': {
     'title': '\u0411\u0430\u0437\u0430 \u0437\u043d\u0430\u043d\u0438\u0439',
