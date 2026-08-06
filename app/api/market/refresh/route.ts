@@ -8,7 +8,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
-import { fetchAndSaveRss } from '@/lib/rss'
+import { fetchAndSaveRss, resetHydrationBudget } from '@/lib/rss'
 import { requireCronAuth } from '@/lib/cron-auth'
 import { buildSourceConnector } from '@/lib/ingestion/types'
 import { generateWithFallback } from '@/lib/ai'
@@ -161,6 +161,8 @@ export async function POST(): Promise<NextResponse> {
 
     if (srcErr) return NextResponse.json({ error: srcErr.message }, { status: 500 })
     if (!sources?.length) return NextResponse.json({ success: true, sourcesProcessed: 0, itemsSaved: 0, translated: 0 })
+
+    resetHydrationBudget()
 
     const { error: pruneErr } = await getSupabaseAdmin().rpc('prune_market_rss_items_keep_latest_50')
     if (pruneErr) console.warn('[refresh] prune failed:', pruneErr.message)
