@@ -193,7 +193,7 @@ export default function OverviewPage() {
                       onClick={() => setFeedback(item.id, 'irrelevant')}
                       className="rounded-full px-3 py-1 text-xs font-semibold"
                       style={{
-                        background: item.feedback === 'irrelevant' ? 'var(--v2-color-error, #dc2626)' : 'var(--v2-color-surface-alt)',
+                        background: item.feedback === 'irrelevant' ? 'var(--v2-color-danger)' : 'var(--v2-color-surface-alt)',
                         color: item.feedback === 'irrelevant' ? '#fff' : 'var(--v2-color-text-secondary)',
                       }}
                     >

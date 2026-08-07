@@ -31,6 +31,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       language_code?: string
       parser_config?: Record<string, unknown>
       active?: boolean
+      competitor_id?: string
+      source_category?: string
     }
 
     const name = body.name?.trim()
@@ -67,6 +69,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         language_code: body.language_code ?? 'pt-BR',
         parser_config: body.parser_config ?? {},
         active: body.active ?? true,
+        competitor_id: body.competitor_id ?? null,
+        source_category: body.source_category ?? (body.competitor_id ? 'competitor' : 'general'),
       })
       .select()
       .single()

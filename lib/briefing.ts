@@ -99,18 +99,25 @@ function parseRankedItems(raw: string, candidates: CandidateRow[]): RankedItem[]
 }
 
 async function rankAndExplain(candidates: CandidateRow[]): Promise<{ items: RankedItem[]; model: string }> {
+  // Source material (titles/content below) is pt-BR, same language the
+  // evidence was collected in -- that's expected and left as-is. But the
+  // instructions and the requested whyItMatters output are Russian: this
+  // text is read by the (Russian-speaking) team on the Overview page, not
+  // generated marketing content for a Brazilian audience -- those are two
+  // different language conventions in this project and this is the first
+  // one, not the second.
   const systemPrompt = [
-    'Você é um analista de inteligência de mercado para uma equipe de marketing B2B brasileira.',
-    `Abaixo estão até ${MAX_CANDIDATES} itens recentes coletados de fontes de mercado.`,
-    `Selecione os ${MAX_BRIEFING_ITEMS} itens MAIS RELEVANTES e importantes para essa equipe agir hoje.`,
-    'Para cada item selecionado, escreva uma frase curta e direta (até 200 caracteres) explicando',
-    'por que ele importa especificamente para uma equipe de marketing no Brasil -- não um resumo do',
-    'conteúdo, mas a implicação prática (oportunidade, risco, mudança de comportamento do público, etc).',
+    'Ты аналитик рыночной разведки для команды маркетинга, которая продвигает бренд на бразильском рынке.',
+    `Ниже — до ${MAX_CANDIDATES} материалов, собранных недавно из источников рынка (на португальском).`,
+    `Выбери ${MAX_BRIEFING_ITEMS} самых важных материалов, которые команде стоит учитывать сегодня.`,
+    'Для каждого выбранного материала напиши короткую фразу на РУССКОМ языке (до 200 символов),',
+    'объясняющую, почему это важно именно для этой команды — не пересказ содержания, а практический',
+    'вывод (возможность, риск, изменение поведения аудитории и т.п.).',
     '',
-    'Responda APENAS com um array JSON, nada além disso, neste formato exato:',
+    'Ответь ТОЛЬКО JSON-массивом, без ничего лишнего, в точно таком формате:',
     '[{"index": 0, "whyItMatters": "..."}, {"index": 5, "whyItMatters": "..."}]',
-    '"index" deve ser o número entre colchetes do item na lista abaixo, em ordem de importância',
-    '(mais importante primeiro). Não invente itens fora da lista.',
+    '"index" — номер материала в квадратных скобках из списка ниже, в порядке важности',
+    '(самый важный первым). Не придумывай материалы, которых нет в списке.',
   ].join('\n')
 
   const userPrompt = buildCandidateBlock(candidates)
