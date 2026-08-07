@@ -18,6 +18,25 @@ export interface NewContentRequestRecord {
   word_count: number
   char_count: number
   processed_at: string
+  thread_id: string
+  parent_request_id: string | null
+  refinement_note: string | null
+  knowledge_chunk_ids: string[] | null
+  brand_snapshot_summary: unknown
+}
+
+export interface ContentRequestRecord {
+  id: string
+  thread_id: string | null
+  parent_request_id: string | null
+  topic: string
+  content_format: string
+  generated_content: string | null
+  refinement_note: string | null
+  brand_snapshot_summary: unknown
+  knowledge_chunk_ids: string[] | null
+  evidence_item_ids: string[] | null
+  created_at: string
 }
 
 /**
@@ -32,7 +51,13 @@ export interface ContentRequestRepository {
   record(data: NewContentRequestRecord): Promise<{ id: string } | null>
   markCompleted(id: string): Promise<void>
   markFailed(id: string, message: string): Promise<void>
+  getById(id: string): Promise<ContentRequestRecord | null>
+  /** All versions in a thread, oldest first — for the version-history UI. */
+  getThread(threadId: string): Promise<ContentRequestRecord[]>
 }
+
+const RECORD_COLUMNS =
+  'id, thread_id, parent_request_id, topic, content_format, generated_content, refinement_note, brand_snapshot_summary, knowledge_chunk_ids, evidence_item_ids, created_at'
 
 export function createSupabaseContentRequestRepository(): ContentRequestRepository {
   return {
@@ -61,6 +86,30 @@ export function createSupabaseContentRequestRepository(): ContentRequestReposito
         .update({ status: 'failed', error_message: message })
         .eq('id', id)
       if (error) console.error('[content-request-repository] markFailed failed:', error.message)
+    },
+    async getById(id) {
+      const { data, error } = await getSupabaseAdmin()
+        .from('content_requests')
+        .select(RECORD_COLUMNS)
+        .eq('id', id)
+        .maybeSingle()
+      if (error) {
+        console.error('[content-request-repository] getById failed:', error.message)
+        return null
+      }
+      return (data as ContentRequestRecord) ?? null
+    },
+    async getThread(threadId) {
+      const { data, error } = await getSupabaseAdmin()
+        .from('content_requests')
+        .select(RECORD_COLUMNS)
+        .eq('thread_id', threadId)
+        .order('created_at', { ascending: true })
+      if (error) {
+        console.error('[content-request-repository] getThread failed:', error.message)
+        return []
+      }
+      return (data as ContentRequestRecord[]) ?? []
     },
   }
 }

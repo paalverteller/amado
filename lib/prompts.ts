@@ -13,6 +13,9 @@
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { isShortFormat, isSegmentedFormat, getFormatMeta, type ContentFormat } from './content-formats'
 import { DEFAULT_LOCALE } from './locale'
+import { createSupabaseKnowledgeRepository } from '@/lib/repositories/knowledge-repository'
+import { embedTexts, isEmbeddingConfigured } from '@/lib/knowledge/embeddings'
+import { isFeatureEnabled } from '@/lib/amado-config'
 
 export const CURRENT_PROMPT_VERSION = 'v1.0_amado_stage0'
 
@@ -215,6 +218,69 @@ export async function buildRegionContextLayer(regionId?: string | null): Promise
   }
 
   return parts.join('\n')
+}
+
+export interface KnowledgeContextResult {
+  promptText: string
+  chunks: { assetId: string; assetTitle: string; snippet: string; similarity: number | null }[]
+}
+
+/**
+ * Retrieves relevant knowledge chunks for the topic via the same search
+ * repository /api/knowledge/search uses (semantic when an embedding
+ * provider is configured, keyword fallback otherwise). No retrievalMode
+ * filter -- searches 'idea'/'evidence'/'brand' chunks together, which
+ * also means Sprint 7's competitor reviews (content_type='competitor_note',
+ * retrieval_mode='evidence') surface here automatically. That's
+ * deliberate: one retrieval call covers both "knowledge library" and
+ * "competitor context" from the roadmap's Sprint 8 line, since they're
+ * already the same underlying table.
+ */
+export async function buildKnowledgeContext(
+  topic: string,
+  brandId?: string | null,
+  limit = 6,
+): Promise<KnowledgeContextResult> {
+  const query = topic.trim()
+  if (!query) return { promptText: '', chunks: [] }
+
+  try {
+    const repo = createSupabaseKnowledgeRepository()
+    let results: Awaited<ReturnType<typeof repo.searchKeyword>> = []
+
+    if (isFeatureEnabled('hybridSearchEnabled') && isEmbeddingConfigured()) {
+      try {
+        const [embedding] = await embedTexts([query])
+        results = await repo.searchSemantic(embedding, { brandId: brandId ?? null, retrievalMode: null, limit })
+      } catch (semanticError) {
+        console.warn('[buildKnowledgeContext] semantic search failed, falling back to keyword:', semanticError)
+      }
+    }
+
+    if (results.length === 0) {
+      results = await repo.searchKeyword({ query, brandId: brandId ?? null, retrievalMode: null, limit })
+    }
+
+    if (results.length === 0) return { promptText: '', chunks: [] }
+
+    const parts = results.map((r, i) => `[${i + 1}] ${r.asset_title}\n${r.content}`)
+    const promptText = `<knowledge_context>\nRelevant material from the knowledge library and competitor reviews:\n\n${parts.join('\n\n')}\n</knowledge_context>`
+
+    return {
+      promptText,
+      chunks: results.map((r) => ({
+        assetId: r.asset_id,
+        assetTitle: r.asset_title,
+        snippet: r.content.slice(0, 200),
+        similarity: r.similarity,
+      })),
+    }
+  } catch (err) {
+    // Knowledge retrieval is an enhancement, not a hard dependency --
+    // generation should still work if this fails for any reason.
+    console.warn('[buildKnowledgeContext] failed, continuing without it:', err)
+    return { promptText: '', chunks: [] }
+  }
 }
 
 export async function buildEvidenceContext(evidenceItemIds?: string[] | null): Promise<string> {

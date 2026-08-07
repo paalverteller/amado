@@ -1,9 +1,11 @@
-import { buildSystemPrompt, buildUserPrompt, buildBrandVoiceLayer, buildLocalizationNotesPrompt, buildRegionContextLayer, buildEvidenceContext } from '@/lib/prompts'
+import { buildSystemPrompt, buildUserPrompt, buildLocalizationNotesPrompt, buildRegionContextLayer, buildEvidenceContext, buildKnowledgeContext } from '@/lib/prompts'
+import { buildBrandSnapshot } from '@/lib/brand-snapshot'
 import { getRecentEvidenceItems } from '@/lib/evidence'
 import { generateArticleWithFallback, generateWithFallback } from '@/lib/ai'
 import { cleanPlainTextOutput } from '@/lib/text-cleanup'
 import { mapToLegacyContentType } from '@/lib/content-formats'
 import type { ContentFormat } from '@/lib/content-formats'
+import crypto from 'crypto'
 import {
   createSupabaseContentRequestRepository,
   type ContentRequestRepository,
@@ -22,6 +24,9 @@ export interface GenerateArticleInput {
   seoMode?: boolean
   regionId?: string
   evidenceItemIds?: string[]
+  /** Refine a previous generation instead of starting a fresh topic. */
+  parentRequestId?: string
+  refinementNote?: string
 }
 
 export interface GenerateArticleDeps {
@@ -33,6 +38,11 @@ export interface GenerateArticleResult {
   text: string
   model: string
   contentRequestId: string | null
+  /** What actually went into the prompt -- for the "visible context" UI. */
+  usedContext: {
+    brandFacts: { category: string; label: string }[]
+    knowledgeChunks: { assetId: string; assetTitle: string; snippet: string }[]
+  }
 }
 
 function defaultDeps(): GenerateArticleDeps {
@@ -44,9 +54,11 @@ function defaultDeps(): GenerateArticleDeps {
 
 /**
  * Full generate-and-persist workflow: assembles the prompt from the
- * template, brand voice, region context and evidence layers, calls the AI
- * provider fallback chain, then persists both a content_requests record
- * and the resulting article.
+ * template, brand snapshot (Sprint 4 Brand OS tables), region context,
+ * evidence, and retrieved knowledge (Sprint 3 library + Sprint 7
+ * competitor reviews, same search), calls the AI provider fallback
+ * chain, then persists both a content_requests record and the
+ * resulting article.
  *
  * If persisting the article fails, the content request is marked
  * 'failed' and the error is re-thrown — callers must not treat a
@@ -63,13 +75,23 @@ export async function generateAndPersistArticle(
   const promptTopic = (input.context && input.context.trim()) ? input.context.trim() : trimmedTopic
   const seoMode = input.seoMode ?? false
 
+  // Refinement: pull the parent version's content + thread so this
+  // generation is recorded as part of the same version chain, not a
+  // fresh unrelated topic.
+  let parent: Awaited<ReturnType<ContentRequestRepository['getById']>> = null
+  if (input.parentRequestId) {
+    parent = await deps.contentRequests.getById(input.parentRequestId)
+  }
+  const threadId = parent?.thread_id ?? crypto.randomUUID()
+
   // Stage 3: Use evidence_items instead of rss_items
   const evidenceContext = await buildEvidenceContext(input.evidenceItemIds)
   const rssText = evidenceContext || await getRecentEvidenceItems(trimmedTopic)
 
   const built = await buildSystemPrompt(input.templateId)
-  const brandVoice = await buildBrandVoiceLayer(input.brandProfileId)
+  const brandSnapshot = await buildBrandSnapshot(input.brandProfileId, input.contentType)
   const regionContext = await buildRegionContextLayer(input.regionId)
+  const knowledge = await buildKnowledgeContext(promptTopic, input.brandProfileId)
 
   // Build structured content spec — no contradictory length rules
   const contentSpec = {
@@ -79,7 +101,7 @@ export async function generateAndPersistArticle(
     brandProfileId: input.brandProfileId ?? null,
   }
 
-  const systemPrompt = `${built.systemPrompt}${brandVoice ? '\n\n' + brandVoice : ''}${regionContext ? '\n\n' + regionContext : ''}
+  const systemPrompt = `${built.systemPrompt}${brandSnapshot.promptText ? '\n\n' + brandSnapshot.promptText : ''}${regionContext ? '\n\n' + regionContext : ''}
 
 STRICT OUTPUT FORMAT:
 Write only the final clean text for publication. No think tags. No Markdown.`
@@ -87,6 +109,13 @@ Write only the final clean text for publication. No think tags. No Markdown.`
   const sections: string[] = []
   if (rssText) sections.push(`BRAZILIAN MARKET SIGNALS:\n${rssText}`)
   if (evidenceContext) sections.push(`EVIDENCE:\n${evidenceContext}`)
+  if (knowledge.promptText) sections.push(knowledge.promptText)
+  if (parent?.generated_content && input.refinementNote) {
+    sections.push(
+      `PREVIOUS DRAFT (revise this, don't start over from nothing):\n${parent.generated_content}\n\n` +
+      `REQUESTED CHANGE: ${input.refinementNote}`,
+    )
+  }
 
   const userPrompt = `${sections.length > 0 ? `${sections.join('\n\n---\n\n')}\n\n` : ''}${buildUserPrompt(contentSpec)}`
 
@@ -117,6 +146,11 @@ Write only the final clean text for publication. No think tags. No Markdown.`
     word_count: words,
     char_count: cleanText.length,
     processed_at: new Date().toISOString(),
+    thread_id: threadId,
+    parent_request_id: input.parentRequestId ?? null,
+    refinement_note: input.refinementNote ?? null,
+    knowledge_chunk_ids: knowledge.chunks.length ? knowledge.chunks.map((c) => c.assetId) : null,
+    brand_snapshot_summary: brandSnapshot.facts.length ? brandSnapshot.facts : null,
   })
 
   const contentRequestId = requestRecord?.id ?? null
@@ -168,5 +202,13 @@ Write only the final clean text for publication. No think tags. No Markdown.`
     await deps.contentRequests.markCompleted(contentRequestId)
   }
 
-  return { text: cleanText, model: generated.model, contentRequestId }
+  return {
+    text: cleanText,
+    model: generated.model,
+    contentRequestId,
+    usedContext: {
+      brandFacts: brandSnapshot.facts,
+      knowledgeChunks: knowledge.chunks.map((c) => ({ assetId: c.assetId, assetTitle: c.assetTitle, snippet: c.snippet })),
+    },
+  }
 }

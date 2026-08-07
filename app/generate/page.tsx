@@ -17,6 +17,23 @@ const FORMATS = [
 type ThreadSegment = string
 type CarouselSegment = { title: string; body: string }
 
+type UsedContext = {
+  brandFacts: { category: string; label: string }[]
+  knowledgeChunks: { assetId: string; assetTitle: string; snippet: string }[]
+}
+
+type StreamMetadata = {
+  contentRequestId: string | null
+  usedContext: UsedContext
+}
+
+type ThreadVersion = {
+  id: string
+  refinement_note: string | null
+  generated_content: string | null
+  created_at: string
+}
+
 function parseAIChunk(raw: string): string {
   let out = ''
   for (const line of raw.split('\n')) {
@@ -121,6 +138,21 @@ function GenerateContent() {
   const [seoMode, setSeoMode] = useState(false)
   const [localizationNotes, setLocalizationNotes] = useState('')
 
+  // Sprint 8: visible context, refinement, version history
+  const [contentRequestId, setContentRequestId] = useState<string | null>(null)
+  const [usedContext, setUsedContext] = useState<UsedContext | null>(null)
+  const [showContext, setShowContext] = useState(false)
+  const [threadVersions, setThreadVersions] = useState<ThreadVersion[]>([])
+  const [refinementNote, setRefinementNote] = useState('')
+  const [refining, setRefining] = useState(false)
+
+  function loadThread(requestId: string) {
+    fetch(`/api/generate/requests/${requestId}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d: { thread: ThreadVersion[] }) => setThreadVersions(d.thread ?? []))
+      .catch(() => { /* version history is a nice-to-have, fail silently */ })
+  }
+
   // Hydrate local storage states
   useEffect(() => {
     const savedFmt = localStorage.getItem('amado_format')
@@ -168,9 +200,10 @@ function GenerateContent() {
       .catch(() => {})
   }, [])
 
-  async function handleGenerate(e?: React.FormEvent) {
+  async function handleGenerate(e?: React.FormEvent, refinement?: { parentRequestId: string; note: string }) {
     if (e) e.preventDefault()
     if (!topic.trim() || loading) return
+    if (refinement && !refinement.note.trim()) return
 
     if (abortRef.current) abortRef.current.abort()
     const controller = new AbortController()
@@ -182,6 +215,9 @@ function GenerateContent() {
     setArticleId(null)
     setRating(0)
     setLocalizationNotes('')
+    setContentRequestId(null)
+    setUsedContext(null)
+    if (!refinement) setThreadVersions([])
 
     try {
       const res = await fetch('/api/generate', {
@@ -194,6 +230,8 @@ function GenerateContent() {
           templateId,
           brandProfileId: brandProfileId || undefined,
           seoMode,
+          parentRequestId: refinement?.parentRequestId,
+          refinementNote: refinement?.note,
         }),
         signal: controller.signal,
       })
@@ -206,6 +244,7 @@ function GenerateContent() {
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      let capturedMetadata: StreamMetadata | null = null
 
       while (true) {
         const { value, done } = await reader.read()
@@ -218,6 +257,8 @@ function GenerateContent() {
         for (const line of lines) {
           if (line.startsWith('0:')) {
             try { setOutput((prev) => prev + (JSON.parse(line.slice(2)) as string)) } catch { /* skip */ }
+          } else if (line.startsWith('m:')) {
+            try { capturedMetadata = JSON.parse(line.slice(2)) as StreamMetadata } catch { /* skip */ }
           } else if (line.trim() && !line.startsWith('d:') && !line.startsWith('e:')) {
             setOutput((prev) => prev + line + '\n')
           }
@@ -228,6 +269,12 @@ function GenerateContent() {
         const parsed = parseAIChunk(buffer)
         if (parsed) setOutput((prev) => prev + parsed)
         else if (buffer.trim()) setOutput((prev) => prev + buffer)
+      }
+
+      if (capturedMetadata) {
+        setContentRequestId(capturedMetadata.contentRequestId)
+        setUsedContext(capturedMetadata.usedContext)
+        if (capturedMetadata.contentRequestId) loadThread(capturedMetadata.contentRequestId)
       }
 
       try {
@@ -247,6 +294,18 @@ function GenerateContent() {
       if (e.name !== 'AbortError') setError(e.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleRefine() {
+    if (!contentRequestId || !refinementNote.trim()) return
+    const note = refinementNote.trim()
+    setRefining(true)
+    try {
+      await handleGenerate(undefined, { parentRequestId: contentRequestId, note })
+      setRefinementNote('')
+    } finally {
+      setRefining(false)
     }
   }
 
@@ -465,6 +524,86 @@ function GenerateContent() {
           {output && (
             <div className="mt-4 text-xs font-medium text-on-surface-variant text-right">
               Caracteres: {output.length}
+            </div>
+          )}
+
+          {/* Sprint 8: what context was actually used */}
+          {!loading && usedContext && (usedContext.brandFacts.length > 0 || usedContext.knowledgeChunks.length > 0) && (
+            <div className="mt-4 pt-4 border-t border-surface-variant/50">
+              <button
+                type="button"
+                onClick={() => setShowContext((v) => !v)}
+                className="text-xs font-semibold bg-transparent border-none cursor-pointer p-0"
+                style={{ color: 'var(--color-primary)' }}
+              >
+                {showContext ? '▾' : '▸'} Использованный контекст ({usedContext.brandFacts.length + usedContext.knowledgeChunks.length})
+              </button>
+              {showContext && (
+                <div className="mt-2 flex flex-col gap-2 text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
+                  {usedContext.brandFacts.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {usedContext.brandFacts.map((f, i) => (
+                        <span key={i} className="rounded-full px-2 py-0.5" style={{ background: 'var(--color-surface-container-low)' }}>
+                          {f.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {usedContext.knowledgeChunks.map((c) => (
+                    <div key={c.assetId} className="rounded-lg p-2" style={{ background: 'var(--color-surface-container-low)' }}>
+                      <span className="font-semibold">{c.assetTitle}</span>
+                      <p className="m-0 mt-0.5">{c.snippet}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sprint 8: refine this version */}
+          {!loading && output && contentRequestId && (
+            <div className="mt-4 pt-4 border-t border-surface-variant/50 flex flex-col gap-2">
+              <span className="text-xs font-semibold" style={{ color: 'var(--color-on-surface)' }}>Уточнить версию</span>
+              <div className="flex gap-2">
+                <input
+                  value={refinementNote}
+                  onChange={(e) => setRefinementNote(e.target.value)}
+                  placeholder="Например: короче, более неформальный тон..."
+                  className="m3-input-outlined flex-1 text-sm h-10"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleRefine() }}
+                />
+                <button
+                  type="button"
+                  onClick={handleRefine}
+                  disabled={refining || !refinementNote.trim()}
+                  className="m3-button-tonal text-sm px-4 disabled:opacity-50"
+                >
+                  {refining ? '...' : 'Уточнить'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Sprint 8: version history within this thread */}
+          {!loading && threadVersions.length > 1 && (
+            <div className="mt-4 pt-4 border-t border-surface-variant/50">
+              <span className="text-xs font-semibold" style={{ color: 'var(--color-on-surface)' }}>
+                История версий ({threadVersions.length})
+              </span>
+              <div className="mt-2 flex flex-col gap-1">
+                {threadVersions.map((v, i) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => v.generated_content && setOutput(v.generated_content)}
+                    disabled={!v.generated_content}
+                    className="text-left text-xs rounded-lg px-2 py-1.5 bg-transparent border-none cursor-pointer disabled:cursor-default"
+                    style={{ color: 'var(--color-on-surface-variant)' }}
+                  >
+                    {i === 0 ? 'Версия 1 (исходная)' : `Версия ${i + 1}: ${v.refinement_note ?? ''}`}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

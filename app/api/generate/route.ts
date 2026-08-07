@@ -16,13 +16,21 @@ type GenerateBody = {
   seoMode?: boolean
   regionId?: string
   evidenceItemIds?: string[]
+  parentRequestId?: string
+  refinementNote?: string
 }
 
-function textToAiSdkLikeStream(text: string): ReadableStream<Uint8Array> {
+function textToAiSdkLikeStream(text: string, metadata: unknown): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder()
   return new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(encoder.encode(`0:${JSON.stringify(text)}\n`))
+      // 'm:' is not part of the AI-SDK stream protocol this format
+      // otherwise mimics -- the client's reader loop treats it as
+      // metadata to parse, not text to display. Kept in the body (not a
+      // response header) since usedContext can contain Cyrillic brand
+      // fact labels, which HTTP headers can't safely carry.
+      controller.enqueue(encoder.encode(`m:${JSON.stringify(metadata)}\n`))
       controller.close()
     },
   })
@@ -31,7 +39,7 @@ function textToAiSdkLikeStream(text: string): ReadableStream<Uint8Array> {
 export async function POST(req: NextRequest): Promise<Response> {
   try {
     const body = (await req.json()) as GenerateBody
-    const { topic, context, templateId, brandProfileId, seoMode = false, regionId, evidenceItemIds } = body
+    const { topic, context, templateId, brandProfileId, seoMode = false, regionId, evidenceItemIds, parentRequestId, refinementNote } = body
     const contentType = (body.contentType ?? 'article') as ContentFormat
 
     if (!topic?.trim()) {
@@ -55,9 +63,13 @@ export async function POST(req: NextRequest): Promise<Response> {
       seoMode,
       regionId,
       evidenceItemIds,
+      parentRequestId,
+      refinementNote,
     })
 
-    return new Response(textToAiSdkLikeStream(result.text), {
+    const metadata = { contentRequestId: result.contentRequestId, usedContext: result.usedContext }
+
+    return new Response(textToAiSdkLikeStream(result.text, metadata), {
       status: 200,
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
