@@ -2,219 +2,141 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { getErrorMessage } from '@/lib/api/error-message'
 
+interface RouteContext {
+  params: Promise<{ brandId: string }>
+}
+
 /**
  * GET /api/brands/[brandId]/learning
- * Get learning data: performance snapshots, patterns, preferences
+ *
+ * Read-only view over what's been recorded for this brand: manually
+ * entered performance snapshots and explicit preference signals (see
+ * POST below). Rewritten from scratch -- the previous version of this
+ * route referenced columns that don't exist on any of these tables
+ * (performance_snapshots.metrics/period_start/format,
+ * content_pattern_usage.usage_count/pattern_key,
+ * preference_profiles.preference_type/weight) and would have failed on
+ * every call. See migration 043 for what actually changed vs. what was
+ * simply always wrong here.
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ brandId: string }> }
-) {
+export async function GET(request: NextRequest, context: RouteContext): Promise<NextResponse> {
   try {
-    const { brandId } = await params
-    const { searchParams } = new URL(request.url)
-    const type = searchParams.get('type') || 'all'
-    const limit = parseInt(searchParams.get('limit') || '50')
-
+    const { brandId } = await context.params
+    const type = request.nextUrl.searchParams.get('type') || 'all'
+    const limit = Math.min(Number(request.nextUrl.searchParams.get('limit')) || 50, 200)
     const admin = getSupabaseAdmin()
     const result: Record<string, unknown[]> = {}
 
     if (type === 'all' || type === 'performance') {
-      const { data: snapshots } = await admin
+      const { data, error } = await admin
         .from('performance_snapshots')
-        .select('*')
+        .select('*, article:article_id (topic, content_type)')
         .eq('brand_id', brandId)
-        .order('period_start', { ascending: false })
+        .order('recorded_at', { ascending: false })
         .limit(limit)
-      result.performance = snapshots || []
-    }
-
-    if (type === 'all' || type === 'patterns') {
-      const { data: patterns } = await admin
-        .from('content_pattern_usage')
-        .select('*')
-        .eq('brand_id', brandId)
-        .order('usage_count', { ascending: false })
-        .limit(limit)
-      result.patterns = patterns || []
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      result.performance = data ?? []
     }
 
     if (type === 'all' || type === 'preferences') {
-      const { data: preferences } = await admin
+      const { data, error } = await admin
         .from('preference_profiles')
         .select('*')
         .eq('brand_id', brandId)
-        .order('updated_at', { ascending: false })
+        .eq('active', true)
+        .order('confidence', { ascending: false })
         .limit(limit)
-      result.preferences = preferences || []
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      result.preferences = data ?? []
     }
 
     return NextResponse.json(result)
   } catch (err) {
-    console.error('[learning-get] error:', err)
     return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
 /**
  * POST /api/brands/[brandId]/learning
- * Record performance data and update learning loop
+ *
+ * Records ONE explicit preference signal -- a person looking at
+ * performance data decides "this worked, remember it" and describes the
+ * pattern themselves (patternKey/patternValue, free text: e.g.
+ * profileType="hook", patternKey="opener_style", patternValue="question").
+ * This is the sprint's "explicit-signal learning loop": the signal only
+ * exists because a human typed it after looking at real results. This
+ * route never writes to brand_claims/brand_terms/brand_rules or any
+ * other governance table -- preference_profiles is an observational,
+ * human-curated log a person can review and act on manually in the
+ * Brand workspace, not something the system applies on its own
+ * (plan §11.4: no automatic Brand OS rewrites).
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ brandId: string }> }
-) {
+export async function POST(request: NextRequest, context: RouteContext): Promise<NextResponse> {
   try {
-    const { brandId } = await params
-    const body = await request.json()
-    const {
-      assetId,
-      platform,
-      format,
-      pillarId,
-      metrics,
-      periodStart,
-      periodEnd,
-    } = body
+    const { brandId } = await context.params
+    const body = await request.json() as {
+      profileType?: string
+      patternKey?: string
+      patternValue?: string
+    }
 
-    if (!assetId || !metrics) {
-      return NextResponse.json(
-        { error: 'assetId and metrics are required' },
-        { status: 400 }
-      )
+    const profileType = body.profileType?.trim()
+    const patternKey = body.patternKey?.trim()
+    const patternValue = body.patternValue?.trim()
+
+    const validTypes = ['hook', 'structure', 'ending', 'cta', 'visual', 'tone']
+    if (!profileType || !validTypes.includes(profileType)) {
+      return NextResponse.json({ error: `profileType must be one of: ${validTypes.join(', ')}` }, { status: 400 })
+    }
+    if (!patternKey || !patternValue) {
+      return NextResponse.json({ error: 'patternKey and patternValue are required' }, { status: 400 })
     }
 
     const admin = getSupabaseAdmin()
 
-    // 1. Record performance snapshot
-    const { data: snapshot, error: snapshotError } = await admin
-      .from('performance_snapshots')
+    const { data: existing } = await admin
+      .from('preference_profiles')
+      .select('id, confidence, evidence_count')
+      .eq('brand_id', brandId)
+      .eq('profile_type', profileType)
+      .eq('pattern_key', patternKey)
+      .eq('pattern_value', patternValue)
+      .maybeSingle()
+
+    if (existing) {
+      const { data, error } = await admin
+        .from('preference_profiles')
+        .update({
+          confidence: Math.min(1, existing.confidence + 0.1),
+          evidence_count: existing.evidence_count + 1,
+          last_used_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          active: true,
+        })
+        .eq('id', existing.id)
+        .select()
+        .single()
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json(data)
+    }
+
+    const { data, error } = await admin
+      .from('preference_profiles')
       .insert({
         brand_id: brandId,
-        asset_id: assetId,
-        platform,
-        format,
-        content_pillar_id: pillarId,
-        metrics,
-        period_start: periodStart || new Date().toISOString(),
-        period_end: periodEnd || new Date().toISOString(),
+        profile_type: profileType,
+        pattern_key: patternKey,
+        pattern_value: patternValue,
+        confidence: 0.5,
+        evidence_count: 1,
+        last_used_at: new Date().toISOString(),
       })
       .select()
       .single()
 
-    if (snapshotError) throw snapshotError
-
-    // 2. Update or create content pattern usage
-    const patternKey = `${platform}:${format}:${pillarId || 'none'}`
-    const { data: existingPattern } = await admin
-      .from('content_pattern_usage')
-      .select('*')
-      .eq('brand_id', brandId)
-      .eq('pattern_key', patternKey)
-      .single()
-
-    if (existingPattern) {
-      // Update existing pattern
-      const newUsageCount = existingPattern.usage_count + 1
-      const currentAvg: Record<string, number> = existingPattern.avg_performance || {}
-      const newAvg: Record<string, number> = {}
-      
-      for (const [key, value] of Object.entries(metrics)) {
-        const currentVal = currentAvg[key] || 0
-        newAvg[key] = (currentVal * existingPattern.usage_count + (value as number)) / newUsageCount
-      }
-
-      await admin
-        .from('content_pattern_usage')
-        .update({
-          usage_count: newUsageCount,
-          avg_performance: newAvg,
-          last_used_at: new Date().toISOString(),
-        })
-        .eq('id', existingPattern.id)
-    } else {
-      // Create new pattern
-      await admin
-        .from('content_pattern_usage')
-        .insert({
-          brand_id: brandId,
-          pattern_key: patternKey,
-          pattern_type: 'platform_format_pillar',
-          platform,
-          format,
-          content_pillar_id: pillarId,
-          usage_count: 1,
-          avg_performance: metrics,
-          last_used_at: new Date().toISOString(),
-        })
-    }
-
-    // 3. Update preference profile
-    const { data: existingPref } = await admin
-      .from('preference_profiles')
-      .select('*')
-      .eq('brand_id', brandId)
-      .eq('preference_type', 'platform_format')
-      .eq('preference_key', `${platform}:${format}`)
-      .single()
-
-    const performanceScore = calculatePerformanceScore(metrics)
-
-    if (existingPref) {
-      const newWeight = Math.min(1.0, existingPref.weight + 0.05)
-      await admin
-        .from('preference_profiles')
-        .update({
-          weight: newWeight,
-          performance_score: performanceScore,
-          evidence_count: existingPref.evidence_count + 1,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingPref.id)
-    } else {
-      await admin
-        .from('preference_profiles')
-        .insert({
-          brand_id: brandId,
-          preference_type: 'platform_format',
-          preference_key: `${platform}:${format}`,
-          weight: 0.5,
-          performance_score: performanceScore,
-          evidence_count: 1,
-        })
-    }
-
-    return NextResponse.json({
-      snapshot,
-      message: 'Performance recorded and learning loop updated',
-    })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(data, { status: 201 })
   } catch (err) {
-    console.error('[learning-post] error:', err)
     return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
-}
-
-function calculatePerformanceScore(metrics: Record<string, number>): number {
-  // Simple weighted score based on common metrics
-  const weights: Record<string, number> = {
-    engagement_rate: 0.3,
-    click_through_rate: 0.25,
-    conversion_rate: 0.25,
-    reach: 0.1,
-    impressions: 0.1,
-  }
-
-  let score = 0
-  let totalWeight = 0
-
-  for (const [key, weight] of Object.entries(weights)) {
-    if (metrics[key] !== undefined) {
-      // Normalize to 0-1 range (assuming percentages)
-      const normalized = Math.min(1, Math.max(0, metrics[key] / 100))
-      score += normalized * weight
-      totalWeight += weight
-    }
-  }
-
-  return totalWeight > 0 ? score / totalWeight : 0.5
 }

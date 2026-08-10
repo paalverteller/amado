@@ -32,6 +32,24 @@ function formatDate(dateStr: string): string {
   })
 }
 
+interface PerformanceSnapshot {
+  id: string
+  platform: string
+  horizon: string
+  reach: number | null
+  likes: number | null
+  comments: number | null
+  shares: number | null
+  saves: number | null
+  link_clicks: number | null
+  qualitative_notes: string | null
+  ai_hypothesis: string | null
+  ai_hypothesis_generated_at: string | null
+  recorded_at: string
+}
+
+const PLATFORM_OPTIONS = ['instagram', 'linkedin', 'facebook', 'x', 'telegram', 'whatsapp', 'youtube', 'website', 'email']
+
 interface PageProps { params: Promise<{ id: string }> }
 
 export default function ArticlePage({ params }: PageProps) {
@@ -46,6 +64,26 @@ export default function ArticlePage({ params }: PageProps) {
   const [savedMsg, setSavedMsg]       = useState('')
   const [copied, setCopied]           = useState(false)
 
+  // Sprint 9: manual performance & feedback
+  const [snapshots, setSnapshots] = useState<PerformanceSnapshot[]>([])
+  const [showPerfForm, setShowPerfForm] = useState(false)
+  const [perfPlatform, setPerfPlatform] = useState('instagram')
+  const [perfMetrics, setPerfMetrics] = useState({ reach: '', likes: '', comments: '', shares: '', saves: '', link_clicks: '' })
+  const [perfNotes, setPerfNotes] = useState('')
+  const [savingPerf, setSavingPerf] = useState(false)
+  const [hypothesisLoading, setHypothesisLoading] = useState<string | null>(null)
+  const [rememberOpenFor, setRememberOpenFor] = useState<string | null>(null)
+  const [rememberForm, setRememberForm] = useState({ profileType: 'hook', patternKey: '', patternValue: '' })
+  const [rememberSaving, setRememberSaving] = useState(false)
+  const [rememberMsg, setRememberMsg] = useState('')
+
+  function loadSnapshots() {
+    fetch(`/api/articles/${id}/performance`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d: { snapshots: PerformanceSnapshot[] }) => setSnapshots(d.snapshots ?? []))
+      .catch(() => { /* non-critical */ })
+  }
+
   useEffect(() => {
     let cancelled = false
     fetch(`/api/articles/${id}`)
@@ -53,6 +91,7 @@ export default function ArticlePage({ params }: PageProps) {
       .then((data) => { if (!cancelled) { setArticle(data); setFinalContent(data.final_content ?? '') } })
       .catch((err) => console.error('[article/id] load error:', err))
       .finally(() => { if (!cancelled) setLoading(false) })
+    loadSnapshots()
     return () => { cancelled = true }
   }, [id])
 
@@ -99,6 +138,63 @@ export default function ArticlePage({ params }: PageProps) {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch { /* clipboard unavailable */ }
+  }
+
+  async function handleSavePerformance() {
+    setSavingPerf(true)
+    try {
+      const body: Record<string, unknown> = { platform: perfPlatform, horizon: 'manual', qualitative_notes: perfNotes || undefined }
+      for (const [key, val] of Object.entries(perfMetrics) as [string, string][]) {
+        if (val.trim() !== '') body[key] = Number(val)
+      }
+      const res = await fetch(`/api/articles/${id}/performance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        setPerfMetrics({ reach: '', likes: '', comments: '', shares: '', saves: '', link_clicks: '' })
+        setPerfNotes('')
+        setShowPerfForm(false)
+        loadSnapshots()
+        if (article && article.status !== 'published') setArticle({ ...article, status: 'published' })
+      }
+    } finally {
+      setSavingPerf(false)
+    }
+  }
+
+  async function handleGetHypothesis(snapshotId: string) {
+    setHypothesisLoading(snapshotId)
+    try {
+      const res = await fetch(`/api/performance/${snapshotId}/hypothesis`, { method: 'POST' })
+      if (res.ok) loadSnapshots()
+    } finally {
+      setHypothesisLoading(null)
+    }
+  }
+
+  async function handleRememberPattern() {
+    if (!article?.brand_profile_id || !rememberForm.patternKey.trim() || !rememberForm.patternValue.trim()) return
+    setRememberSaving(true)
+    setRememberMsg('')
+    try {
+      const res = await fetch(`/api/brands/${article.brand_profile_id}/learning`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rememberForm),
+      })
+      if (res.ok) {
+        setRememberMsg('Сохранено — видно в разделе обучения бренда')
+        setRememberForm({ profileType: 'hook', patternKey: '', patternValue: '' })
+        setTimeout(() => { setRememberOpenFor(null); setRememberMsg('') }, 2000)
+      } else {
+        const d = await res.json()
+        setRememberMsg(`Ошибка: ${d.error ?? 'неизвестная'}`)
+      }
+    } finally {
+      setRememberSaving(false)
+    }
   }
 
   if (loading) {
@@ -236,6 +332,127 @@ export default function ArticlePage({ params }: PageProps) {
               {savingStatus && <span className="text-xs font-medium text-on-surface-variant">Atualizando...</span>}
             </div>
           </div>
+        </div>
+
+        {/* Sprint 9: manual performance & feedback */}
+        <div className="m3-card p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-on-surface m-0">Показатели публикации</h2>
+            <button onClick={() => setShowPerfForm((v) => !v)} className="m3-button-tonal text-sm">
+              {showPerfForm ? 'Отмена' : '+ Записать показатели'}
+            </button>
+          </div>
+
+          {showPerfForm && (
+            <div className="space-y-3 border-t border-surface-variant/50 pt-4">
+              <select value={perfPlatform} onChange={(e) => setPerfPlatform(e.target.value)} className="m3-input-outlined w-48">
+                {PLATFORM_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {(Object.keys(perfMetrics) as (keyof typeof perfMetrics)[]).map((key) => (
+                  <input
+                    key={key}
+                    type="number"
+                    value={perfMetrics[key]}
+                    onChange={(e) => setPerfMetrics((prev) => ({ ...prev, [key]: e.target.value }))}
+                    placeholder={key}
+                    className="m3-input-outlined text-sm"
+                  />
+                ))}
+              </div>
+              <textarea
+                value={perfNotes}
+                onChange={(e) => setPerfNotes(e.target.value)}
+                placeholder="Заметки (необязательно)"
+                rows={2}
+                className="m3-input-outlined w-full resize-none text-sm"
+              />
+              <button onClick={handleSavePerformance} disabled={savingPerf} className="m3-button-filled text-sm">
+                {savingPerf ? 'Сохранение...' : 'Сохранить'}
+              </button>
+            </div>
+          )}
+
+          {snapshots.length > 0 && (
+            <div className="space-y-3 border-t border-surface-variant/50 pt-4">
+              {snapshots.map((s) => (
+                <div key={s.id} className="rounded-lg bg-surface-container-high p-3 space-y-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
+                      {s.platform} · {new Date(s.recorded_at).toLocaleDateString('ru-RU')}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-on-surface">
+                    {s.reach != null && <span>Охват: {s.reach}</span>}
+                    {s.likes != null && <span>Лайки: {s.likes}</span>}
+                    {s.comments != null && <span>Комментарии: {s.comments}</span>}
+                    {s.shares != null && <span>Репосты: {s.shares}</span>}
+                    {s.saves != null && <span>Сохранения: {s.saves}</span>}
+                    {s.link_clicks != null && <span>Клики: {s.link_clicks}</span>}
+                  </div>
+                  {s.qualitative_notes && <p className="text-xs text-on-surface-variant m-0">{s.qualitative_notes}</p>}
+
+                  {s.ai_hypothesis ? (
+                    <div className="rounded-md bg-tertiary-container/40 px-3 py-2 text-xs text-on-surface">
+                      <span className="font-semibold">Предположение ИИ</span> — не факт, а гипотеза: {s.ai_hypothesis}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleGetHypothesis(s.id)}
+                      disabled={hypothesisLoading === s.id}
+                      className="text-xs font-semibold text-primary bg-transparent border-none cursor-pointer p-0"
+                    >
+                      {hypothesisLoading === s.id ? 'Анализ...' : 'Получить гипотезу ИИ'}
+                    </button>
+                  )}
+
+                  {article?.brand_profile_id && (
+                    rememberOpenFor === s.id ? (
+                      <div className="flex flex-col gap-1.5 pt-1">
+                        <div className="flex gap-1.5">
+                          <select
+                            value={rememberForm.profileType}
+                            onChange={(e) => setRememberForm((p) => ({ ...p, profileType: e.target.value }))}
+                            className="m3-input-outlined text-xs py-1"
+                          >
+                            {['hook', 'structure', 'ending', 'cta', 'visual', 'tone'].map((t) => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                          <input
+                            value={rememberForm.patternKey}
+                            onChange={(e) => setRememberForm((p) => ({ ...p, patternKey: e.target.value }))}
+                            placeholder="что именно"
+                            className="m3-input-outlined text-xs py-1 flex-1"
+                          />
+                          <input
+                            value={rememberForm.patternValue}
+                            onChange={(e) => setRememberForm((p) => ({ ...p, patternValue: e.target.value }))}
+                            placeholder="какое значение"
+                            className="m3-input-outlined text-xs py-1 flex-1"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={handleRememberPattern} disabled={rememberSaving} className="text-xs font-semibold text-primary bg-transparent border-none cursor-pointer p-0">
+                            {rememberSaving ? '...' : 'Сохранить'}
+                          </button>
+                          <button onClick={() => setRememberOpenFor(null)} className="text-xs text-on-surface-variant bg-transparent border-none cursor-pointer p-0">
+                            Отмена
+                          </button>
+                          {rememberMsg && <span className="text-xs text-on-surface-variant">{rememberMsg}</span>}
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setRememberOpenFor(s.id)}
+                        className="text-xs font-semibold text-on-surface-variant bg-transparent border-none cursor-pointer p-0"
+                      >
+                        Запомнить этот паттерн →
+                      </button>
+                    )
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </Layout>

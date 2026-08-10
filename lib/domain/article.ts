@@ -7,5 +7,5 @@ export interface Article {
   source_context: string | null; word_count: number | null;
   char_count: number | null; template_id: string | null;
   region_id: string | null; locale: string | null;
-  content_request_id: string | null;
+  content_request_id: string | null; brand_profile_id: string | null;
 }
