@@ -2,6 +2,7 @@ import { buildSystemPrompt, buildUserPrompt, buildLocalizationNotesPrompt, build
 import { buildBrandSnapshot } from '@/lib/brand-snapshot'
 import { getRecentEvidenceItems } from '@/lib/evidence'
 import { generateArticleWithFallback, generateWithFallback } from '@/lib/ai'
+import { recordAiUsage } from '@/lib/ai-usage'
 import { cleanPlainTextOutput } from '@/lib/text-cleanup'
 import { mapToLegacyContentType } from '@/lib/content-formats'
 import type { ContentFormat } from '@/lib/content-formats'
@@ -124,6 +125,7 @@ Write only the final clean text for publication. No think tags. No Markdown.`
     userPrompt,
     maxTokens: undefined, // Let the model decide based on format
   })
+  await recordAiUsage(input.parentRequestId ? 'generate_refine' : 'generate', generated.model, generated.usage)
 
   const cleanText = cleanPlainTextOutput(generated.text)
   const words = cleanText.trim().split(/\s+/).filter(Boolean).length

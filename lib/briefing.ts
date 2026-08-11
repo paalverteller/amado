@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { generateArticleWithFallback } from '@/lib/ai'
 import { getErrorMessage } from '@/lib/api/error-message'
+import { recordAiUsage, checkDailyAiBudget } from '@/lib/ai-usage'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -123,6 +124,7 @@ async function rankAndExplain(candidates: CandidateRow[]): Promise<{ items: Rank
   const userPrompt = buildCandidateBlock(candidates)
 
   const result = await generateArticleWithFallback({ systemPrompt, userPrompt, maxTokens: 2000 })
+  await recordAiUsage('briefing', result.model, result.usage)
   const items = parseRankedItems(result.text, candidates)
   return { items, model: result.model }
 }
@@ -190,6 +192,15 @@ export async function runBriefing(runDate?: string): Promise<BriefingRunResult> 
   }
 
   try {
+    const budget = await checkDailyAiBudget()
+    if (!budget.withinBudget) {
+      const message = `Daily AI call budget reached (${budget.callsToday}/${budget.limit}) -- skipping today's briefing`
+      await admin.from('briefing_runs').update({
+        status: 'failed', error_message: message, completed_at: new Date().toISOString(),
+      }).eq('id', runId)
+      return { runId, status: 'failed', itemsCount: 0, error: message }
+    }
+
     const candidates = await selectCandidates()
 
     if (candidates.length === 0) {

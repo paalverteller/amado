@@ -3,6 +3,7 @@ import { generateArticleWithFallback } from '@/lib/ai'
 import { processKnowledgeAsset } from '@/lib/knowledge/process-asset'
 import { createSupabaseKnowledgeRepository } from '@/lib/repositories/knowledge-repository'
 import { getErrorMessage } from '@/lib/api/error-message'
+import { recordAiUsage } from '@/lib/ai-usage'
 
 // Competitor reviews look further back than the daily briefing (48h) --
 // competitor positioning/messaging shifts show up over weeks, not hours.
@@ -89,6 +90,7 @@ async function writeReview(competitor: CompetitorRow, evidence: EvidenceRow[]): 
   const userPrompt = buildEvidenceBlock(evidence)
 
   const result = await generateArticleWithFallback({ systemPrompt, userPrompt, maxTokens: 1500 })
+  await recordAiUsage('competitor_review', result.model, result.usage)
   return { text: result.text, model: result.model }
 }
 

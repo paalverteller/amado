@@ -68,9 +68,18 @@ export interface GenerateResult {
   model: string
 }
 
+export interface TokenUsage {
+  promptTokens: number | null
+  completionTokens: number | null
+  totalTokens: number | null
+}
+
 export interface GenerateAttemptResult {
   text: string
   model: string
+  /** null when the provider (e.g. the DeepSeek raw-HTTP path) doesn't
+   *  report usage, or when usage wasn't in the SDK response. */
+  usage: TokenUsage | null
 }
 
 async function* streamFromText(text: string): AsyncIterable<string> { yield text }
@@ -146,7 +155,7 @@ export async function generateArticleWithFallback(params: GenerateParams): Promi
         const text = cleanPlainTextOutput(rawText)
         if (!text) throw new Error(`Empty text`)
         console.info(`[generate pipeline] SUCCESS using ${entry.model}`)
-        return { text, model: modelLabel(entry) }
+        return { text, model: modelLabel(entry), usage: null }
       }
 
       const model = createModel(entry)
@@ -161,7 +170,12 @@ export async function generateArticleWithFallback(params: GenerateParams): Promi
       if (!text) throw new Error(`Empty text`)
       
       console.info(`[generate pipeline] SUCCESS using ${entry.model}`)
-      return { text, model: modelLabel(entry) }
+      const usage: TokenUsage | null = result.usage ? {
+        promptTokens: result.usage.inputTokens ?? null,
+        completionTokens: result.usage.outputTokens ?? null,
+        totalTokens: result.usage.totalTokens ?? null,
+      } : null
+      return { text, model: modelLabel(entry), usage }
     } catch (error) {
       if (isQuotaError(error)) setCooldown(entry, retryDelayMs(error))
       errors.push(`${entry.model}: ${getErrorMessage(error).slice(0, 100)}`)

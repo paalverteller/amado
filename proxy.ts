@@ -1,6 +1,24 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+/**
+ * Sprint 10 addition: a request carrying a valid CRON_SECRET bearer
+ * token is a trusted server-to-server call and passes regardless of the
+ * auth cookie. Needed because app/api/cron/market-refresh/route.ts makes
+ * an internal fetch to /api/market/refresh -- a route this proxy does
+ * NOT put in the always-allow list below (only /api/cron/* is), so that
+ * internal call would otherwise 401 against itself. This was a
+ * pre-existing gap (the fetch call predates this fix), not something
+ * introduced here -- ACCESS_PASSWORD being unset makes isAuthenticated
+ * always false below, so this route would 401 the internal call either
+ * way, cookie or not.
+ */
+function hasValidCronSecret(request: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET
+  if (!secret) return false
+  return request.headers.get('authorization') === `Bearer ${secret}`
+}
+
 // In Next.js 16+, the exported function MUST be named 'proxy', not 'middleware'
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -16,6 +34,10 @@ export function proxy(request: NextRequest) {
     pathname === '/sw.js' ||
     pathname === '/manifest.webmanifest'
   ) {
+    return NextResponse.next()
+  }
+
+  if (hasValidCronSecret(request)) {
     return NextResponse.next()
   }
 

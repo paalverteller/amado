@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { buildSystemPrompt, buildUserPrompt } from '@/lib/prompts'
 import { generateArticleWithFallback } from '@/lib/ai'
+import { recordAiUsage } from '@/lib/ai-usage'
 import { cleanPlainTextOutput } from '@/lib/text-cleanup'
 import { requireCronAuth } from '@/lib/cron-auth'
 import { CRON_CONFIG } from '@/lib/amado-config'
 import { mapToLegacyContentType } from '@/lib/content-formats'
+import { startCronRun, finishCronRun } from '@/lib/cron-log'
 import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'
@@ -17,6 +19,8 @@ const STATE_KEY = 'auto_generate_last_run'
 export async function GET(request: Request): Promise<NextResponse> {
   const denied = requireCronAuth(request)
   if (denied) return denied
+
+  const runId = await startCronRun('auto-generate')
 
   try {
     const admin = getSupabaseAdmin()
@@ -32,6 +36,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     const hoursSince = (Date.now() - lastRun) / (1000 * 60 * 60)
 
     if (lastRun && hoursSince < THROTTLE_HOURS) {
+      await finishCronRun(runId, 'success', { skipped: true, hoursSince })
       return NextResponse.json({
         status: 'skipped',
         reason: `Only ${hoursSince.toFixed(1)}h since last run, need ${THROTTLE_HOURS}h`,
@@ -52,6 +57,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
 
     if (!chunk) {
+      await finishCronRun(runId, 'failed', undefined, 'No book chunks available for auto-generation')
       return NextResponse.json({ error: 'No book chunks available for auto-generation' }, { status: 404 })
     }
 
@@ -62,6 +68,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     const userPrompt = buildUserPrompt({ topic, format: 'article' })
 
     const generated = await generateArticleWithFallback({ systemPrompt, userPrompt })
+    await recordAiUsage('auto_generate_legacy', generated.model, generated.usage)
     const cleanText = cleanPlainTextOutput(generated.text)
 
     // Use first line as display topic if it looks like a title
@@ -86,6 +93,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       .from('cron_state')
       .upsert({ key: STATE_KEY, last_run_at: new Date().toISOString() }, { onConflict: 'key' })
 
+    await finishCronRun(runId, 'success', { articleId: inserted?.id, topic: displayTopic })
     return NextResponse.json({
       status: 'ok',
       articleId: inserted?.id,
@@ -94,6 +102,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     })
   } catch (err) {
     console.error('[cron/auto-generate] error:', err)
+    await finishCronRun(runId, 'failed', undefined, getErrorMessage(err))
     return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
   }
 }

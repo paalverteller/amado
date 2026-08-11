@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { generateArticleWithFallback } from '@/lib/ai'
 import { getErrorMessage } from '@/lib/api/error-message'
+import { recordAiUsage } from '@/lib/ai-usage'
 
 export interface HypothesisResult {
   status: 'ready' | 'failed'
@@ -75,6 +76,7 @@ export async function generatePerformanceHypothesis(snapshotId: string): Promise
 
   try {
     const result = await generateArticleWithFallback({ systemPrompt, userPrompt, maxTokens: 400 })
+    await recordAiUsage('performance_hypothesis', result.model, result.usage)
 
     await admin.from('performance_snapshots').update({
       ai_hypothesis: result.text.trim(),

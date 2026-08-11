@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect, useCallback, use } from 'react'
 import Link from 'next/link'
 import Layout from '@/components/Layout'
 import RatingWidget from '@/components/RatingWidget'
@@ -77,12 +77,12 @@ export default function ArticlePage({ params }: PageProps) {
   const [rememberSaving, setRememberSaving] = useState(false)
   const [rememberMsg, setRememberMsg] = useState('')
 
-  function loadSnapshots() {
+  const loadSnapshots = useCallback(() => {
     fetch(`/api/articles/${id}/performance`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d: { snapshots: PerformanceSnapshot[] }) => setSnapshots(d.snapshots ?? []))
       .catch(() => { /* non-critical */ })
-  }
+  }, [id])
 
   useEffect(() => {
     let cancelled = false
@@ -93,7 +93,7 @@ export default function ArticlePage({ params }: PageProps) {
       .finally(() => { if (!cancelled) setLoading(false) })
     loadSnapshots()
     return () => { cancelled = true }
-  }, [id])
+  }, [id, loadSnapshots])
 
   async function handleSaveFinal() {
     if (!article) return

@@ -11,7 +11,8 @@
     "start": "next start -H 0.0.0.0",
     "postinstall": "next build",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.78",
@@ -26,6 +27,7 @@
     "rss-parser": "^3.13.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
