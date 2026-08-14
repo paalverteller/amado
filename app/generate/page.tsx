@@ -767,6 +767,10 @@ function GenerateContent() {
 export default function GeneratePage() {
   return (
     <Layout>
+      <div className="mb-6 flex flex-wrap gap-3">
+        <a href="/generate/seo" className="aug-button aug-button--growth">SEO-статья · PMEs Brazil</a>
+        <a href="/settings#prompt-library" className="aug-button aug-button--secondary">Профили каналов</a>
+      </div>
       <Suspense fallback={<div className="p-8 text-on-surface-variant font-medium">Carregando workspace...</div>}>
         <GenerateContent />
       </Suspense>

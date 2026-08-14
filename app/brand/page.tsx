@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Layout from '@/components/Layout'
+import BrandOsEditor from '@/components/brand/BrandOsEditor'
 import { t } from '@/lib/i18n/config'
 import OverviewTab from '@/components/brand/tabs/OverviewTab'
 import AudiencePainsTab from '@/components/brand/tabs/AudiencePainsTab'
@@ -158,6 +159,7 @@ export default function BrandBrainPage() {
           ))}
         </nav>
 
+        <BrandOsEditor brandId={brandId} />
         <div>{renderTab()}</div>
       </div>
     </Layout>

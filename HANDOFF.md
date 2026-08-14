@@ -108,3 +108,26 @@ The legacy pre-pivot `/api/cron/auto-generate` schedule is removed from
 Do not run historical `supabase db push` merely to apply this seed: the current DB
 was established from the manually consolidated clean baseline. Use SQL Editor for
 the additive seed.
+
+<!-- AMADO_FINAL_WORKSPACES_V1 -->
+## Final workspace sprint — localization, prompt library, SEO, market analysis, Brand OS editing
+
+Canonical workspaces added:
+- `/localize`: source-language copy -> natural pt-BR, with context modes and Brand OS.
+- Settings now contains Prompt Library. Prompt text is data in `prompt_templates`;
+  X/Facebook/Instagram/LinkedIn/SEO/localization/market-analysis profiles can be edited
+  without deployment, and custom profiles can be created.
+- `/generate/seo`: grounded SEO article workspace using the normal generation/persistence
+  pipeline and up to 10 recent evidence items.
+- `/market/analysis`: strict 60-day SME Brazil report. The model receives only collected
+  evidence, must cite supplied evidence IDs, and is told explicitly not to invent live
+  web facts. Successful reports are saved/indexed into Knowledge when possible.
+- Brand page exposes a wide Brand OS editor for core profile fields plus existing content
+  pillars and vocabulary terms. It writes the same tables consumed by BrandSnapshot.
+- `proxy.ts` treats static asset extensions as public. This fixes the August mark/favicon
+  on the unauthenticated password screen; previously `/amado-icon.svg` was redirected.
+
+Database activation is additive seed `supabase/seeds/003_final_workspaces.sql`.
+It uses `ON CONFLICT (name) DO NOTHING` for prompts on purpose: future re-runs never
+overwrite human edits made in Settings. Do not use historical `supabase db push` merely
+to install this seed; the production DB still follows the manually consolidated baseline.

@@ -20,8 +20,16 @@ function hasValidCronSecret(request: NextRequest): boolean {
 }
 
 // In Next.js 16+, the exported function MUST be named 'proxy', not 'middleware'
+const PUBLIC_ASSET_RE = /\.(?:svg|png|jpe?g|webp|gif|ico|avif|woff2?|webmanifest)$/i
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  // Static assets must be available before password auth. In particular the
+  // August /amado-icon.* files are rendered on the login screen itself.
+  if (PUBLIC_ASSET_RE.test(pathname)) {
+    return NextResponse.next()
+  }
 
   // Always allow: static assets, auth API, cron, PWA files
   if (

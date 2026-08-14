@@ -175,6 +175,9 @@ export default function MarketPage() {
 
   return (
     <Layout>
+      <div className="mb-6 flex flex-wrap gap-3">
+        <Link href="/market/analysis" className="aug-button aug-button--growth">Глубокий анализ · 60 дней</Link>
+      </div>
       <div className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-6 overflow-hidden">
 
         {/* ── Header card ── */}

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Layout from '@/components/Layout'
 import TemplateCard from '@/components/settings/TemplateCard'
 import SourceCard from '@/components/settings/SourceCard'
+import PromptStudio from '@/components/settings/PromptStudio'
 import { PromptTemplate } from '@/lib/domain/prompt-template'
 import { RssSource } from '@/lib/domain/rss'
 import { BrandProfile } from '@/lib/domain/brand-profile'
@@ -128,6 +129,7 @@ export default function SettingsPage() {
 
   return (
     <Layout>
+      <PromptStudio />
       <div className="space-y-10">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-on-background">{t('settings.title')}</h1>

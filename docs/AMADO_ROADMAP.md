@@ -488,3 +488,15 @@ campaign decisions.
       attach official source pages to the existing evidence pipeline.
 - [x] Stop scheduling the legacy pre-pivot auto-generation cron.
 - [x] Add a static runtime-contract verifier and Supabase URL unit tests.
+
+<!-- AMADO_FINAL_WORKSPACES_V1 -->
+### Final product workspace sprint — 2026-08-14
+- [x] Fix public August favicon/brand mark before authentication.
+- [x] Add native pt-BR localization workspace with user-provided localization contract.
+- [x] Seed editable X, Facebook, Instagram/Meta and LinkedIn prompt profiles.
+- [x] Add Prompt Library create/edit UI under Settings.
+- [x] Add grounded SEO article workspace under Generate.
+- [x] Add strict 60-day Brazil SME deep-market analysis and Knowledge persistence.
+- [x] Add editable core Brand OS + content pillars + vocabulary governance.
+- [x] Keep August desktop/PWA navigation coherent: Localization is first class; mobile
+      remains four direct destinations plus More.

@@ -18,6 +18,7 @@ type IconName =
   | 'overview'
   | 'market'
   | 'generate'
+  | 'localize'
   | 'knowledge'
   | 'brand'
   | 'competitors'
@@ -32,6 +33,7 @@ const NAV_PRIMARY: NavItem[] = [
   { href: '/overview', label: t('nav.overview'), icon: 'overview' },
   { href: '/market', label: t('nav.market'), icon: 'market' },
   { href: '/generate', label: t('nav.generate'), icon: 'generate' },
+  { href: '/localize', label: 'Локализация', icon: 'localize' },
   { href: '/knowledge', label: t('nav.knowledge'), icon: 'knowledge' },
   { href: '/brand', label: t('nav.brand'), icon: 'brand' },
   { href: '/competitors', label: t('nav.competitors'), icon: 'competitors' },
@@ -48,10 +50,11 @@ const MOBILE_NAV: NavItem[] = [
   { href: '/overview', label: 'Обзор', icon: 'overview' },
   { href: '/market', label: 'Рынок', icon: 'market' },
   { href: '/generate', label: 'Создать', icon: 'generate' },
-  { href: '/history', label: 'История', icon: 'history' },
+  { href: '/localize', label: 'Локализация', icon: 'localize' },
 ]
 
 const MOBILE_MORE: NavItem[] = [
+  { href: '/history', label: 'История', icon: 'history' },
   { href: '/knowledge', label: 'База знаний', icon: 'knowledge' },
   { href: '/brand', label: 'Бренд', icon: 'brand' },
   { href: '/competitors', label: 'Конкуренты', icon: 'competitors' },
@@ -74,6 +77,7 @@ function NavIcon({ name }: { name: IconName }) {
   if (name === 'overview') return <svg {...common}><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><path d="M14 17h7m-3.5-3.5V21"/></svg>
   if (name === 'market') return <svg {...common}><path d="M4 19V9m6 10V5m6 14v-7m4 7H2"/><path d="m4 7 6-4 6 6 4-3"/></svg>
   if (name === 'generate') return <svg {...common}><path d="M12 3v18M3 12h18"/><path d="m17.5 4.5.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"/></svg>
+  if (name === 'localize') return <svg {...common}><path d="M4 5h8M8 3v2"/><path d="M5 9c2.8-.8 5-3 6-6M6 7c1.1 2 2.4 3.3 4.2 4.2"/><path d="M14 8h6m-3-3v12m-3-4h6"/></svg>
   if (name === 'knowledge') return <svg {...common}><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z"/></svg>
   if (name === 'brand') return <svg {...common}><path d="M12 3 4.5 7v10L12 21l7.5-4V7L12 3Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg>
   if (name === 'competitors') return <svg {...common}><circle cx="8" cy="8" r="3"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M3 20c.5-4 2.5-6 5-6s4.5 2 5 6M13 15c1-.9 2.1-1.3 3.5-1.3 2.3 0 4 1.8 4.5 5.3"/></svg>
