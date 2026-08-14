@@ -103,7 +103,7 @@ export default function ArticleCard({ article }: { article: Article }) {
           {article.rating !== null ? (
             <div className="flex shrink-0 gap-0.5 text-sm" aria-label={`Avaliação: ${article.rating} de 5`}>
               {[1, 2, 3, 4, 5].map((i) => (
-                <span key={i} className={i <= (article.rating ?? 0) ? 'text-[#e5b513]' : 'text-surface-variant'}>
+                <span key={i} className={i <= (article.rating ?? 0) ? 'text-[#6E5CF6]' : 'text-surface-variant'}>
                   ★
                 </span>
               ))}

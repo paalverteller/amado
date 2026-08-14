@@ -29,7 +29,6 @@ type TabId =
 interface Tab {
   id: TabId
   label: string
-  icon: string
 }
 
 interface BrandListItem {
@@ -48,16 +47,16 @@ interface BrandListItem {
 // examples, compliance) with no obvious home in that list. Restructuring
 // needs an explicit decision, not a guess — see docs/AMADO_ROADMAP.md.
 const TABS: Tab[] = [
-  { id: 'overview', label: 'Обзор', icon: '🏠' },
-  { id: 'audience-pains', label: 'Аудитория и боли', icon: '👥' },
-  { id: 'products-claims', label: 'Продукты и утверждения', icon: '📦' },
-  { id: 'voice-vocabulary', label: 'Голос и словарь', icon: '🎙️' },
-  { id: 'content-pillars', label: 'Контент-пилары', icon: '🏛️' },
-  { id: 'platform-playbooks', label: 'Правила площадок', icon: '📱' },
-  { id: 'examples', label: 'Примеры', icon: '✨' },
-  { id: 'compliance', label: 'Проверка', icon: '🛡️' },
-  { id: 'versions', label: 'История изменений', icon: '📋' },
-  { id: 'guideline-import', label: 'Импорт гайдлайнов', icon: '📥' },
+  { id: 'overview', label: 'Обзор' },
+  { id: 'audience-pains', label: 'Аудитория и боли' },
+  { id: 'products-claims', label: 'Продукты и утверждения' },
+  { id: 'voice-vocabulary', label: 'Голос и словарь' },
+  { id: 'content-pillars', label: 'Контент-пилары' },
+  { id: 'platform-playbooks', label: 'Правила площадок' },
+  { id: 'examples', label: 'Примеры' },
+  { id: 'compliance', label: 'Проверка' },
+  { id: 'versions', label: 'История изменений' },
+  { id: 'guideline-import', label: 'Импорт гайдлайнов' },
 ]
 
 export default function BrandBrainPage() {
@@ -154,7 +153,6 @@ export default function BrandBrainPage() {
                 background: 'transparent',
               }}
             >
-              <span className="mr-2">{tabItem.icon}</span>
               {tabItem.label}
             </button>
           ))}

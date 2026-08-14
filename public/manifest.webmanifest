@@ -1,37 +1,95 @@
 {
-  "name": "Пишем как Янка Купала",
-  "short_name": "Kupala",
-  "description": "Контент-фабрика для мониторинга рынка и генерации материалов на русском языке.",
+  "name": "Amado — маркетинг для Бразилии",
+  "short_name": "Amado",
+  "description": "AI-рабочее пространство маркетолога: рынок, бренд, конкуренты, контент и результаты.",
   "lang": "ru",
-  "start_url": "/generate?source=pwa",
+  "start_url": "/overview?source=pwa",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
-  "background_color": "#1E3A8A",
-  "theme_color": "#1E3A8A",
-  "categories": ["productivity", "business", "news"],
+  "display_override": [
+    "window-controls-overlay",
+    "standalone"
+  ],
+  "orientation": "any",
+  "background_color": "#F7F8FC",
+  "theme_color": "#15172A",
+  "categories": [
+    "productivity",
+    "business",
+    "marketing"
+  ],
   "icons": [
     {
-      "src": "/pwa-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "/amado-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/amado-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/amado-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
     {
-      "name": "Генерация",
-      "short_name": "Генерация",
-      "description": "Создать новый материал",
-      "url": "/generate",
-      "icons": [{ "src": "/pwa-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+      "name": "Обзор",
+      "short_name": "Обзор",
+      "description": "Открыть Marketer Control Center",
+      "url": "/overview",
+      "icons": [
+        {
+          "src": "/amado-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
-      "name": "Анализ рынка",
+      "name": "Рынок",
       "short_name": "Рынок",
-      "description": "Открыть свежие рыночные сигналы",
+      "description": "Открыть рыночные сигналы",
       "url": "/market",
-      "icons": [{ "src": "/pwa-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+      "icons": [
+        {
+          "src": "/amado-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Создать",
+      "short_name": "Создать",
+      "description": "Создать новый материал",
+      "url": "/generate",
+      "icons": [
+        {
+          "src": "/amado-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "История",
+      "short_name": "История",
+      "description": "Открыть созданные материалы",
+      "url": "/history",
+      "icons": [
+        {
+          "src": "/amado-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }

@@ -1,5 +1,11 @@
-const CACHE_NAME = 'kupala-pwa-1782891273'
-const APP_SHELL = ['/', '/generate', '/market', '/history', '/rewrite', '/settings', '/manifest.webmanifest', '/pwa-icon.svg', '/icon-v2.svg', '/icon-nobg.svg']
+const CACHE_NAME = 'amado-pwa-august-v4'
+const APP_SHELL = [
+  '/offline',
+  '/manifest.webmanifest',
+  '/amado-icon.svg',
+  '/amado-icon-192.png',
+  '/amado-icon-512.png',
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -25,34 +31,39 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return
   if (url.pathname.startsWith('/api/')) return
 
-  // Network-first for HTML navigations — always get the latest page,
-  // never serve a stale cached shell for route content.
+  // App routes are network-first. Pages become available as a fallback only
+  // after the person has actually visited them while authenticated.
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const responseClone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone))
+          if (response.ok) {
+            const responseClone = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone))
+          }
           return response
         })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match('/')))
+        .catch(async () => {
+          const cached = await caches.match(request)
+          return cached || caches.match('/offline')
+        })
     )
     return
   }
 
-  // Network-first for everything else too, cache as fallback only
   event.respondWith(
     fetch(request)
       .then((response) => {
-        const responseClone = response.clone()
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone))
+        if (response.ok) {
+          const responseClone = response.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone))
+        }
         return response
       })
       .catch(() => caches.match(request))
   )
 })
 
-// Let the page force-activate a waiting SW immediately (see layout.tsx registration)
 self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting()
 })

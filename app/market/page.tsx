@@ -257,7 +257,7 @@ export default function MarketPage() {
               <article
                 key={item.id}
                 className="m3-card flex min-w-0 flex-col gap-3 overflow-hidden p-5 relative"
-                style={selectedIds.has(item.id) ? { borderColor: '#4A6FD4', boxShadow: '0 0 0 2px rgba(74,111,212,0.25)' } : undefined}
+                style={selectedIds.has(item.id) ? { borderColor: '#6E5CF6', boxShadow: '0 0 0 2px rgba(110,92,246,0.25)' } : undefined}
               >
                 <button
                   type="button"
@@ -266,8 +266,8 @@ export default function MarketPage() {
                   style={{
                     position: 'absolute', top: 12, right: 12, zIndex: 1,
                     width: 24, height: 24, borderRadius: 8,
-                    border: selectedIds.has(item.id) ? 'none' : '1.5px solid rgba(74,111,212,0.3)',
-                    background: selectedIds.has(item.id) ? '#4A6FD4' : 'rgba(255,255,255,0.8)',
+                    border: selectedIds.has(item.id) ? 'none' : '1.5px solid rgba(110,92,246,0.3)',
+                    background: selectedIds.has(item.id) ? '#6E5CF6' : 'rgba(255,255,255,0.8)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     cursor: 'pointer', transition: 'all 150ms ease',
                   }}
@@ -430,7 +430,7 @@ export default function MarketPage() {
               style={{
                 fontSize: 12.5, fontWeight: 700,
                 padding: '0.5rem 1rem', borderRadius: 999,
-                background: selectedIds.size > 10 ? 'rgba(255,255,255,0.2)' : '#F97316',
+                background: selectedIds.size > 10 ? 'rgba(255,255,255,0.2)' : '#6E5CF6',
                 color: '#fff', border: 'none',
                 cursor: batchLoading || selectedIds.size > 10 ? 'not-allowed' : 'pointer',
                 opacity: batchLoading ? 0.6 : 1,

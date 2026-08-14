@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Layout from '@/components/Layout'
+import { confirmAction } from '@/components/ui/AugustFeedback'
 import { t } from '@/lib/i18n/config'
 import type { KnowledgeAssetSummary, KnowledgeSearchResult } from '@/lib/domain/knowledge'
 
@@ -9,10 +10,10 @@ const CONTENT_TYPES = ['note', 'book', 'report', 'transcript', 'guideline', 'com
 const RETRIEVAL_MODES = ['idea', 'evidence', 'brand'] as const
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
-  pending: { bg: '#F1F5F9', fg: '#64748B' },
-  processing: { bg: '#FEF3C7', fg: '#B45309' },
-  ready: { bg: '#DCFCE7', fg: '#15803D' },
-  error: { bg: '#FEE2E2', fg: '#B91C1C' },
+  pending: { bg: 'var(--aug-neutral-bg)', fg: 'var(--aug-neutral-fg)' },
+  processing: { bg: 'var(--aug-warning-bg)', fg: 'var(--aug-warning-fg)' },
+  ready: { bg: 'var(--aug-success-bg)', fg: 'var(--aug-success-fg)' },
+  error: { bg: 'var(--aug-danger-bg)', fg: 'var(--aug-danger-fg)' },
 }
 
 function contentTypeLabel(value: string): string {
@@ -135,7 +136,13 @@ export default function KnowledgePage() {
   }
 
   async function handleDelete(id: string) {
-    if (!window.confirm(t('knowledge.delete_confirm'))) return
+    const confirmed = await confirmAction({
+      title: 'Удалить материал?',
+      message: t('knowledge.delete_confirm'),
+      confirmLabel: 'Удалить',
+      danger: true,
+    })
+    if (!confirmed) return
     setBusyId(id)
     try {
       await fetch(`/api/knowledge/${id}`, { method: 'DELETE' })

@@ -1,15 +1,19 @@
 import type { Metadata, Viewport } from 'next'
 import PwaInstallPrompt from '@/components/PwaInstallPrompt'
+import AugustFeedbackProvider from '@/components/ui/AugustFeedback'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Amado — Content Pipeline para o Brasil',
-  description: 'Ferramenta B2B para digital marketing managers adaptarem conteúdo ao mercado brasileiro.',
+  title: {
+    default: 'Amado — маркетинг для Бразилии',
+    template: '%s · Amado',
+  },
+  description: 'AI-рабочее пространство маркетолога: рынок, бренд, конкуренты, контент и измеримые результаты.',
   manifest: '/manifest.webmanifest',
   applicationName: 'Amado',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    statusBarStyle: 'black-translucent',
     title: 'Amado',
   },
   formatDetection: {
@@ -17,27 +21,31 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/icon-v2.svg?v=2', type: 'image/svg+xml' },
-      { url: '/pwa-icon.svg?v=2', type: 'image/svg+xml', sizes: 'any' },
+      { url: '/amado-icon.svg?v=4', type: 'image/svg+xml', sizes: 'any' },
+      { url: '/amado-icon-192.png?v=4', type: 'image/png', sizes: '192x192' },
+      { url: '/amado-icon-512.png?v=4', type: 'image/png', sizes: '512x512' },
     ],
-    apple: [{ url: '/pwa-icon.svg?v=2', type: 'image/svg+xml' }],
+    apple: [{ url: '/apple-touch-icon.png?v=4', type: 'image/png', sizes: '180x180' }],
+    shortcut: [{ url: '/amado-icon.svg?v=4', type: 'image/svg+xml' }],
   },
 }
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: 'cover',
-  themeColor: '#1E3A8A',
+  themeColor: '#15172A',
+  colorScheme: 'light',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR">
+    <html lang="ru">
       <body>
-        {children}
-        <PwaInstallPrompt />
+        <AugustFeedbackProvider>
+          {children}
+          <PwaInstallPrompt />
+        </AugustFeedbackProvider>
       </body>
     </html>
   )

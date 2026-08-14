@@ -53,7 +53,7 @@ export default function RatingWidget({ articleId, currentRating, currentComment,
             onMouseLeave={() => setHovered(null)}
             onClick={() => { setSelected(i); setShowComment(true) }}
             aria-label={`${i} estrela`}
-            className={`text-2xl p-1 bg-transparent border-none cursor-pointer transition-transform duration-200 ease-m3-emphasized active:scale-75 focus:outline-none ${i <= display ? 'text-[#e5b513]' : 'text-surface-variant'}`}
+            className={`text-2xl p-1 bg-transparent border-none cursor-pointer transition-transform duration-200 ease-m3-emphasized active:scale-75 focus:outline-none ${i <= display ? 'text-[#6E5CF6]' : 'text-surface-variant'}`}
           >
             ★
           </button>

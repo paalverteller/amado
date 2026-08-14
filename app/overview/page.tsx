@@ -267,7 +267,7 @@ export default function OverviewPage() {
               <p className="m-0 p-5 text-sm text-on-surface-variant">Критичных сигналов нет.</p>
             ) : data.attention.map((item, index) => (
               <Link key={`${item.title}-${index}`} href={item.href} className="flex items-start gap-3 p-4 no-underline hover:bg-surface-container-low">
-                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.severity === 'high' ? 'var(--color-error)' : item.severity === 'medium' ? '#F59E0B' : 'var(--color-primary)' }} />
+                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.severity === 'high' ? 'var(--color-error)' : item.severity === 'medium' ? 'var(--aug-warning-fg)' : 'var(--color-primary)' }} />
                 <span className="min-w-0"><strong className="block text-sm text-on-surface">{item.title}</strong><span className="text-xs text-on-surface-variant">{item.detail}</span></span>
               </Link>
             ))}

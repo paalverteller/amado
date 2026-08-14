@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { confirmAction } from '@/components/ui/AugustFeedback'
 
 interface SourceHealth {
   status: string
@@ -67,7 +68,13 @@ export default function SourceCard({ source, health, onToggleActive, onDelete }:
 
   async function handleDelete() {
     if (!onDelete) return
-    if (!window.confirm(`Удалить источник «${source.name}» и все его материалы?`)) return
+    const confirmed = await confirmAction({
+      title: 'Удалить источник?',
+      message: `Источник «${source.name}» и связанные материалы будут удалены.`,
+      confirmLabel: 'Удалить',
+      danger: true,
+    })
+    if (!confirmed) return
 
     setLoading(true)
     try {

@@ -3,201 +3,171 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { type ReactNode, useState, useEffect, useRef } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { t } from '@/lib/i18n/config'
+import AugustDialog from '@/components/ui/AugustDialog'
+import { toast } from '@/components/ui/AugustFeedback'
 
-// Primary nav — matches the target IA from the lean plan:
-// Обзор → Рынок → Генерация → База знаний → Бренд → Конкуренты
-const NAV_PRIMARY = [
-  { href: '/overview',    label: t('nav.overview') },
-  { href: '/market',      label: t('nav.market') },
-  { href: '/generate',    label: t('nav.generate') },
-  { href: '/knowledge',   label: t('nav.knowledge') },
-  { href: '/brand',       label: t('nav.brand') },
-  { href: '/competitors', label: t('nav.competitors') },
+type NavItem = {
+  href: string
+  label: string
+  icon: IconName
+}
+
+type IconName =
+  | 'overview'
+  | 'market'
+  | 'generate'
+  | 'knowledge'
+  | 'brand'
+  | 'competitors'
+  | 'ideas'
+  | 'rewrite'
+  | 'history'
+  | 'settings'
+  | 'more'
+  | 'logout'
+
+const NAV_PRIMARY: NavItem[] = [
+  { href: '/overview', label: t('nav.overview'), icon: 'overview' },
+  { href: '/market', label: t('nav.market'), icon: 'market' },
+  { href: '/generate', label: t('nav.generate'), icon: 'generate' },
+  { href: '/knowledge', label: t('nav.knowledge'), icon: 'knowledge' },
+  { href: '/brand', label: t('nav.brand'), icon: 'brand' },
+  { href: '/competitors', label: t('nav.competitors'), icon: 'competitors' },
 ]
 
-// Utility nav — secondary destinations. Nothing was deleted: /ideas and
-// /rewrite keep working, they're just de-prioritized per the plan's IA.
-const NAV_UTILITY = [
-  { href: '/ideas',    label: t('nav.ideas') },
-  { href: '/rewrite',  label: t('nav.rewrite') },
-  { href: '/history',  label: t('nav.history') },
-  { href: '/settings', label: t('nav.settings') },
+const NAV_UTILITY: NavItem[] = [
+  { href: '/ideas', label: t('nav.ideas'), icon: 'ideas' },
+  { href: '/rewrite', label: t('nav.rewrite'), icon: 'rewrite' },
+  { href: '/history', label: t('nav.history'), icon: 'history' },
+  { href: '/settings', label: t('nav.settings'), icon: 'settings' },
 ]
 
-// Mobile bottom nav — 6 icon-only destinations split around center FAB
-const NAV_MOBILE = [
-  { href: '/generate', label: 'Создать',  icon: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 5v14M5 12h14"/>
-    </svg>
-  )},
-  { href: '/market',   label: 'Рынок',    icon: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2 12h20M2 6h20M2 18h12"/>
-    </svg>
-  )},
-  { href: '/ideas',    label: 'Идеи',     icon: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.29-1.22 4.3-3 5.42V16a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1.58A6 6 0 0 1 12 3z"/>
-    </svg>
-  )},
-  { href: '/rewrite',  label: 'Переписать',  icon: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-    </svg>
-  )},
-  { href: '/history',  label: 'История',  icon: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 8v4l3 3M3.05 11a9 9 0 1 0 .5-3M3 4v4h4"/>
-    </svg>
-  )},
-  { href: '/settings', label: 'Ещё',      icon: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
-    </svg>
-  )},
+const MOBILE_NAV: NavItem[] = [
+  { href: '/overview', label: 'Обзор', icon: 'overview' },
+  { href: '/market', label: 'Рынок', icon: 'market' },
+  { href: '/generate', label: 'Создать', icon: 'generate' },
+  { href: '/history', label: 'История', icon: 'history' },
 ]
 
-function Brand() {
+const MOBILE_MORE: NavItem[] = [
+  { href: '/knowledge', label: 'База знаний', icon: 'knowledge' },
+  { href: '/brand', label: 'Бренд', icon: 'brand' },
+  { href: '/competitors', label: 'Конкуренты', icon: 'competitors' },
+  { href: '/ideas', label: 'Идеи', icon: 'ideas' },
+  { href: '/rewrite', label: 'Rewrite', icon: 'rewrite' },
+  { href: '/settings', label: 'Настройки', icon: 'settings' },
+]
+
+function NavIcon({ name }: { name: IconName }) {
+  const common = {
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.9,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+  }
+
+  if (name === 'overview') return <svg {...common}><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><path d="M14 17h7m-3.5-3.5V21"/></svg>
+  if (name === 'market') return <svg {...common}><path d="M4 19V9m6 10V5m6 14v-7m4 7H2"/><path d="m4 7 6-4 6 6 4-3"/></svg>
+  if (name === 'generate') return <svg {...common}><path d="M12 3v18M3 12h18"/><path d="m17.5 4.5.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"/></svg>
+  if (name === 'knowledge') return <svg {...common}><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z"/></svg>
+  if (name === 'brand') return <svg {...common}><path d="M12 3 4.5 7v10L12 21l7.5-4V7L12 3Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg>
+  if (name === 'competitors') return <svg {...common}><circle cx="8" cy="8" r="3"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M3 20c.5-4 2.5-6 5-6s4.5 2 5 6M13 15c1-.9 2.1-1.3 3.5-1.3 2.3 0 4 1.8 4.5 5.3"/></svg>
+  if (name === 'ideas') return <svg {...common}><path d="M9 18h6m-5 3h4"/><path d="M8.2 15.2A7 7 0 1 1 15.8 15c-.8.6-1.3 1.2-1.5 2h-4.6c-.2-.7-.7-1.3-1.5-1.8Z"/></svg>
+  if (name === 'rewrite') return <svg {...common}><path d="M4 20h5l10.5-10.5a2.8 2.8 0 0 0-4-4L5 16l-1 4Z"/><path d="m13.8 7.2 3 3"/></svg>
+  if (name === 'history') return <svg {...common}><path d="M3.5 11a8.5 8.5 0 1 0 2-5.5L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>
+  if (name === 'settings') return <svg {...common}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-4v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3V3h4v.1A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+  if (name === 'logout') return <svg {...common}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>
+  return <svg {...common}><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+}
+
+function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href="/overview" className="min-w-0 no-underline group flex items-center gap-3">
-      <div
-        className="shrink-0 flex items-center justify-center overflow-hidden"
-        style={{
-          width: 38,
-          height: 38,
-          borderRadius: 12,
-          background: 'linear-gradient(135deg, #4A6FD4 0%, #2D55B0 100%)',
-          boxShadow: '0 2px 8px rgba(74,111,212,0.35)',
-          transition: 'transform 200ms ease, box-shadow 200ms ease',
-        }}
-      >
-        <img src="/icon-nobg.svg" alt="Amado" style={{ width: '78%', height: '78%', objectFit: 'contain' }} />
-      </div>
-      <div className="flex flex-col min-w-0">
-        <span
-          className="truncate font-bold tracking-tight text-white"
-          style={{ fontFamily: 'var(--font-display)', fontSize: 17, lineHeight: 1.2 }}
-        >
-          Amado
+    <Link href="/overview" className="aug-brand" aria-label="Amado — на главную">
+      <img src="/amado-icon.svg" alt="" className="aug-brand__mark" />
+      {!compact ? (
+        <span className="aug-brand__copy">
+          <strong>amado</strong>
+          <small>marketing intelligence</small>
         </span>
-        <span
-          className="truncate font-semibold uppercase"
-          style={{ fontSize: 9, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}
-        >
-          Content Pipeline
-        </span>
-      </div>
+      ) : null}
     </Link>
   )
 }
 
-function QuickCreateModal({ onClose }: { onClose: () => void }) {
+function QuickCreateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const router = useRouter()
 
   async function handleCreate() {
-    if (text.trim().length < 20) {
-      setError('Escreva um pouco mais — pelo menos duas frases')
+    const value = text.trim()
+    if (value.length < 20) {
+      toast.warning('Добавьте хотя бы две фразы — так Amado лучше поймёт задачу.', 'Нужно немного больше контекста')
       return
     }
-    setError('')
+
     setLoading(true)
     try {
-      const res = await fetch('/api/generate', {
+      const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: text.trim(), contentType: 'quick_note' }),
+        body: JSON.stringify({ topic: value, contentType: 'quick_note' }),
       })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error ?? 'Não foi possível criar o material')
+      const data = await response.json().catch(() => ({})) as { error?: string }
+      if (!response.ok) throw new Error(data.error ?? 'Не удалось создать материал')
+      setText('')
       onClose()
+      toast.success('Черновик создан и сохранён в истории.', 'Готово')
       router.push('/history')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro desconhecido')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Неизвестная ошибка', 'Не удалось создать материал')
+    } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="quick-create-overlay" onClick={onClose}>
-      <div className="quick-create-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3
-            className="m-0 font-bold text-lg"
-            style={{ fontFamily: 'var(--font-display)', color: 'var(--color-on-surface)' }}
-          >
-            Conteúdo rápido
-          </h3>
-          <button
-            onClick={onClose}
-            style={{
-              width: 32, height: 32, borderRadius: '50%',
-              background: 'var(--color-surface-container-high)',
-              border: 'none', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--color-on-surface-variant)',
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M18 6 6 18M6 6l12 12"/>
-            </svg>
+    <AugustDialog
+      open={open}
+      onClose={onClose}
+      title="Быстрое создание"
+      eyebrow="Amado Create"
+      description="Зафиксируйте мысль как есть. Контекст бренда и правила генерации подключатся автоматически."
+      footer={(
+        <>
+          <button type="button" className="aug-button aug-button--secondary" onClick={onClose}>Отмена</button>
+          <button type="button" className="aug-button aug-button--primary" onClick={handleCreate} disabled={loading || text.trim().length < 20} aria-busy={loading}>
+            {loading ? 'Создаю…' : 'Создать черновик'}
           </button>
-        </div>
-
+        </>
+      )}
+    >
+      <label className="aug-field">
+        <span>Идея или задача</span>
         <textarea
           autoFocus
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Escreva sua ideia como está — nós transformamos em conteúdo pronto..."
-          rows={6}
-          className="m3-input-outlined w-full"
-          style={{ resize: 'none', fontSize: 15, lineHeight: 1.6 }}
+          onChange={(event) => setText(event.target.value)}
+          placeholder="Например: объяснить, почему CRM полезнее таблицы для follow-up в небольшой бразильской компании…"
+          rows={7}
         />
-
-        {error && (
-          <p className="text-sm font-medium mt-2 mb-0" style={{ color: 'var(--color-error)' }}>
-            {error}
-          </p>
-        )}
-
-        <button
-          onClick={handleCreate}
-          disabled={loading || text.trim().length < 20}
-          className="m3-button-filled w-full h-12 mt-4 text-base disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {loading ? 'Criando conteúdo...' : 'Criar conteúdo'}
-        </button>
-      </div>
-    </div>
+        <small>{text.length} знаков · минимум 20</small>
+      </label>
+    </AugustDialog>
   )
 }
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const pathname  = usePathname()
-  const router    = useRouter()
-  const [navVisible, setNavVisible] = useState(true)
-  const lastScrollY = useRef(0)
+  const pathname = usePathname()
+  const router = useRouter()
   const [quickCreateOpen, setQuickCreateOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
 
-  useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY
-      const dir = y - lastScrollY.current
-      if (y < 10) setNavVisible(true)
-      else if (dir > 4) setNavVisible(false)
-      else if (dir < -4) setNavVisible(true)
-      lastScrollY.current = y
-    }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-
-  // Add bottom-nav padding class to body for PWA
   useEffect(() => {
     document.body.classList.add('has-bottom-nav')
     return () => document.body.classList.remove('has-bottom-nav')
@@ -209,285 +179,123 @@ export default function Layout({ children }: { children: ReactNode }) {
   }
 
   function isActive(href: string) {
-    return href === '/generate' || href === '/overview'
-      ? pathname === href
-      : pathname === href || pathname.startsWith(href + '/')
+    if (href === '/overview' || href === '/generate') return pathname === href
+    return pathname === href || pathname.startsWith(`${href}/`)
   }
 
-  return (
-    <div className="min-h-dvh font-sans" style={{ background: 'var(--color-background)', color: 'var(--color-on-background)' }}>
+  const moreIsActive = MOBILE_MORE.some((item) => isActive(item.href))
 
-      {/* ── Desktop sidebar (lg+) — fixed left, 240px, per design.md §3 ── */}
-      <aside
-        className="hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:w-60 lg:flex-col"
-        style={{
-          background: 'linear-gradient(180deg, #1E3A8A 0%, #2D55B0 55%, #1E3A8A 100%)',
-          borderRight: '1px solid rgba(255,255,255,0.08)',
-        }}
-      >
-        <div style={{ padding: '1.25rem 1rem 1.25rem' }}>
-          <Brand />
+  return (
+    <div className="aug-app-shell">
+      <aside className="aug-sidebar" aria-label="Навигация Amado">
+        <div className="aug-sidebar__brand">
+          <BrandMark />
         </div>
 
-        <nav className="flex flex-col" style={{ flex: 1, padding: '0.25rem 0.75rem', gap: '0.15rem', overflowY: 'auto' }}>
-          {NAV_PRIMARY.map(({ href, label }) => {
-            const active = isActive(href)
-            return (
-              <Link
-                key={href} href={href}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '0.55rem 0.75rem',
-                  borderRadius: 10,
-                  fontSize: 13.5,
-                  fontWeight: 600,
-                  textDecoration: 'none',
-                  letterSpacing: '0.01em',
-                  transition: 'all 180ms ease',
-                  background: active ? 'rgba(255,255,255,0.16)' : 'transparent',
-                  color: active ? '#ffffff' : 'rgba(255,255,255,0.65)',
-                  boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.12)' : 'none',
-                }}
-                onMouseEnter={e => {
-                  if (!active) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.10)'
-                }}
-                onMouseLeave={e => {
-                  if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'
-                }}
-              >
-                {label}
-              </Link>
-            )
-          })}
+        <div className="aug-sidebar__quick">
+          <button type="button" className="aug-button aug-button--primary aug-button--full" onClick={() => setQuickCreateOpen(true)}>
+            <NavIcon name="generate" />
+            Быстро создать
+          </button>
+        </div>
 
-          <div aria-hidden style={{ height: 1, background: 'rgba(255,255,255,0.12)', margin: '0.6rem 0.25rem' }} />
+        <nav className="aug-sidebar__nav" aria-label="Основные разделы">
+          <span className="aug-nav-group-label">Рабочее пространство</span>
+          {NAV_PRIMARY.map((item) => (
+            <Link key={item.href} href={item.href} className="aug-nav-item" aria-current={isActive(item.href) ? 'page' : undefined}>
+              <span className="aug-nav-item__icon"><NavIcon name={item.icon} /></span>
+              <span>{item.label}</span>
+            </Link>
+          ))}
 
-          {NAV_UTILITY.map(({ href, label }) => {
-            const active = isActive(href)
-            return (
-              <Link
-                key={href} href={href}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '0.45rem 0.75rem',
-                  borderRadius: 10,
-                  fontSize: 12,
-                  fontWeight: 500,
-                  textDecoration: 'none',
-                  letterSpacing: '0.01em',
-                  transition: 'all 180ms ease',
-                  background: active ? 'rgba(255,255,255,0.12)' : 'transparent',
-                  color: active ? '#ffffff' : 'rgba(255,255,255,0.45)',
-                }}
-                onMouseEnter={e => {
-                  if (!active) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.7)'
-                }}
-                onMouseLeave={e => {
-                  if (!active) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.45)'
-                }}
-              >
-                {label}
-              </Link>
-            )
-          })}
+          <span className="aug-nav-group-label aug-nav-group-label--spaced">Инструменты</span>
+          {NAV_UTILITY.map((item) => (
+            <Link key={item.href} href={item.href} className="aug-nav-item aug-nav-item--utility" aria-current={isActive(item.href) ? 'page' : undefined}>
+              <span className="aug-nav-item__icon"><NavIcon name={item.icon} /></span>
+              <span>{item.label}</span>
+            </Link>
+          ))}
         </nav>
 
-        <div style={{ padding: '0.75rem' }}>
-          <button
-            onClick={handleLogout}
-            style={{
-              display: 'flex',
-              width: '100%',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.55rem 0.75rem',
-              borderRadius: 10,
-              fontSize: 13,
-              fontWeight: 600,
-              border: '1px solid rgba(255,255,255,0.14)',
-              background: 'rgba(255,255,255,0.06)',
-              color: 'rgba(255,255,255,0.65)',
-              cursor: 'pointer',
-              transition: 'all 180ms ease',
-              letterSpacing: '0.01em',
-            }}
-            onMouseEnter={e => {
-              const el = e.currentTarget as HTMLElement
-              el.style.background = 'rgba(220,38,38,0.20)'
-              el.style.borderColor = 'rgba(220,38,38,0.40)'
-              el.style.color = '#FCA5A5'
-            }}
-            onMouseLeave={e => {
-              const el = e.currentTarget as HTMLElement
-              el.style.background = 'rgba(255,255,255,0.06)'
-              el.style.borderColor = 'rgba(255,255,255,0.14)'
-              el.style.color = 'rgba(255,255,255,0.65)'
-            }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-              <polyline points="16 17 21 12 16 7"/>
-              <line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
-            {t('action.logout')}
+        <div className="aug-sidebar__footer">
+          <div className="aug-growth-note">
+            <span className="aug-growth-note__dot" />
+            <div><strong>Amado</strong><small>Brazil · AI workspace</small></div>
+          </div>
+          <button type="button" className="aug-nav-item aug-nav-item--logout" onClick={handleLogout}>
+            <span className="aug-nav-item__icon"><NavIcon name="logout" /></span>
+            <span>Выйти</span>
           </button>
         </div>
       </aside>
 
-      {/* ── Content column, offset past the fixed sidebar on desktop ── */}
-      <div className="flex flex-col min-h-dvh lg:pl-60">
-
-        {/* ── Mobile sticky header — hidden on desktop, sidebar replaces it there ── */}
-        <header
-          className="lg:hidden"
-          style={{
-            position: 'sticky',
-            top: 0,
-            zIndex: 40,
-            width: '100%',
-            height: 56,
-            display: 'flex',
-            alignItems: 'center',
-            willChange: 'transform',
-            transform: navVisible ? 'translateY(0)' : 'translateY(-100%)',
-            transition: 'transform 280ms cubic-bezier(0.4,0,0.2,1)',
-            background: 'linear-gradient(135deg, #1E3A8A 0%, #2D55B0 60%, #4A6FD4 100%)',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
-            boxShadow: '0 2px 12px rgba(30,58,138,0.25)',
-          }}
-        >
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 2,
-              background: 'linear-gradient(90deg, #F97316 0%, #4A6FD4 50%, #7C3AED 100%)',
-            }}
-          />
-
-          <div
-            style={{
-              margin: '0 auto',
-              maxWidth: '1200px',
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '0 1rem',
-              gap: '1.5rem',
-            }}
-          >
-            <Brand />
-
-            <button
-              onClick={handleLogout}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.375rem',
-                padding: '0.4rem 1rem',
-                borderRadius: 999,
-                fontSize: 13,
-                fontWeight: 600,
-                border: '1px solid rgba(255,255,255,0.18)',
-                background: 'rgba(255,255,255,0.08)',
-                color: 'rgba(255,255,255,0.70)',
-                cursor: 'pointer',
-                transition: 'all 180ms ease',
-                letterSpacing: '0.01em',
-              }}
-              onMouseEnter={e => {
-                const el = e.currentTarget as HTMLElement
-                el.style.background = 'rgba(220,38,38,0.20)'
-                el.style.borderColor = 'rgba(220,38,38,0.40)'
-                el.style.color = '#FCA5A5'
-              }}
-              onMouseLeave={e => {
-                const el = e.currentTarget as HTMLElement
-                el.style.background = 'rgba(255,255,255,0.08)'
-                el.style.borderColor = 'rgba(255,255,255,0.18)'
-                el.style.color = 'rgba(255,255,255,0.70)'
-              }}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                <polyline points="16 17 21 12 16 7"/>
-                <line x1="21" y1="12" x2="9" y2="12"/>
-              </svg>
-              <span className="hidden sm:inline">{t('action.logout')}</span>
-            </button>
-          </div>
+      <div className="aug-workspace">
+        <header className="aug-mobile-header">
+          <BrandMark compact />
+          <button type="button" className="aug-button aug-button--primary aug-mobile-header__create" onClick={() => setQuickCreateOpen(true)}>
+            <NavIcon name="generate" />
+            Создать
+          </button>
         </header>
 
-        {/* ── Main Content ── */}
-        <main
-          style={{
-            flex: 1,
-            width: '100%',
-            maxWidth: 1200,
-            margin: '0 auto',
-            padding: '1.5rem 1rem 2rem',
-          }}
-          className="sm:px-6 sm:py-10"
-        >
-          <div className="animate-fade-in">
-            {children}
-          </div>
+        <main className="aug-workspace__main">
+          <div className="aug-page-enter">{children}</div>
         </main>
       </div>
 
-      {/* ── Mobile Bottom Nav Bar (PWA-native, hidden on desktop) ── */}
-      <nav className="bottom-nav lg:hidden" aria-label="Основная навигация">
-        <div className="bottom-nav-inner">
-          {NAV_MOBILE.slice(0, 3).map(({ href, label, icon }) => {
-            const active = isActive(href)
-            return (
-              <Link
-                key={href}
-                href={href}
-                aria-label={label}
-                title={label}
-                className={`bottom-nav-item${active ? ' active' : ''}`}
-              >
-                {icon}
-              </Link>
-            )
-          })}
-
+      <nav className="aug-mobile-nav" aria-label="Основная навигация">
+        <div className="aug-mobile-nav__inner">
+          {MOBILE_NAV.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`aug-mobile-nav__item${item.href === '/generate' ? ' aug-mobile-nav__item--create' : ''}`}
+              aria-current={isActive(item.href) ? 'page' : undefined}
+              title={item.label}
+            >
+              <span><NavIcon name={item.icon} /></span>
+              <small>{item.label}</small>
+            </Link>
+          ))}
           <button
             type="button"
-            className="bottom-nav-fab"
-            aria-label="Быстрое создание"
-            title="Быстрое создание"
-            onClick={() => setQuickCreateOpen(true)}
+            className="aug-mobile-nav__item"
+            data-active={moreIsActive || moreOpen ? 'true' : undefined}
+            onClick={() => setMoreOpen(true)}
+            aria-expanded={moreOpen}
+            aria-haspopup="dialog"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14"/>
-            </svg>
+            <span><NavIcon name="more" /></span>
+            <small>Ещё</small>
           </button>
-
-          {NAV_MOBILE.slice(3, 6).map(({ href, label, icon }) => {
-            const active = isActive(href)
-            return (
-              <Link
-                key={href}
-                href={href}
-                aria-label={label}
-                title={label}
-                className={`bottom-nav-item${active ? ' active' : ''}`}
-              >
-                {icon}
-              </Link>
-            )
-          })}
         </div>
       </nav>
 
-      {quickCreateOpen && <QuickCreateModal onClose={() => setQuickCreateOpen(false)} />}
+      <AugustDialog
+        open={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        title="Все разделы"
+        eyebrow="Навигация"
+        description="Дополнительные рабочие пространства Amado."
+        className="aug-dialog--mobile-sheet"
+      >
+        <div className="aug-more-grid">
+          {MOBILE_MORE.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="aug-more-link"
+              aria-current={isActive(item.href) ? 'page' : undefined}
+              onClick={() => setMoreOpen(false)}
+            >
+              <span className="aug-more-link__icon"><NavIcon name={item.icon} /></span>
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </div>
+      </AugustDialog>
+
+      <QuickCreateDialog open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} />
     </div>
   )
 }

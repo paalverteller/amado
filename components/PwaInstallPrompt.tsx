@@ -8,8 +8,9 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
 }
 
-const DISMISS_UNTIL_KEY = 'kupala-pwa-install-dismiss-until-v2'
-const PROMPT_SEEN_KEY = 'kupala-pwa-install-seen-v2'
+const DISMISS_UNTIL_KEY = 'amado-pwa-install-dismiss-until-v4'
+const PROMPT_SEEN_KEY = 'amado-pwa-install-seen-v4'
+const LEGACY_DISMISS_KEY = 'kupala-pwa-install-dismiss-until-v2'
 const DISMISS_DAYS = 30
 
 function isStandaloneMode(): boolean {
@@ -20,7 +21,7 @@ function isStandaloneMode(): boolean {
 
 function isMobileDevice(): boolean {
   if (typeof window === 'undefined') return false
-  return window.matchMedia('(max-width: 768px)').matches || /android|iphone|ipad|ipod/i.test(window.navigator.userAgent)
+  return window.matchMedia('(max-width: 780px)').matches || /android|iphone|ipad|ipod/i.test(window.navigator.userAgent)
 }
 
 function isIosDevice(): boolean {
@@ -28,12 +29,17 @@ function isIosDevice(): boolean {
   return /iphone|ipad|ipod/i.test(window.navigator.userAgent)
 }
 
+function dismissalTimestamp(): number {
+  if (typeof window === 'undefined') return Number.POSITIVE_INFINITY
+  const current = Number(window.localStorage.getItem(DISMISS_UNTIL_KEY))
+  const legacy = Number(window.localStorage.getItem(LEGACY_DISMISS_KEY))
+  const safeCurrent = Number.isFinite(current) ? current : 0
+  const safeLegacy = Number.isFinite(legacy) ? legacy : 0
+  return Math.max(safeCurrent, safeLegacy)
+}
+
 function isDismissedNow(): boolean {
-  if (typeof window === 'undefined') return true
-  const raw = window.localStorage.getItem(DISMISS_UNTIL_KEY)
-  if (!raw) return false
-  const until = Number(raw)
-  return Number.isFinite(until) && Date.now() < until
+  return Date.now() < dismissalTimestamp()
 }
 
 function dismissFor(days = DISMISS_DAYS): void {
@@ -52,8 +58,6 @@ export default function PwaInstallPrompt() {
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').then((registration) => {
-        // Force-activate a new SW as soon as it's found, and reload once
-        // so the person always gets the latest deployed version.
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing
           if (!newWorker) return
@@ -63,7 +67,6 @@ export default function PwaInstallPrompt() {
             }
           })
         })
-        // Check for updates on every page load
         registration.update().catch(() => {})
       }).catch((error: unknown) => {
         console.error('[pwa] service worker registration failed', error)
@@ -114,11 +117,7 @@ export default function PwaInstallPrompt() {
         await deferredPrompt.prompt()
         const choice = await deferredPrompt.userChoice
         setDeferredPrompt(null)
-        if (choice.outcome === 'accepted') {
-          close(365)
-        } else {
-          close(14)
-        }
+        close(choice.outcome === 'accepted' ? 365 : 14)
       } catch (error) {
         console.error('[pwa] install prompt failed', error)
         setShowHelp(true)
@@ -131,47 +130,30 @@ export default function PwaInstallPrompt() {
   if (!visible || isStandaloneMode() || isDismissedNow()) return null
 
   return (
-    <div className="fixed inset-x-3 bottom-3 z-[9999] md:hidden animate-[fadeInUp_400ms_ease-out_forwards]" role="dialog" aria-live="polite">
-      <div className="safe-bottom max-h-[70vh] overflow-auto rounded-[28px] border border-surface-variant/50 bg-surface-container-high p-4 text-on-surface shadow-2xl">
-        <div className="flex items-start gap-3">
-          
-          {/* New PWA Icon syncing with brand */}
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] bg-secondary shadow-sm overflow-hidden">
-            <img src="/icon.svg" alt="Amado" className="w-full h-full object-cover" />
-          </div>
+    <aside className="aug-pwa-prompt" role="dialog" aria-modal="false" aria-labelledby="pwa-install-title" aria-live="polite">
+      <div className="aug-pwa-prompt__row">
+        <img className="aug-pwa-prompt__icon" src="/amado-icon.svg" alt="" />
+        <div>
+          <span className="aug-eyebrow">Amado PWA</span>
+          <h2 id="pwa-install-title">Добавить Amado на экран</h2>
+          <p>Быстрый доступ к обзору, рынку и созданию контента без лишней вкладки браузера.</p>
 
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold">Adicionar Amado</div>
-            <p className="mt-1 text-xs leading-5 text-on-surface-variant font-medium">
-              Instale na área de trabalho para acesso rápido.
+          {showHelp ? (
+            <p className="aug-pwa-prompt__help">
+              iPhone: Safari → «Поделиться» → «На экран Домой». Android: меню браузера → «Установить приложение» или «Добавить на главный экран».
             </p>
+          ) : null}
 
-            {showHelp && (
-              <p className="mt-2 rounded-2xl bg-surface-container px-3 py-2 text-xs leading-5 text-on-surface-variant">
-                No iPhone: Safari → &quot;Compartilhar&quot; → &quot;Adicionar à Tela de Início&quot;.
-                No Android: Menu do navegador → &quot;Adicionar à tela inicial&quot;.
-              </p>
-            )}
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={handleInstall}
-                className="rounded-full bg-secondary px-5 py-2 text-xs font-bold tracking-wide text-on-secondary shadow-sm transition-opacity hover:opacity-90"
-              >
-                Adicionar
-              </button>
-              <button
-                type="button"
-                onClick={() => close(30)}
-                className="rounded-full px-4 py-2 text-xs font-bold text-on-surface-variant transition-colors hover:bg-surface-variant/60"
-              >
-                Depois
-              </button>
-            </div>
+          <div className="aug-pwa-prompt__actions">
+            <button type="button" onClick={handleInstall} className="aug-button aug-button--primary">
+              {deferredPrompt ? 'Установить' : 'Как установить'}
+            </button>
+            <button type="button" onClick={() => close(30)} className="aug-button aug-button--secondary">
+              Позже
+            </button>
           </div>
         </div>
       </div>
-    </div>
+    </aside>
   )
 }

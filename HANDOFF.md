@@ -64,3 +64,18 @@ Amado — B2B-маркетинг AI-платформа для команды, п
 - `docs/SCHEMA.md` — схема БД (сгенерирована для Sprint 1, устарела — миграции 024–044 добавили много нового, сверяйся с `supabase/migrations/`, не только с этим документом)
 - `CLAUDE.md` — правила работы в этом репо
 - `lib/amado-config.ts` — все env-флаги и их значения по умолчанию
+
+<!-- AUGUST_GUI_HANDOFF_START -->
+## August GUI / PWA baseline — 2026-08-14
+
+August Design System v1.0 is the canonical Amado UI contract.
+
+- Do not reintroduce the retired cornflower/orange visual identity or Playfair.
+- Semantic anchors: Ink `#171927`, Canvas `#F7F8FC`, Surface `#FFFFFF`, Accent `#6E5CF6`, Accent Dark `#5140DC`, Growth Lime `#D7FF61`, Navy `#15172A`.
+- `app/globals.css` owns the August tokens plus compatibility mappings for legacy `m3-*` and `--v2-*` contracts. New UI should use `aug-*` primitives instead of adding another design layer.
+- Desktop navigation is the dark 280/230px sidebar. Mobile/PWA has exactly five top-level destinations: Overview, Market, Create, History, More.
+- Standard feedback lives in `components/ui/AugustFeedback.tsx`; use `toast.*` and `confirmAction(...)` instead of new `alert()`/`window.confirm()` call sites.
+- Standard modal geometry lives in `components/ui/AugustDialog.tsx`.
+- PWA identity is Amado and starts at `/overview`; manifest/theme/cache names must not regress to Kupala.
+- `scripts/verify-august-ui.mjs` is mandatory in GUI verification.
+<!-- AUGUST_GUI_HANDOFF_END -->

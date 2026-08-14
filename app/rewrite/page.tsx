@@ -57,9 +57,9 @@ export default function RewritePage() {
   }
 
   function uniquenessColor(score: number): string {
-    if (score >= 85) return '#16A34A'
-    if (score >= 70) return '#F97316'
-    return '#DC2626'
+    if (score >= 85) return '#276131'
+    if (score >= 70) return '#7B5813'
+    return '#A43F3F'
   }
 
   return (
@@ -93,8 +93,8 @@ export default function RewritePage() {
                   flex: 1,
                   padding: '0.75rem 0.5rem',
                   borderRadius: 12,
-                  border: intensity === id ? '1.5px solid #4A6FD4' : '1.5px solid rgba(74,111,212,0.15)',
-                  background: intensity === id ? 'rgba(74,111,212,0.08)' : 'transparent',
+                  border: intensity === id ? '1.5px solid #6E5CF6' : '1.5px solid rgba(110,92,246,0.15)',
+                  background: intensity === id ? 'rgba(110,92,246,0.08)' : 'transparent',
                   cursor: 'pointer',
                   textAlign: 'center',
                   transition: 'all 180ms ease',

@@ -77,7 +77,7 @@ function SegmentedOutput({ contentType, raw }: { contentType: string; raw: strin
         <div
           key={i}
           className="rounded-xl p-4"
-          style={{ background: 'var(--color-surface-container-low)', border: '1px solid rgba(74,111,212,0.12)' }}
+          style={{ background: 'var(--color-surface-container-low)', border: '1px solid rgba(110,92,246,0.12)' }}
         >
           <div className="flex items-center gap-2 mb-2">
             <span
@@ -478,8 +478,8 @@ function GenerateContent() {
           style={{
             display: 'flex', alignItems: 'center', gap: '0.625rem',
             width: '100%', padding: '0.6rem 1rem', borderRadius: 12,
-            border: seoMode ? '1.5px solid #4A6FD4' : '1.5px solid rgba(74,111,212,0.2)',
-            background: seoMode ? 'rgba(74,111,212,0.08)' : 'transparent',
+            border: seoMode ? '1.5px solid #6E5CF6' : '1.5px solid rgba(110,92,246,0.2)',
+            background: seoMode ? 'rgba(110,92,246,0.08)' : 'transparent',
             cursor: 'pointer', transition: 'all 180ms ease',
             fontSize: 13, fontWeight: 600,
             color: seoMode ? 'var(--color-primary)' : 'var(--color-on-surface-variant)',
@@ -488,7 +488,7 @@ function GenerateContent() {
           <div style={{
             width: 36, height: 20, borderRadius: 10, flexShrink: 0,
             position: 'relative',
-            background: seoMode ? '#4A6FD4' : 'rgba(0,0,0,0.15)',
+            background: seoMode ? '#6E5CF6' : 'rgba(0,0,0,0.15)',
             transition: 'background 180ms ease',
           }}>
             <div style={{
@@ -504,7 +504,7 @@ function GenerateContent() {
             <span style={{
               marginLeft: 'auto', fontSize: 10, fontWeight: 700,
               padding: '2px 7px', borderRadius: 6,
-              background: '#4A6FD4', color: '#fff',
+              background: '#6E5CF6', color: '#fff',
             }}>ON</span>
           )}
         </button>
@@ -662,7 +662,7 @@ function GenerateContent() {
                       key={st}
                       onClick={() => handleRate(st)}
                       className="text-2xl transition-transform duration-200 ease-m3-emphasized hover:scale-110 active:scale-75 bg-transparent border-none cursor-pointer focus:outline-none"
-                      style={{ color: rating >= st ? '#e5b513' : 'var(--color-surface-variant)' }}
+                      style={{ color: rating >= st ? '#6E5CF6' : 'var(--color-surface-variant)' }}
                       aria-label={`${st} estrela`}
                     >
                       ★
@@ -724,7 +724,7 @@ function GenerateContent() {
                       : aiCheck.score < 65
                         ? 'rgba(249,115,22,0.12)'
                         : 'rgba(220,38,38,0.12)',
-                    color: aiCheck.score < 35 ? '#16A34A' : aiCheck.score < 65 ? '#F97316' : '#DC2626',
+                    color: aiCheck.score < 35 ? '#276131' : aiCheck.score < 65 ? '#7B5813' : '#A43F3F',
                   }}
                 >
                   {aiCheck.verdictLabel} · {aiCheck.score}/100

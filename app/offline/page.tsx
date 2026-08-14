@@ -1,15 +1,20 @@
+import Link from 'next/link'
+
 export default function OfflinePage() {
   return (
-    <main className="min-h-dvh bg-background px-5 py-10 text-on-background">
-      <div className="mx-auto max-w-md rounded-[28px] bg-surface-container-low p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold tracking-tight text-on-surface">Sem conexão</h1>
-        <p className="mt-3 text-sm leading-6 text-on-surface-variant">
-          Amado está aberto no modo PWA, mas é necessário internet para geração, RSS e histórico. Verifique a conexão e atualize a página.
+    <main className="aug-offline">
+      <section className="aug-offline__card">
+        <div className="aug-offline__signal">a</div>
+        <span className="aug-eyebrow mt-5 inline-block">Amado PWA</span>
+        <h1 className="mt-2 text-3xl font-extrabold tracking-[-.045em]">Сейчас нет сети</h1>
+        <p className="mt-3 text-sm leading-7 text-on-surface-variant">
+          Мы сохранили оболочку приложения. Как только соединение вернётся, можно продолжить работу с рынком, генерацией и результатами.
         </p>
-        <a href="/generate" className="mt-5 inline-flex rounded-full bg-primary px-5 py-3 text-sm font-semibold text-on-primary no-underline">
-          Voltar para geração
-        </a>
-      </div>
+        <div className="mt-6 flex flex-wrap gap-2">
+          <Link href="/overview" className="aug-button aug-button--primary">Повторить</Link>
+          <Link href="/history" className="aug-button aug-button--secondary">История</Link>
+        </div>
+      </section>
     </main>
   )
 }

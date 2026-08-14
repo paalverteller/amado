@@ -461,3 +461,17 @@ conflict graph beyond what already exists · page-snapshot diff for
 competitors · protected social scraping · automatic external social-metrics ingestion ·
 direct social publishing · automatic Brand OS learning · autonomous
 campaign decisions.
+
+<!-- AUGUST_GUI_SPRINT_START -->
+### UI Sprint — August GUI + PWA modernization (2026-08-14) — DONE
+
+- August v1.0 is now the canonical visual system for Amado: Navy anchor, Canvas/Surface bento UI, purple action, lime growth signal, Inter-only typography.
+- Existing M3/v2 class contracts are preserved as compatibility aliases but resolve to August semantic tokens.
+- Desktop shell: 280px sidebar, compact 230px at <=1100px.
+- PWA/mobile shell: floating five-item navigation — Overview, Market, Create, History, More — with Knowledge, Brand, Competitors, Ideas, Rewrite and Settings in the More sheet.
+- Global feedback primitives added: standardized toasts, confirmations and modal workspace geometry.
+- PWA manifest/service worker rebranded from legacy Kupala state; installed app starts on `/overview`.
+- New lime Amado icon/wordmark family added for favicon, PWA maskable icon and Apple touch icon.
+- Login and offline surfaces migrated to August.
+- Verification: `scripts/verify-august-ui.mjs` + chain audit + TypeScript + ESLint + Vitest + production Next build.
+<!-- AUGUST_GUI_SPRINT_END -->
