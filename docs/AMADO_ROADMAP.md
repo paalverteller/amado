@@ -475,3 +475,16 @@ campaign decisions.
 - Login and offline surfaces migrated to August.
 - Verification: `scripts/verify-august-ui.mjs` + chain audit + TypeScript + ESLint + Vitest + production Next build.
 <!-- AUGUST_GUI_SPRINT_END -->
+
+<!-- AMADO_MVP_RUNTIME_REPAIR_V1 -->
+### MVP production repair — 2026-08-14
+
+- [x] Harden Supabase project URL handling and add sanitized runtime health.
+- [x] Support both Google AI Studio key conventions.
+- [x] Make `gemini-3-flash-preview` the configurable primary with a Google
+      model-level fallback chain through 3.7 / 3.6 / 3.5 / 3.5 Flash-Lite.
+- [x] Add additive Brazil SaaS market sources.
+- [x] Seed Salesforce, monday.com and Slack as the current competitive set and
+      attach official source pages to the existing evidence pipeline.
+- [x] Stop scheduling the legacy pre-pivot auto-generation cron.
+- [x] Add a static runtime-contract verifier and Supabase URL unit tests.

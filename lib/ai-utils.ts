@@ -107,16 +107,47 @@ export function modelLabel(entry: PipelineEntry): string {
   return `${PROVIDER_LABELS[entry.provider]} ${entry.model}`
 }
 
-const PROVIDER_ENV_KEYS: Record<Provider, string> = {
-  google: 'GOOGLE_GENERATIVE_AI_API_KEY',
+// AMADO_MVP_RUNTIME_REPAIR_V1
+const PROVIDER_ENV_KEYS: Record<Exclude<Provider, 'google'>, string> = {
   groq: 'GROQ_API_KEY',
   openai: 'OPENAI_API_KEY',
   deepseek: 'DEEPSEEK_API_KEY',
 }
 
+type GoogleKeySource = 'GOOGLE_GENERATIVE_AI_API_KEY' | 'GEMINI_API_KEY' | null
+
+function googleApiKey(): { key?: string; source: GoogleKeySource } {
+  const canonical = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim()
+  if (canonical) return { key: canonical, source: 'GOOGLE_GENERATIVE_AI_API_KEY' }
+
+  const studio = process.env.GEMINI_API_KEY?.trim()
+  if (studio) return { key: studio, source: 'GEMINI_API_KEY' }
+
+  return { source: null }
+}
+
+function providerApiKey(provider: Provider): string | undefined {
+  if (provider === 'google') return googleApiKey().key
+  return process.env[PROVIDER_ENV_KEYS[provider]]?.trim() || undefined
+}
+
 /** Whether the given provider has an API key configured in the environment. */
 export function isProviderConfigured(provider: Provider): boolean {
-  return Boolean(process.env[PROVIDER_ENV_KEYS[provider]])
+  return Boolean(providerApiKey(provider))
+}
+
+export function getAiRuntimeInfo(): {
+  googleConfigured: boolean
+  googleKeySource: GoogleKeySource
+  googlePrimaryModel: string
+} {
+  const google = googleApiKey()
+  return {
+    googleConfigured: Boolean(google.key),
+    googleKeySource: google.source,
+    googlePrimaryModel:
+      process.env.AMADO_GOOGLE_MODEL_PRIMARY?.trim() || 'gemini-3-flash-preview',
+  }
 }
 
 /** Filter a pipeline down to entries whose provider is configured and not cooling down. */
@@ -125,14 +156,12 @@ export function eligiblePipeline(pipeline: PipelineEntry[]): PipelineEntry[] {
 }
 
 /**
- * Construct an ai-sdk LanguageModel for a pipeline entry using whichever
- * provider key is configured in the environment. Returns null for providers
- * not backed by the ai-sdk (e.g. deepseek, handled via generateDeepSeekText).
- * Adding a new ai-sdk provider only requires adding one entry to
- * PROVIDER_ENV_KEYS/PROVIDER_LABELS plus one line here.
+ * Construct an ai-sdk LanguageModel for a pipeline entry.
+ * Google accepts both the AI SDK conventional key and Google AI Studio's
+ * GEMINI_API_KEY; the key is passed explicitly so SDK defaults cannot drift.
  */
 export function createModel(entry: PipelineEntry) {
-  const apiKey = process.env[PROVIDER_ENV_KEYS[entry.provider]]
+  const apiKey = providerApiKey(entry.provider)
   if (!apiKey) return null
   if (entry.provider === 'google') return createGoogleGenerativeAI({ apiKey })(entry.model)
   if (entry.provider === 'groq') return createGroq({ apiKey })(entry.model)

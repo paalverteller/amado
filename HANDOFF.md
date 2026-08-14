@@ -79,3 +79,32 @@ August Design System v1.0 is the canonical Amado UI contract.
 - PWA identity is Amado and starts at `/overview`; manifest/theme/cache names must not regress to Kupala.
 - `scripts/verify-august-ui.mjs` is mandatory in GUI verification.
 <!-- AUGUST_GUI_HANDOFF_END -->
+
+<!-- AMADO_MVP_RUNTIME_REPAIR_V1 -->
+## MVP runtime repair — Supabase + Brazil SaaS + Google AI Studio
+
+Production logs on 2026-08-14 showed the same `Invalid path specified in request URL`
+failure across Market, Brands, Templates, Knowledge, Competitors and article
+persistence. The common dependency is Supabase Data API access, not the individual
+routes. `lib/supabase/client.ts` now normalizes a mistakenly pasted Supabase service
+endpoint (`.../rest/v1`, `.../auth/v1`, etc.) back to the project origin and rejects
+other non-origin paths with an actionable error. `/api/admin/runtime-health` checks
+database connectivity and AI configuration without returning secrets.
+
+MVP AI default is Google AI Studio. `GEMINI_API_KEY` and
+`GOOGLE_GENERATIVE_AI_API_KEY` are both accepted. Generation starts with
+`AMADO_GOOGLE_MODEL_PRIMARY` (default `gemini-3-flash-preview`) and falls back
+through `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-3.5-flash`, and
+`gemini-3.5-flash-lite`, with the existing per-model quota cooldown/fail-fast
+mechanism retained.
+
+`supabase/seeds/002_mvp_brazil_saas.sql` is the additive production seed for the
+MVP market workspace: Brazil market sources plus Salesforce, monday.com and Slack
+as tracked competitors using the existing `rss_sources -> evidence_items ->
+competitor review -> Knowledge/RAG` pipeline.
+
+The legacy pre-pivot `/api/cron/auto-generate` schedule is removed from
+`vercel.json`; the route itself is left intact for history/surgical scope.
+Do not run historical `supabase db push` merely to apply this seed: the current DB
+was established from the manually consolidated clean baseline. Use SQL Editor for
+the additive seed.

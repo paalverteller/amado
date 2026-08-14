@@ -13,46 +13,53 @@ const FUNCTION_DEADLINE_MS = 55_000
 const SAFETY_MARGIN_MS = 3_000
 
 // ─── Pipeline Groups ─────────────────────────────────────────────────────────
+// AMADO_MVP_GOOGLE_PIPELINE_V1
+//
+// Google AI Studio is the MVP provider. Model fallback is deliberate:
+// 1) preview alias requested by product owner,
+// 2) newest stable Flash,
+// 3) previous stable generations,
+// 4) Flash-Lite as the final low-cost recovery path.
+//
+// Existing provider adapters remain in ai-utils.ts, but are not part of the
+// default MVP route while only Google is configured.
 
-// STRONG MODELS: For article drafting (Rotation: OpenAI 2026, Gemini 3.5, Groq 120b)
-// WEIGHTED ROTATION: 50% of the time Gemini starts first, 50% - strongest GPT 2026 models
-// WEIGHTED ROTATION: 50% of the time Gemini starts first, 50% - strongest GPT 2026 models
-const MIXED_STRONG_GROUP: PipelineEntry[] = [
-  { provider: 'google', model: 'gemini-3.5-flash',        budgetMs: 30_000 },
-  { provider: 'openai', model: 'gpt-5.5-2026-04-23',      budgetMs: 35_000 },
-  { provider: 'google', model: 'gemini-3.5-flash',        budgetMs: 30_000 },
-  { provider: 'openai', model: 'gpt-5.4-2026-03-05',      budgetMs: 35_000 },
-  { provider: 'google', model: 'gemini-3.5-flash',        budgetMs: 30_000 },
-  { provider: 'openai', model: 'gpt-5.4-mini-2026-03-17', budgetMs: 25_000 },
+const GOOGLE_PRIMARY_MODEL =
+  process.env.AMADO_GOOGLE_MODEL_PRIMARY?.trim() || 'gemini-3-flash-preview'
+
+const GOOGLE_STABLE_FALLBACKS: PipelineEntry[] = [
+  { provider: 'google', model: 'gemini-3.7-flash',      budgetMs: 30_000 },
+  { provider: 'google', model: 'gemini-3.6-flash',      budgetMs: 28_000 },
+  { provider: 'google', model: 'gemini-3.5-flash',      budgetMs: 26_000 },
+  { provider: 'google', model: 'gemini-3.5-flash-lite', budgetMs: 20_000 },
 ]
 
-// TRANSLATIONS AND BACKGROUND (Llama-Scout DEPRECATED July 17 - replaced with Qwen/Compound)
-const TRANSLATION_GROUP: PipelineEntry[] = [
-  { provider: 'google', model: 'gemini-3.5-flash',        budgetMs: 20_000 },
-  { provider: 'groq',   model: 'groq/compound',           budgetMs: 15_000 },
-  { provider: 'google', model: 'gemini-3.1-flash-lite',   budgetMs: 15_000 },
-  { provider: 'groq',   model: 'qwen/qwen3.6-27b',        budgetMs: 15_000 },
-]
+function uniquePipeline(entries: PipelineEntry[]): PipelineEntry[] {
+  const seen = new Set<string>()
+  return entries.filter((entry) => {
+    const key = `${entry.provider}:${entry.model}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
 
-const NANO_GROUP: PipelineEntry[] = [
-  { provider: 'google', model: 'gemini-3.1-flash-lite',   budgetMs: 10_000 },
-  { provider: 'groq',   model: 'groq/compound',           budgetMs: 10_000 },
-  { provider: 'groq',   model: 'qwen/qwen3.6-27b',        budgetMs: 10_000 },
-]
-
-const FALLBACK_TAIL: PipelineEntry[] = [
-  { provider: 'google', model: 'gemini-3.1-flash-lite',   budgetMs: 12_000 },
-  { provider: 'groq',   model: 'groq/compound',           budgetMs: 10_000 },
-]
+function googlePipeline(seed: string, primaryBudgetMs: number): PipelineEntry[] {
+  return uniquePipeline([
+    { provider: 'google', model: GOOGLE_PRIMARY_MODEL, budgetMs: primaryBudgetMs },
+    ...rotateGroup(GOOGLE_STABLE_FALLBACKS, seed),
+  ])
+}
 
 function buildPipelines(seed: string): Record<AiTask, PipelineEntry[]> {
   return {
-    generation:  [...rotateGroup(MIXED_STRONG_GROUP, seed), ...FALLBACK_TAIL],
-    translation: [...rotateGroup(TRANSLATION_GROUP, seed),  ...FALLBACK_TAIL],
-    extraction:  [...rotateGroup(NANO_GROUP, seed),         ...FALLBACK_TAIL],
-    utility:     [...rotateGroup([...NANO_GROUP].reverse(), seed), ...FALLBACK_TAIL],
+    generation: googlePipeline(seed, 32_000),
+    translation: googlePipeline(`${seed}:translation`, 22_000),
+    extraction: googlePipeline(`${seed}:extraction`, 18_000),
+    utility: googlePipeline(`${seed}:utility`, 18_000),
   }
 }
+
 
 // ─── Interfaces & Streams ────────────────────────────────────────────────────
 
