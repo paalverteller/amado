@@ -222,7 +222,7 @@ export async function buildRegionContextLayer(regionId?: string | null): Promise
 
 export interface KnowledgeContextResult {
   promptText: string
-  chunks: { assetId: string; assetTitle: string; snippet: string; similarity: number | null }[]
+  chunks: { chunkId: string; assetId: string; assetTitle: string; snippet: string; similarity: number | null }[]
 }
 
 /**
@@ -269,6 +269,7 @@ export async function buildKnowledgeContext(
     return {
       promptText,
       chunks: results.map((r) => ({
+        chunkId: r.chunk_id,
         assetId: r.asset_id,
         assetTitle: r.asset_title,
         snippet: r.content.slice(0, 200),
@@ -280,6 +281,86 @@ export async function buildKnowledgeContext(
     // generation should still work if this fails for any reason.
     console.warn('[buildKnowledgeContext] failed, continuing without it:', err)
     return { promptText: '', chunks: [] }
+  }
+}
+
+export interface CompetitorContextResult {
+  promptText: string
+  signals: Array<{ evidenceId: string; competitor: string; title: string; publishedAt: string | null }>
+}
+
+/**
+ * Direct competitor-evidence layer. Reviews in knowledge_assets remain useful
+ * synthesized context, but generation no longer depends on a human having run
+ * a review first: fresh evidence linked through rss_sources.competitor_id can
+ * participate directly and transparently.
+ */
+export async function buildCompetitorContext(
+  topic: string,
+  brandId?: string | null,
+  limit = 5,
+): Promise<CompetitorContextResult> {
+  if (!brandId) return { promptText: '', signals: [] }
+  try {
+    const admin = getSupabaseAdmin()
+    const { data: competitors, error: competitorError } = await admin
+      .from('competitors')
+      .select('id, name')
+      .eq('brand_id', brandId)
+      .eq('status', 'active')
+    if (competitorError || !competitors?.length) return { promptText: '', signals: [] }
+
+    const names = new Map(competitors.map((c) => [c.id, c.name]))
+    const { data: sources, error: sourceError } = await admin
+      .from('rss_sources')
+      .select('id, competitor_id')
+      .in('competitor_id', competitors.map((c) => c.id))
+      .eq('active', true)
+    if (sourceError || !sources?.length) return { promptText: '', signals: [] }
+
+    const competitorBySource = new Map(sources.map((source) => [source.id, source.competitor_id]))
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const { data: evidence, error: evidenceError } = await admin
+      .from('evidence_items')
+      .select('id, source_id, source_title, source_summary, full_text, published_at, discovered_at')
+      .in('source_id', sources.map((source) => source.id))
+      .gte('discovered_at', since)
+      .order('published_at', { ascending: false, nullsFirst: false })
+      .limit(60)
+    if (evidenceError || !evidence?.length) return { promptText: '', signals: [] }
+
+    const keywords = topic.toLowerCase().split(/\s+/).filter((word) => word.length > 3)
+    const ranked = evidence
+      .map((item) => {
+        const haystack = `${item.source_title ?? ''} ${item.source_summary ?? ''} ${item.full_text ?? ''}`.toLowerCase()
+        const relevance = keywords.reduce((score, keyword) => score + (haystack.includes(keyword) ? 1 : 0), 0)
+        return { item, relevance }
+      })
+      .sort((a, b) => b.relevance - a.relevance || Date.parse(b.item.published_at ?? b.item.discovered_at) - Date.parse(a.item.published_at ?? a.item.discovered_at))
+      .slice(0, limit)
+
+    const signals = ranked.map(({ item }) => {
+      const competitorId = competitorBySource.get(item.source_id) ?? null
+      return {
+        evidenceId: item.id,
+        competitor: competitorId ? (names.get(competitorId) ?? 'Конкурент') : 'Конкурент',
+        title: item.source_title ?? 'Без названия',
+        publishedAt: item.published_at ?? null,
+      }
+    })
+    const lines = ranked.map(({ item }, index) => {
+      const meta = signals[index]
+      const body = (item.full_text || item.source_summary || '').slice(0, 500)
+      return `- ${meta.competitor}: ${meta.title}\n  ${body}`
+    })
+
+    return {
+      promptText: `<competitor_context>\nFresh signals from tracked competitors. Use as market context, never copy wording:\n${lines.join('\n')}\n</competitor_context>`,
+      signals,
+    }
+  } catch (error) {
+    console.warn('[buildCompetitorContext] failed, continuing without it:', error)
+    return { promptText: '', signals: [] }
   }
 }
 

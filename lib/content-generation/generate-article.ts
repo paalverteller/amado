@@ -1,6 +1,6 @@
-import { buildSystemPrompt, buildUserPrompt, buildLocalizationNotesPrompt, buildRegionContextLayer, buildEvidenceContext, buildKnowledgeContext } from '@/lib/prompts'
+import { buildSystemPrompt, buildUserPrompt, buildLocalizationNotesPrompt, buildRegionContextLayer, buildEvidenceContext, buildKnowledgeContext, buildCompetitorContext } from '@/lib/prompts'
 import { buildBrandSnapshot } from '@/lib/brand-snapshot'
-import { getRecentEvidenceItems } from '@/lib/evidence'
+import { getRecentEvidenceContext } from '@/lib/evidence'
 import { generateArticleWithFallback, generateWithFallback } from '@/lib/ai'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { cleanPlainTextOutput } from '@/lib/text-cleanup'
@@ -28,6 +28,7 @@ export interface GenerateArticleInput {
   /** Refine a previous generation instead of starting a fresh topic. */
   parentRequestId?: string
   refinementNote?: string
+  marketingCampaignId?: string
 }
 
 export interface GenerateArticleDeps {
@@ -39,10 +40,12 @@ export interface GenerateArticleResult {
   text: string
   model: string
   contentRequestId: string | null
+  articleId: string | null
   /** What actually went into the prompt -- for the "visible context" UI. */
   usedContext: {
     brandFacts: { category: string; label: string }[]
-    knowledgeChunks: { assetId: string; assetTitle: string; snippet: string }[]
+    knowledgeChunks: { chunkId: string; assetId: string; assetTitle: string; snippet: string }[]
+    competitorSignals: { evidenceId: string; competitor: string; title: string; publishedAt: string | null }[]
   }
 }
 
@@ -86,13 +89,16 @@ export async function generateAndPersistArticle(
   const threadId = parent?.thread_id ?? crypto.randomUUID()
 
   // Stage 3: Use evidence_items instead of rss_items
-  const evidenceContext = await buildEvidenceContext(input.evidenceItemIds)
-  const rssText = evidenceContext || await getRecentEvidenceItems(trimmedTopic)
+  const selectedEvidenceContext = await buildEvidenceContext(input.evidenceItemIds)
+  const recentEvidence = selectedEvidenceContext ? { text: '', ids: [], items: [] } : await getRecentEvidenceContext(trimmedTopic)
+  const rssText = selectedEvidenceContext || recentEvidence.text
+  const evidenceIdsUsed = input.evidenceItemIds?.length ? input.evidenceItemIds : recentEvidence.ids
 
   const built = await buildSystemPrompt(input.templateId)
   const brandSnapshot = await buildBrandSnapshot(input.brandProfileId, input.contentType)
   const regionContext = await buildRegionContextLayer(input.regionId)
   const knowledge = await buildKnowledgeContext(promptTopic, input.brandProfileId)
+  const competitorContext = await buildCompetitorContext(promptTopic, input.brandProfileId)
 
   // Build structured content spec — no contradictory length rules
   const contentSpec = {
@@ -109,7 +115,8 @@ Write only the final clean text for publication. No think tags. No Markdown.`
 
   const sections: string[] = []
   if (rssText) sections.push(`BRAZILIAN MARKET SIGNALS:\n${rssText}`)
-  if (evidenceContext) sections.push(`EVIDENCE:\n${evidenceContext}`)
+  if (selectedEvidenceContext) sections.push(`EVIDENCE:\n${selectedEvidenceContext}`)
+  if (competitorContext.promptText) sections.push(competitorContext.promptText)
   if (knowledge.promptText) sections.push(knowledge.promptText)
   if (parent?.generated_content && input.refinementNote) {
     sections.push(
@@ -137,7 +144,7 @@ Write only the final clean text for publication. No think tags. No Markdown.`
     locale: 'pt-BR',
     seo_mode: seoMode,
     context: input.context || null,
-    evidence_item_ids: input.evidenceItemIds || null,
+    evidence_item_ids: evidenceIdsUsed.length ? evidenceIdsUsed : null,
     rss_context: rssText || null,
     brand_profile_id: input.brandProfileId || null,
     region_id: input.regionId || null,
@@ -151,11 +158,15 @@ Write only the final clean text for publication. No think tags. No Markdown.`
     thread_id: threadId,
     parent_request_id: input.parentRequestId ?? null,
     refinement_note: input.refinementNote ?? null,
-    knowledge_chunk_ids: knowledge.chunks.length ? knowledge.chunks.map((c) => c.assetId) : null,
+    knowledge_chunk_ids: knowledge.chunks.length ? knowledge.chunks.map((c) => c.chunkId) : null,
     brand_snapshot_summary: brandSnapshot.facts.length ? brandSnapshot.facts : null,
+    marketing_campaign_id: input.marketingCampaignId ?? null,
   })
 
   const contentRequestId = requestRecord?.id ?? null
+  if (contentRequestId && evidenceIdsUsed.length) {
+    await deps.contentRequests.linkEvidence(contentRequestId, evidenceIdsUsed)
+  }
 
   // Generate localization notes (non-blocking, best-effort)
   let localizationNotes = ''
@@ -174,7 +185,7 @@ Write only the final clean text for publication. No think tags. No Markdown.`
     console.warn('[generate] localization notes failed:', e)
   }
 
-  const { error: articleInsertError } = await deps.articles.create({
+  const { id: articleId, error: articleInsertError } = await deps.articles.create({
     topic: trimmedTopic,
     content_type: mapToLegacyContentType(input.contentType),
     draft_content: cleanText,
@@ -189,6 +200,7 @@ Write only the final clean text for publication. No think tags. No Markdown.`
     content_request_id: contentRequestId,
     locale: 'pt-BR',
     region_id: input.regionId || null,
+    marketing_campaign_id: input.marketingCampaignId ?? null,
   })
 
   if (articleInsertError) {
@@ -208,9 +220,11 @@ Write only the final clean text for publication. No think tags. No Markdown.`
     text: cleanText,
     model: generated.model,
     contentRequestId,
+    articleId,
     usedContext: {
       brandFacts: brandSnapshot.facts,
-      knowledgeChunks: knowledge.chunks.map((c) => ({ assetId: c.assetId, assetTitle: c.assetTitle, snippet: c.snippet })),
+      knowledgeChunks: knowledge.chunks.map((c) => ({ chunkId: c.chunkId, assetId: c.assetId, assetTitle: c.assetTitle, snippet: c.snippet })),
+      competitorSignals: competitorContext.signals,
     },
   }
 }

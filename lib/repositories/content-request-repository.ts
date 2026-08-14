@@ -23,6 +23,7 @@ export interface NewContentRequestRecord {
   refinement_note: string | null
   knowledge_chunk_ids: string[] | null
   brand_snapshot_summary: unknown
+  marketing_campaign_id: string | null
 }
 
 export interface ContentRequestRecord {
@@ -54,6 +55,7 @@ export interface ContentRequestRepository {
   getById(id: string): Promise<ContentRequestRecord | null>
   /** All versions in a thread, oldest first — for the version-history UI. */
   getThread(threadId: string): Promise<ContentRequestRecord[]>
+  linkEvidence(contentRequestId: string, evidenceItemIds: string[]): Promise<void>
 }
 
 const RECORD_COLUMNS =
@@ -110,6 +112,19 @@ export function createSupabaseContentRequestRepository(): ContentRequestReposito
         return []
       }
       return (data as ContentRequestRecord[]) ?? []
+    },
+    async linkEvidence(contentRequestId, evidenceItemIds) {
+      if (evidenceItemIds.length === 0) return
+      const admin = getSupabaseAdmin()
+      const rows = Array.from(new Set(evidenceItemIds)).map((evidenceItemId) => ({
+        content_request_id: contentRequestId,
+        evidence_item_id: evidenceItemId,
+        relevance_score: 1,
+        used_in_generation: true,
+      }))
+      const { error } = await admin.from('content_request_evidence').upsert(rows, { onConflict: 'content_request_id,evidence_item_id' })
+      if (error) console.error('[content-request-repository] linkEvidence failed:', error.message)
+      await admin.from('evidence_items').update({ last_used_at: new Date().toISOString() }).in('id', evidenceItemIds)
     },
   }
 }

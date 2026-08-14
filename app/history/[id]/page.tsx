@@ -63,6 +63,8 @@ export default function ArticlePage({ params }: PageProps) {
   const [savingStatus, setSavingStatus] = useState(false)
   const [savedMsg, setSavedMsg]       = useState('')
   const [copied, setCopied]           = useState(false)
+  const [scheduledFor, setScheduledFor] = useState('')
+  const [savingSchedule, setSavingSchedule] = useState(false)
 
   // Sprint 9: manual performance & feedback
   const [snapshots, setSnapshots] = useState<PerformanceSnapshot[]>([])
@@ -88,7 +90,11 @@ export default function ArticlePage({ params }: PageProps) {
     let cancelled = false
     fetch(`/api/articles/${id}`)
       .then((r) => { if (!r.ok) throw new Error('Conteúdo não encontrado'); return r.json() as Promise<Article> })
-      .then((data) => { if (!cancelled) { setArticle(data); setFinalContent(data.final_content ?? '') } })
+      .then((data) => { if (!cancelled) {
+        setArticle(data)
+        setFinalContent(data.final_content ?? '')
+        setScheduledFor(data.scheduled_for ? new Date(data.scheduled_for).toISOString().slice(0, 16) : '')
+      } })
       .catch((err) => console.error('[article/id] load error:', err))
       .finally(() => { if (!cancelled) setLoading(false) })
     loadSnapshots()
@@ -129,6 +135,26 @@ export default function ArticlePage({ params }: PageProps) {
       setArticle(await res.json() as Article)
     } catch (err) { console.error('[article/id] status error:', err) }
     finally { setSavingStatus(false) }
+  }
+
+  async function handleSchedule() {
+    if (!article) return
+    setSavingSchedule(true)
+    try {
+      const res = await fetch(`/api/articles/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduled_for: scheduledFor ? new Date(scheduledFor).toISOString() : null }),
+      })
+      if (!res.ok) throw new Error('Не удалось сохранить дату')
+      setArticle(await res.json() as Article)
+      setSavedMsg(scheduledFor ? 'Дата публикации сохранена ✓' : 'Дата публикации очищена ✓')
+      setTimeout(() => setSavedMsg(''), 2000)
+    } catch (err) {
+      setSavedMsg(`Ошибка: ${getErrorMessage(err)}`)
+    } finally {
+      setSavingSchedule(false)
+    }
   }
 
   async function handleCopyDraft() {
@@ -330,7 +356,15 @@ export default function ArticlePage({ params }: PageProps) {
                 ))}
               </select>
               {savingStatus && <span className="text-xs font-medium text-on-surface-variant">Atualizando...</span>}
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="text-xs font-medium text-on-surface-variant">
+                Запланировать публикацию
+                <input type="datetime-local" value={scheduledFor} onChange={(e) => setScheduledFor(e.target.value)} className="m3-input-outlined mt-1 block" />
+              </label>
+              <button onClick={handleSchedule} disabled={savingSchedule} className="m3-button-tonal text-xs">{savingSchedule ? 'Сохраняем…' : 'Сохранить дату'}</button>
+              {article.scheduled_for && <button onClick={() => { setScheduledFor(''); void fetch(`/api/articles/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scheduled_for: null }) }).then(async (r) => { if (r.ok) setArticle(await r.json() as Article) }) }} className="text-xs text-on-surface-variant bg-transparent border-none cursor-pointer">Очистить</button>}
             </div>
+          </div>
           </div>
         </div>
 

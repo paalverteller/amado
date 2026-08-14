@@ -7,11 +7,16 @@ import Layout from '@/components/Layout'
 import { PromptTemplate } from '@/lib/domain/prompt-template'
 import { BrandProfile } from '@/lib/domain/brand-profile'
 const FORMATS = [
-  { value: 'article', label: 'Artigo (~2500 caracteres)' },
-  { value: 'note', label: 'Nota (~1200 caracteres)' },
-  { value: 'social_post', label: 'Post social (<600 caracteres)' },
-  { value: 'thread', label: 'Thread (sequência de posts)' },
-  { value: 'carousel', label: 'Carrossel (slides)' },
+  { value: 'article', label: 'Статья' },
+  { value: 'linkedin_post', label: 'LinkedIn' },
+  { value: 'instagram_caption', label: 'Instagram — подпись' },
+  { value: 'instagram_carousel', label: 'Instagram — карусель' },
+  { value: 'x_thread', label: 'X — тред' },
+  { value: 'facebook_post', label: 'Facebook' },
+  { value: 'telegram_post', label: 'Telegram' },
+  { value: 'short_video_script', label: 'Короткое видео — сценарий' },
+  { value: 'email', label: 'Email' },
+  { value: 'quick_note', label: 'Короткая заметка' },
 ]
 
 type ThreadSegment = string
@@ -19,11 +24,13 @@ type CarouselSegment = { title: string; body: string }
 
 type UsedContext = {
   brandFacts: { category: string; label: string }[]
-  knowledgeChunks: { assetId: string; assetTitle: string; snippet: string }[]
+  knowledgeChunks: { chunkId?: string; assetId: string; assetTitle: string; snippet: string }[]
+  competitorSignals?: { evidenceId: string; competitor: string; title: string; publishedAt: string | null }[]
 }
 
 type StreamMetadata = {
   contentRequestId: string | null
+  articleId: string | null
   usedContext: UsedContext
 }
 
@@ -85,7 +92,7 @@ function SegmentedOutput({ contentType, raw }: { contentType: string; raw: strin
               {i + 1}
             </span>
             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-on-surface-variant)' }}>
-              {contentType === 'thread' ? `Post ${i + 1}/${segments.length}` : `Slide ${i + 1}/${segments.length}`}
+              {contentType === 'x_thread' ? `Post ${i + 1}/${segments.length}` : `Slide ${i + 1}/${segments.length}`}
             </span>
           </div>
           {typeof seg === 'string' ? (
@@ -114,6 +121,8 @@ function GenerateContent() {
     const c = searchParams.get('context')
     return c ? decodeURIComponent(c) : ''
   })
+  const evidenceId = searchParams.get('evidenceId')
+  const campaignId = searchParams.get('campaignId')
 
   const [contentType, setContentType] = useState('article')
   const [templateId, setTemplateId] = useState('')
@@ -156,7 +165,12 @@ function GenerateContent() {
   // Hydrate local storage states
   useEffect(() => {
     const savedFmt = localStorage.getItem('amado_format')
-    if (savedFmt) setContentType(savedFmt)
+    if (!savedFmt) return
+    const legacy: Record<string, string> = {
+      blog_post: 'article', note: 'quick_note', social_post: 'linkedin_post', thread: 'x_thread', carousel: 'instagram_carousel',
+    }
+    const canonical = FORMATS.some((format) => format.value === savedFmt) ? savedFmt : (legacy[savedFmt] ?? 'article')
+    setContentType(canonical)
   }, [])
 
   useEffect(() => {
@@ -179,6 +193,10 @@ function GenerateContent() {
         const savedBp = localStorage.getItem('amado_brand_profile')
         if (savedBp && d.profiles?.some((p: BrandProfile) => p.id === savedBp)) {
           setBrandProfileId(savedBp)
+        } else {
+          const fallback = d.profiles?.find((profile: BrandProfile) => profile.is_default && profile.is_active)
+            ?? d.profiles?.find((profile: BrandProfile) => profile.is_active)
+          if (fallback) setBrandProfileId(fallback.id)
         }
       })
       .catch(() => {})
@@ -232,6 +250,8 @@ function GenerateContent() {
           seoMode,
           parentRequestId: refinement?.parentRequestId,
           refinementNote: refinement?.note,
+          evidenceItemIds: evidenceId ? [evidenceId] : undefined,
+          marketingCampaignId: campaignId || undefined,
         }),
         signal: controller.signal,
       })
@@ -274,21 +294,19 @@ function GenerateContent() {
       if (capturedMetadata) {
         setContentRequestId(capturedMetadata.contentRequestId)
         setUsedContext(capturedMetadata.usedContext)
+        setArticleId(capturedMetadata.articleId)
         if (capturedMetadata.contentRequestId) loadThread(capturedMetadata.contentRequestId)
-      }
 
-      try {
-        const h = await fetch('/api/articles?limit=1')
-        if (h.ok) {
-          const d = await h.json() as { articles: { id: string; source_context: string | null }[] }
-          if (d.articles[0]) {
-            setArticleId(d.articles[0].id)
-            if (d.articles[0].source_context) {
-              setLocalizationNotes(d.articles[0].source_context)
+        if (capturedMetadata.articleId) {
+          try {
+            const h = await fetch(`/api/articles/${capturedMetadata.articleId}`)
+            if (h.ok) {
+              const d = await h.json() as { source_context?: string | null }
+              if (d.source_context) setLocalizationNotes(d.source_context)
             }
-          }
+          } catch { /* non-critical */ }
         }
-      } catch { /* non-critical */ }
+      }
     } catch (err) {
       const e = err as Error
       if (e.name !== 'AbortError') setError(e.message)
@@ -510,7 +528,7 @@ function GenerateContent() {
         <div className="m3-card p-8 shadow-sm">
 
           {/* Output: segmented (thread/carousel) vs plain text */}
-          {!loading && (contentType === 'thread' || contentType === 'carousel') && output ? (
+          {!loading && (contentType === 'x_thread' || contentType === 'instagram_carousel') && output ? (
             <SegmentedOutput contentType={contentType} raw={output} />
           ) : (
             <div className="text-base leading-relaxed text-on-surface whitespace-pre-wrap">
@@ -528,7 +546,7 @@ function GenerateContent() {
           )}
 
           {/* Sprint 8: what context was actually used */}
-          {!loading && usedContext && (usedContext.brandFacts.length > 0 || usedContext.knowledgeChunks.length > 0) && (
+          {!loading && usedContext && (usedContext.brandFacts.length > 0 || usedContext.knowledgeChunks.length > 0 || (usedContext.competitorSignals?.length ?? 0) > 0) && (
             <div className="mt-4 pt-4 border-t border-surface-variant/50">
               <button
                 type="button"
@@ -536,7 +554,7 @@ function GenerateContent() {
                 className="text-xs font-semibold bg-transparent border-none cursor-pointer p-0"
                 style={{ color: 'var(--color-primary)' }}
               >
-                {showContext ? '▾' : '▸'} Использованный контекст ({usedContext.brandFacts.length + usedContext.knowledgeChunks.length})
+                {showContext ? '▾' : '▸'} Использованный контекст ({usedContext.brandFacts.length + usedContext.knowledgeChunks.length + (usedContext.competitorSignals?.length ?? 0)})
               </button>
               {showContext && (
                 <div className="mt-2 flex flex-col gap-2 text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
@@ -555,6 +573,14 @@ function GenerateContent() {
                       <p className="m-0 mt-0.5">{c.snippet}</p>
                     </div>
                   ))}
+                  {(usedContext.competitorSignals?.length ?? 0) > 0 && (
+                    <div className="rounded-lg p-2" style={{ background: 'var(--color-surface-container-low)' }}>
+                      <span className="font-semibold">Сигналы конкурентов</span>
+                      {usedContext.competitorSignals!.map((c) => (
+                        <p key={c.evidenceId} className="m-0 mt-0.5">{c.competitor}: {c.title}</p>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

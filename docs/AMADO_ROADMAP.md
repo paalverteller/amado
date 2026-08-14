@@ -378,6 +378,46 @@ decision explicitly before any sprint that would delete existing tables.
   fixed a real (self-introduced) `exhaustive-deps` warning on
   `loadSnapshots` in `app/history/[id]/page.tsx`.
 
+
+- [x] **Sprint 11 — Marketer Control Center + explainable content intelligence**
+  `/overview` is now a marketer home rather than a briefing-only page:
+  Today counters, Needs attention, active/planned campaign instances,
+  upcoming scheduled content, recent performance, market opportunities and
+  Content intelligence live behind one server-side dashboard endpoint.
+  Added `marketing_campaigns` rather than overloading `campaign_profiles`:
+  profiles remain reusable defaults/policy; campaigns are dated running
+  instances. `articles`/`content_requests` can link to a campaign and
+  `articles.scheduled_for` drives the Upcoming section. History detail can
+  set/clear the planned publication time.
+
+  Explainable learning is deliberately non-autonomous. On performance entry,
+  deterministic rules classify hook, CTA, topic key, length bucket, canonical
+  requested format and best matching content pillar; the classifier stores
+  `analysis_evidence` explaining the label. Analytics compares only the latest
+  snapshot per article+platform and only computes a normalized score where
+  reach/impressions exists. Recommendations explicitly describe correlation,
+  sample size and pattern fatigue; nothing writes back to Brand OS rules.
+
+  The end-to-end content chain was audited and repaired while building the
+  dashboard. Market feed now reads `evidence_items` directly, so a click on a
+  market/briefing signal carries the exact evidence ID into generation and
+  `content_request_evidence`. Direct fresh competitor evidence is injected as
+  its own prompt layer in addition to existing competitor reviews from
+  Knowledge/RAG. `knowledge_chunk_ids` now stores actual chunk IDs rather than
+  asset IDs. `/api/generate/batch` delegates to the same canonical
+  `generateAndPersistArticle` path as single generation. Default brand resolution was also moved into both single and batch API paths so Brand OS/competitor context cannot silently disappear on first use. The Generate UI was
+  still sending legacy `social_post`/`thread`/`carousel` values to an API that
+  validates only canonical formats; fixed to the canonical registry. The API
+  stream now returns the exact `articleId`, removing the race-prone
+  "fetch latest article" lookup. Migration 045 also fixes the known
+  `telegram_post` articles CHECK mismatch.
+
+  Verification added: deterministic classifier/analytics unit tests, a
+  generation-orchestration regression test, and `scripts/verify-amado-chain.mjs`
+  covering ingestion -> evidence -> competitors/market -> generation ->
+  performance learning -> Overview contracts. Live provider/Supabase behavior
+  still depends on the deployed environment and remains an E2E concern.
+
 ## Open questions awaiting a decision (not blocking, but don't forget)
 
 - **`/api/cron/auto-generate`** (found during Sprint 6 prep): scheduled
@@ -418,6 +458,6 @@ decision explicitly before any sprint that would delete existing tables.
 
 Twelve-agent architecture · DOCX/PDF/PPTX/OCR parsing · automatic policy
 conflict graph beyond what already exists · page-snapshot diff for
-competitors · protected social scraping · automatic social analytics ·
+competitors · protected social scraping · automatic external social-metrics ingestion ·
 direct social publishing · automatic Brand OS learning · autonomous
 campaign decisions.

@@ -2,7 +2,7 @@ node_modules
 .next/
 tsconfig.tsbuildinfo
 repomix-output*.xml
-apply_sprint*.py
+apply_*.py
 
 # Local generated and temporary files
 .turbo/

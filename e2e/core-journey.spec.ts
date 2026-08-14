@@ -33,14 +33,12 @@ test.describe('Core journey', () => {
     await login(page)
   })
 
-  test('Overview loads and shows either a briefing or the empty state', async ({ page }) => {
+  test('Overview loads the marketer control center', async ({ page }) => {
     await page.goto('/overview')
-    // One of these two must be true -- either today's briefing rendered,
-    // or the Sprint-1 empty state is still showing (no run yet). Either
-    // is a valid "page works" signal; what would be a real failure is
-    // neither appearing (a crash) or a raw error message.
-    const hasBriefingHeading = page.getByText('Главное за сегодня')
-    await expect(hasBriefingHeading).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText('Рабочий стол маркетолога')).toBeVisible({ timeout: 15_000 })
+    for (const heading of ['Сегодня', 'Требует внимания', 'Активные кампании', 'Ближайший контент', 'Последние результаты', 'Возможности рынка', 'Content intelligence']) {
+      await expect(page.getByText(heading, { exact: true })).toBeVisible()
+    }
     await expect(page.getByText(/error|failed|500/i)).toHaveCount(0)
   })
 
@@ -73,10 +71,9 @@ test.describe('Core journey', () => {
     await page.goto('/generate')
 
     const topic = `E2E test topic ${Date.now()}`
-    // app/generate/page.tsx's topic field reads from useState, initial
-    // value seeded from ?topic= if present -- using the plain form here
-    // since that's the primary, always-available path.
+    // Exercise the canonical social-format contract, not only long-form.
     await page.getByRole('textbox').first().fill(topic)
+    await page.locator('select').first().selectOption('linkedin_post')
 
     const generateButton = page.getByRole('button', { name: /gerar|generate|создать/i })
     await generateButton.click()

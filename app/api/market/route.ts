@@ -1,182 +1,178 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { getErrorMessage } from '@/lib/api/error-message'
-/**
- * app/api/market/route.ts
- * 
- * Stage 2: Evidence-first market feed.
- * Returns source content directly — no Russian translation gate.
- * Backward compatible: UI expects title_ru/summary_ru fields.
- *
- * ?q=<term> switches to full-content search over evidence_items (title,
- * summary, and full_text when hydrated) instead of the default 14-day feed.
- */
- import { NextRequest, NextResponse } from 'next/server'
- import { getSupabaseAdmin } from '@/lib/supabase/client'
- export const dynamic = 'force-dynamic'
 
- const MAX_TOTAL = 100
- const MAX_PER_SOURCE = 6
- const MAX_SEARCH_RESULTS = 50
- const MAX_SEARCH_PER_QUERY = 30
+export const dynamic = 'force-dynamic'
 
- type Src = { name?: string | null; url?: string | null; country?: string | null; source_type?: string | null }
- type Row = {
-   id: string
-   title: string | null
-   description: string | null
-   link: string | null
-   published_at: string | null
-   collected_at: string | null
-   source: Src | Src[] | null
- }
- type Item = Row & { title_ru: string; summary_ru: string; source: Src | null }
+const MAX_TOTAL = 100
+const MAX_PER_SOURCE = 6
+const MAX_SEARCH_RESULTS = 50
+const MAX_SEARCH_PER_QUERY = 30
+const FEED_WINDOW_MS = 14 * 24 * 60 * 60 * 1000
 
- function normSrc(s: Row['source']): Src | null { return Array.isArray(s) ? s[0] ?? null : s }
- function clean(v: string | null | undefined): string { return (v ?? '').replace(/\s+/g, ' ').trim() }
- function srcKey(s: Src | null): string { return s?.url ?? s?.name ?? 'unknown' }
- function itemTs(r: Row): number { const raw = r.published_at ?? r.collected_at; const t = raw ? Date.parse(raw) : 0; return Number.isFinite(t) ? t : 0 }
+type Src = {
+  name?: string | null
+  url?: string | null
+  country?: string | null
+  source_type?: string | null
+  source_category?: string | null
+}
 
- function toItem(row: Row): Item | null {
-   const source = normSrc(row.source)
-   const title = clean(row.title)
-   const description = clean(row.description)
-   
-   // Stage 2: Source content is the display content
-   const displayTitle = title || 'Untitled'
-   const displaySummary = description || ''
-   
-   // Filter: require at least a title
-   if (!displayTitle || displayTitle === 'Untitled') return null
-   
-   // Filter: 14-day window (configurable)
-   const ts = itemTs(row)
-   if (ts > 0 && Date.now() - ts > 14 * 24 * 60 * 60 * 1000) return null
+type EvidenceRow = {
+  id: string
+  source_title: string | null
+  source_summary: string | null
+  full_text?: string | null
+  canonical_url: string | null
+  published_at: string | null
+  discovered_at: string | null
+  hydration_status: string | null
+  source: Src | Src[] | null
+}
 
-   return {
-     ...row,
-     title_ru: displayTitle,
-     summary_ru: displaySummary,
-     source,
-   }
- }
+type MarketItem = {
+  id: string
+  title: string | null
+  description: string | null
+  title_ru: string
+  summary_ru: string
+  link: string | null
+  published_at: string | null
+  collected_at: string | null
+  hydrationStatus: string | null
+  source: Src | null
+}
 
- function rank(item: Item): number {
-   return itemTs(item)
- }
+function normSrc(source: EvidenceRow['source']): Src | null {
+  return Array.isArray(source) ? source[0] ?? null : source
+}
 
- function pick(available: Item[]): Item[] {
-   const counts = new Map<string, number>()
-   const out: Item[] = []
-   for (const item of available) {
-     if (out.length >= MAX_TOTAL) break
-     const k = srcKey(item.source)
-     const c = counts.get(k) ?? 0
-     if (c >= MAX_PER_SOURCE) continue
-     out.push(item)
-     counts.set(k, c + 1)
-   }
-   return out
- }
+function clean(value: string | null | undefined): string {
+  return (value ?? '').replace(/\s+/g, ' ').trim()
+}
 
- type EvidenceRow = {
-   id: string
-   source_title: string | null
-   source_summary: string | null
-   full_text: string | null
-   canonical_url: string | null
-   published_at: string | null
-   created_at: string | null
-   hydration_status: string | null
-   source: Src | Src[] | null
- }
+function itemTs(row: EvidenceRow): number {
+  const raw = row.published_at ?? row.discovered_at
+  const parsed = raw ? Date.parse(raw) : 0
+  return Number.isFinite(parsed) ? parsed : 0
+}
 
- async function searchEvidence(rawQuery: string): Promise<NextResponse> {
-   try {
-     const term = rawQuery.trim().slice(0, 200)
-     if (!term) return NextResponse.json({ items: [], meta: { total: 0, query: rawQuery } })
+function toMarketItem(row: EvidenceRow): MarketItem | null {
+  const source = normSrc(row.source)
+  // Competitor evidence has its own workspace and is injected separately
+  // into generation. The market feed should remain a market/trend feed.
+  if (source?.source_category === 'competitor') return null
 
-     // Escape LIKE/ILIKE wildcards so a literal % or _ typed by the person
-     // is searched for literally, not treated as a wildcard.
-     const pattern = `%${term.replace(/[%_]/g, '\\$&')}%`
-     const columns = 'id, source_title, source_summary, full_text, canonical_url, published_at, created_at, hydration_status, source:source_id(name, url, country, source_type)'
+  const title = clean(row.source_title)
+  if (!title) return null
 
-     // Three separate ilike() queries + merge in JS, rather than building a
-     // raw .or() filter string -- avoids the person's search term needing
-     // escaping against PostgREST's comma/paren-delimited filter syntax on
-     // top of SQL's own escaping. Each ilike() call is safely parameterized
-     // by supabase-js on its own.
-     const [byTitle, bySummary, byFullText] = await Promise.all([
-       getSupabaseAdmin().from('evidence_items').select(columns).ilike('source_title', pattern).order('published_at', { ascending: false }).limit(MAX_SEARCH_PER_QUERY),
-       getSupabaseAdmin().from('evidence_items').select(columns).ilike('source_summary', pattern).order('published_at', { ascending: false }).limit(MAX_SEARCH_PER_QUERY),
-       getSupabaseAdmin().from('evidence_items').select(columns).ilike('full_text', pattern).order('published_at', { ascending: false }).limit(MAX_SEARCH_PER_QUERY),
-     ])
+  return {
+    id: row.id,
+    title,
+    description: clean(row.source_summary),
+    title_ru: title,
+    summary_ru: clean(row.source_summary),
+    link: row.canonical_url,
+    published_at: row.published_at,
+    collected_at: row.discovered_at,
+    hydrationStatus: row.hydration_status,
+    source,
+  }
+}
 
-     for (const result of [byTitle, bySummary, byFullText]) {
-       if (result.error) return NextResponse.json({ error: result.error.message }, { status: 500 })
-     }
+function pick(items: MarketItem[]): MarketItem[] {
+  const counts = new Map<string, number>()
+  const out: MarketItem[] = []
+  for (const item of items) {
+    if (out.length >= MAX_TOTAL) break
+    const key = item.source?.url ?? item.source?.name ?? 'unknown'
+    const count = counts.get(key) ?? 0
+    if (count >= MAX_PER_SOURCE) continue
+    counts.set(key, count + 1)
+    out.push(item)
+  }
+  return out
+}
 
-     const byId = new Map<string, EvidenceRow>()
-     for (const result of [byTitle.data, bySummary.data, byFullText.data]) {
-       for (const row of (result ?? []) as unknown as EvidenceRow[]) byId.set(row.id, row)
-     }
+async function searchEvidence(rawQuery: string): Promise<NextResponse> {
+  try {
+    const term = rawQuery.trim().slice(0, 200)
+    if (!term) return NextResponse.json({ items: [], meta: { total: 0, query: rawQuery } })
 
-     const lowerTerm = term.toLowerCase()
-     const items = Array.from(byId.values())
-       .sort((a, b) => {
-         const tsA = Date.parse(a.published_at ?? a.created_at ?? '') || 0
-         const tsB = Date.parse(b.published_at ?? b.created_at ?? '') || 0
-         return tsB - tsA
-       })
-       .slice(0, MAX_SEARCH_RESULTS)
-       .map(row => ({
-         id: row.id,
-         title_ru: clean(row.source_title),
-         summary_ru: clean(row.source_summary ?? ''),
-         link: row.canonical_url,
-         published_at: row.published_at,
-         collected_at: row.created_at,
-         hydrationStatus: row.hydration_status,
-         matchedInFullText: Boolean(row.full_text?.toLowerCase().includes(lowerTerm)),
-         source: normSrc(row.source),
-       }))
+    const pattern = `%${term.replace(/[%_]/g, '\\$&')}%`
+    const columns = 'id, source_title, source_summary, full_text, canonical_url, published_at, discovered_at, hydration_status, source:source_id(name, url, country, source_type, source_category)'
 
-     return NextResponse.json({ items, meta: { total: items.length, query: term } })
-   } catch (err) {
-     return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
-   }
- }
+    const [byTitle, bySummary, byFullText] = await Promise.all([
+      getSupabaseAdmin().from('evidence_items').select(columns).ilike('source_title', pattern).order('published_at', { ascending: false }).limit(MAX_SEARCH_PER_QUERY),
+      getSupabaseAdmin().from('evidence_items').select(columns).ilike('source_summary', pattern).order('published_at', { ascending: false }).limit(MAX_SEARCH_PER_QUERY),
+      getSupabaseAdmin().from('evidence_items').select(columns).ilike('full_text', pattern).order('published_at', { ascending: false }).limit(MAX_SEARCH_PER_QUERY),
+    ])
 
- export async function GET(request: NextRequest): Promise<NextResponse> {
-   const q = request.nextUrl.searchParams.get('q')
-   if (q && q.trim()) return searchEvidence(q)
+    for (const result of [byTitle, bySummary, byFullText]) {
+      if (result.error) return NextResponse.json({ error: result.error.message }, { status: 500 })
+    }
 
-   try {
-     const { data, error } = await getSupabaseAdmin()
-       .from('rss_items')
-       .select('id, title, description, link, published_at, collected_at, source:source_id(name, url, country, source_type)')
-       .order('collected_at', { ascending: false })
-       .limit(500)
+    const byId = new Map<string, EvidenceRow>()
+    for (const rows of [byTitle.data, bySummary.data, byFullText.data]) {
+      for (const row of (rows ?? []) as unknown as EvidenceRow[]) byId.set(row.id, row)
+    }
 
-     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const lowerTerm = term.toLowerCase()
+    const items = Array.from(byId.values())
+      .filter((row) => normSrc(row.source)?.source_category !== 'competitor')
+      .sort((a, b) => itemTs(b) - itemTs(a))
+      .slice(0, MAX_SEARCH_RESULTS)
+      .map((row) => {
+        const item = toMarketItem(row)
+        return item ? {
+          ...item,
+          matchedInFullText: Boolean(row.full_text?.toLowerCase().includes(lowerTerm)),
+        } : null
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
 
-     const available = ((data ?? []) as Row[])
-       .map(toItem).filter((i): i is Item => i !== null)
-       .sort((a, b) => rank(b) - rank(a))
+    return NextResponse.json({ items, meta: { total: items.length, query: term } })
+  } catch (error) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 })
+  }
+}
 
-     const items = pick(available)
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const q = request.nextUrl.searchParams.get('q')
+  if (q?.trim()) return searchEvidence(q)
 
-     return NextResponse.json({
-       items,
-       meta: {
-         total: items.length,
-         available: available.length,
-         maxTotal: MAX_TOTAL,
-         maxPerSource: MAX_PER_SOURCE,
-         sources: items.reduce<Record<string, number>>((acc, i) => {
-           const n = i.source?.name ?? 'Unknown'; acc[n] = (acc[n] ?? 0) + 1; return acc
-         }, {}),
-       },
-     })
-   } catch (err) {
-     return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
-   }
- }
+  try {
+    const cutoff = new Date(Date.now() - FEED_WINDOW_MS).toISOString()
+    const { data, error } = await getSupabaseAdmin()
+      .from('evidence_items')
+      .select('id, source_title, source_summary, canonical_url, published_at, discovered_at, hydration_status, source:source_id(name, url, country, source_type, source_category)')
+      .gte('discovered_at', cutoff)
+      .order('discovered_at', { ascending: false })
+      .limit(500)
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    const available = ((data ?? []) as unknown as EvidenceRow[])
+      .map(toMarketItem)
+      .filter((item): item is MarketItem => item !== null)
+      .sort((a, b) => Date.parse(b.published_at ?? b.collected_at ?? '') - Date.parse(a.published_at ?? a.collected_at ?? ''))
+
+    const items = pick(available)
+    return NextResponse.json({
+      items,
+      meta: {
+        total: items.length,
+        available: available.length,
+        maxTotal: MAX_TOTAL,
+        maxPerSource: MAX_PER_SOURCE,
+        sources: items.reduce<Record<string, number>>((acc, item) => {
+          const name = item.source?.name ?? 'Unknown'
+          acc[name] = (acc[name] ?? 0) + 1
+          return acc
+        }, {}),
+      },
+    })
+  } catch (error) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 })
+  }
+}

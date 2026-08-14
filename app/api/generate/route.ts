@@ -3,6 +3,7 @@ import { generateAndPersistArticle } from '@/lib/content-generation/generate-art
 import { isValidContentFormat } from '@/lib/content-formats'
 import type { ContentFormat } from '@/lib/content-formats'
 import { getErrorMessage } from '@/lib/api/error-message'
+import { resolveDefaultBrandProfileId } from '@/lib/brand-snapshot'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -18,6 +19,7 @@ type GenerateBody = {
   evidenceItemIds?: string[]
   parentRequestId?: string
   refinementNote?: string
+  marketingCampaignId?: string
 }
 
 function textToAiSdkLikeStream(text: string, metadata: unknown): ReadableStream<Uint8Array> {
@@ -39,7 +41,7 @@ function textToAiSdkLikeStream(text: string, metadata: unknown): ReadableStream<
 export async function POST(req: NextRequest): Promise<Response> {
   try {
     const body = (await req.json()) as GenerateBody
-    const { topic, context, templateId, brandProfileId, seoMode = false, regionId, evidenceItemIds, parentRequestId, refinementNote } = body
+    const { topic, context, templateId, brandProfileId, seoMode = false, regionId, evidenceItemIds, parentRequestId, refinementNote, marketingCampaignId } = body
     const contentType = (body.contentType ?? 'article') as ContentFormat
 
     if (!topic?.trim()) {
@@ -54,20 +56,22 @@ export async function POST(req: NextRequest): Promise<Response> {
       )
     }
 
+    const resolvedBrandProfileId = await resolveDefaultBrandProfileId(brandProfileId)
     const result = await generateAndPersistArticle({
       topic,
       context,
       contentType,
       templateId,
-      brandProfileId,
+      brandProfileId: resolvedBrandProfileId ?? undefined,
       seoMode,
       regionId,
       evidenceItemIds,
       parentRequestId,
       refinementNote,
+      marketingCampaignId,
     })
 
-    const metadata = { contentRequestId: result.contentRequestId, usedContext: result.usedContext }
+    const metadata = { contentRequestId: result.contentRequestId, articleId: result.articleId, usedContext: result.usedContext }
 
     return new Response(textToAiSdkLikeStream(result.text, metadata), {
       status: 200,

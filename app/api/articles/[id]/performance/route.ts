@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { getErrorMessage } from '@/lib/api/error-message'
+import { recordArticlePattern } from '@/lib/content-patterns'
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -81,6 +82,14 @@ export async function POST(request: NextRequest, context: RouteContext): Promise
     // overwrite an already-published_at timestamp.
     if (article.status !== 'published') {
       await admin.from('articles').update({ status: 'published', published_at: new Date().toISOString() }).eq('id', id)
+    }
+
+    // Deterministic classification is recorded when we have a real
+    // publication+platform signal. Failure here must never block metrics.
+    try {
+      await recordArticlePattern(id, platform)
+    } catch (patternError) {
+      console.warn('[performance] pattern classification failed:', getErrorMessage(patternError))
     }
 
     return NextResponse.json(snapshot, { status: 201 })

@@ -9,6 +9,7 @@ the bottom for why they intentionally differ right now.
 ### Core / identity
 - `brand_profiles` — editable Brand OS/Brand Brain summary
 - `regions`, `user_preferences`
+- `marketing_campaigns` — dated campaign instances for the marketer control center (migration 045)
 
 ### Content pipeline (current)
 - `articles`, `content_requests`, `content_request_evidence`
@@ -36,7 +37,7 @@ the bottom for why they intentionally differ right now.
 - `content_asset_relations`, `qa_findings`, `claim_spans`, `repair_runs`
 
 ### Learning
-- `content_pattern_usage`, `performance_snapshots`, `preference_profiles`
+- `content_pattern_usage` (bridged to real `articles` in migration 045), `performance_snapshots`, `preference_profiles`
 
 ### Knowledge (legacy precursor to the plan's `knowledge_assets`)
 - `books`, `book_chunks`

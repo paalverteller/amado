@@ -29,6 +29,23 @@ export interface BrandSnapshotResult {
 
 const EMPTY: BrandSnapshotResult = { promptText: '', facts: [] }
 
+/** Resolve the active/default brand when a caller does not choose one explicitly. */
+export async function resolveDefaultBrandProfileId(requested?: string | null): Promise<string | null> {
+  if (requested) return requested
+  const { data, error } = await getSupabaseAdmin()
+    .from('brand_profiles')
+    .select('id')
+    .eq('is_active', true)
+    .order('is_default', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) {
+    console.warn('[brand-snapshot] default brand lookup failed:', error.message)
+    return null
+  }
+  return data?.id ?? null
+}
+
 /**
  * Compiles the structured Brand OS tables (Sprint 4: audiences, pain
  * points, products, claims, vocabulary, content pillars, active

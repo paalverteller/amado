@@ -1,108 +1,84 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase/client'
-import { buildSystemPrompt, buildUserPrompt, buildBrandVoiceLayer, buildRegionContextLayer, buildEvidenceContext } from '@/lib/prompts'
-import { generateArticleWithFallback } from '@/lib/ai'
-import { cleanPlainTextOutput } from '@/lib/text-cleanup'
-import { isValidContentFormat, mapToLegacyContentType } from '@/lib/content-formats'
+import { generateAndPersistArticle } from '@/lib/content-generation/generate-article'
+import { isValidContentFormat } from '@/lib/content-formats'
 import { GENERATION_CONFIG } from '@/lib/amado-config'
+import { getErrorMessage } from '@/lib/api/error-message'
+import { resolveDefaultBrandProfileId } from '@/lib/brand-snapshot'
 import type { ContentFormat } from '@/lib/content-formats'
 
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
-type BatchTopic = { title: string; context: string; contentType?: string }
-type BatchBody = { topics?: BatchTopic[]; templateId?: string; brandProfileId?: string; regionId?: string; evidenceItemIds?: string[] }
-type BatchResult = { topic: string; status: 'ok' | 'error'; articleId?: string; error?: string }
+type BatchTopic = { title: string; context: string; contentType?: string; evidenceItemId?: string }
+type BatchBody = {
+  topics?: BatchTopic[]
+  templateId?: string
+  brandProfileId?: string
+  regionId?: string
+  evidenceItemIds?: string[]
+  marketingCampaignId?: string
+}
+type BatchResult = { topic: string; status: 'ok' | 'error'; articleId?: string; contentRequestId?: string; error?: string }
 
 const MAX_BATCH_SIZE = GENERATION_CONFIG.maxBatchSize
 
+/**
+ * Batch generation now delegates to the same canonical pipeline as /api/generate.
+ * That guarantees BrandSnapshot + market evidence + direct competitor evidence +
+ * Knowledge/RAG + persistence/usage logging are identical for single and batch.
+ */
 export async function POST(req: NextRequest): Promise<Response> {
   try {
     const body = (await req.json()) as BatchBody
     const topics = body.topics ?? []
-
-    if (topics.length === 0) {
-      return NextResponse.json({ error: 'Topic list is empty' }, { status: 400 })
-    }
+    if (topics.length === 0) return NextResponse.json({ error: 'Topic list is empty' }, { status: 400 })
     if (topics.length > MAX_BATCH_SIZE) {
-      return NextResponse.json(
-        { error: `Maximum ${MAX_BATCH_SIZE} topics per batch` },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: `Maximum ${MAX_BATCH_SIZE} topics per batch` }, { status: 400 })
     }
 
-    const built = await buildSystemPrompt(body.templateId)
-    const brandVoice = await buildBrandVoiceLayer(body.brandProfileId)
-    const regionContext = await buildRegionContextLayer(body.regionId)
-    const evidenceContext = await buildEvidenceContext(body.evidenceItemIds)
-
+    const resolvedBrandProfileId = await resolveDefaultBrandProfileId(body.brandProfileId)
     const results: BatchResult[] = []
-
     for (const item of topics) {
-      const displayTitle = (item.title ?? '').trim()
-      const promptContext = (item.context ?? item.title ?? '').trim()
-
-      if (!displayTitle || !promptContext) {
-        results.push({ topic: displayTitle || '(no topic)', status: 'error', error: 'Empty topic' })
+      const title = (item.title ?? '').trim()
+      const context = (item.context ?? item.title ?? '').trim()
+      const contentType = (item.contentType ?? 'article') as ContentFormat
+      if (!title || !context) {
+        results.push({ topic: title || '(no topic)', status: 'error', error: 'Empty topic' })
+        continue
+      }
+      if (!isValidContentFormat(contentType)) {
+        results.push({ topic: title, status: 'error', error: `Invalid format: ${contentType}` })
         continue
       }
 
       try {
-        const contentType = (item.contentType ?? 'article') as ContentFormat
-        
-        // Validate format
-        if (!isValidContentFormat(contentType)) {
-          results.push({ topic: displayTitle, status: 'error', error: `Invalid format: ${contentType}` })
-          continue
-        }
-
-        const userPrompt = buildUserPrompt({ topic: promptContext, format: contentType })
-        const systemPrompt = `${built.systemPrompt}${brandVoice ? '\n\n' + brandVoice : ''}${regionContext ? '\n\n' + regionContext : ''}
-
-STRICT OUTPUT FORMAT:
-Write only the final clean text for publication. No think tags. No Markdown.`
-
-        const sections: string[] = []
-        if (evidenceContext) sections.push(`EVIDENCE:\n${evidenceContext}`)
-        const fullUserPrompt = sections.length > 0 
-          ? `${sections.join('\n\n---\n\n')}\n\n${userPrompt}`
-          : userPrompt
-
-        const generated = await generateArticleWithFallback({
-          systemPrompt,
-          userPrompt: fullUserPrompt,
+        const generated = await generateAndPersistArticle({
+          topic: title,
+          context,
+          contentType,
+          templateId: body.templateId,
+          brandProfileId: resolvedBrandProfileId ?? undefined,
+          regionId: body.regionId,
+          evidenceItemIds: item.evidenceItemId ? [item.evidenceItemId] : body.evidenceItemIds,
+          marketingCampaignId: body.marketingCampaignId,
         })
-
-        const cleanText = cleanPlainTextOutput(generated.text)
-
-        const { data: inserted, error: insertError } = await getSupabaseAdmin()
-          .from('articles')
-          .insert({
-            topic: displayTitle,
-            content_type: mapToLegacyContentType(contentType),
-            draft_content: cleanText,
-            status: 'draft',
-            brand_profile_id: body.brandProfileId || null,
-            region_id: body.regionId || null,
-            locale: 'pt-BR',
-          })
-          .select('id')
-          .single()
-
-        if (insertError) throw new Error(insertError.message)
-
-        results.push({ topic: displayTitle, status: 'ok', articleId: inserted?.id })
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error'
-        results.push({ topic: displayTitle, status: 'error', error: message })
+        results.push({
+          topic: title,
+          status: 'ok',
+          articleId: generated.articleId ?? undefined,
+          contentRequestId: generated.contentRequestId ?? undefined,
+        })
+      } catch (error) {
+        results.push({ topic: title, status: 'error', error: getErrorMessage(error) })
       }
     }
 
-    const okCount = results.filter(r => r.status === 'ok').length
-    return NextResponse.json({ results, total: topics.length, succeeded: okCount })
-  } catch (err) {
-    console.error('[generate/batch] error:', err)
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({
+      results,
+      total: topics.length,
+      succeeded: results.filter((result) => result.status === 'ok').length,
+    })
+  } catch (error) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 })
   }
 }

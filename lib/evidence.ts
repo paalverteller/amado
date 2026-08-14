@@ -254,29 +254,47 @@ export async function findDuplicates(fingerprint: string, excludeId?: string): P
   return data ?? []
 }
 
+/** A structured recent-market context so generation can persist the exact evidence IDs it used. */
+export interface RecentEvidenceContext {
+  text: string
+  ids: string[]
+  items: Array<{ id: string; title: string; summary: string | null }>
+}
+
 /**
- * Get recent evidence items for context injection.
- * Replaces getRecentRssItems — reads from evidence_items directly.
+ * Get recent general-market evidence for context injection. Competitor-tagged
+ * sources are deliberately excluded here; they have a separate context layer.
  */
-export async function getRecentEvidenceItems(topic: string, limit = 5): Promise<string> {
+export async function getRecentEvidenceContext(topic: string, limit = 5): Promise<RecentEvidenceContext> {
   const { data: items, error } = await getSupabaseAdmin()
     .from('evidence_items')
-    .select('source_title, source_summary, source_language, published_at')
+    .select('id, source_title, source_summary, source_language, published_at, source:source_id(source_category)')
     .order('discovered_at', { ascending: false })
-    .limit(60)
+    .limit(80)
 
-  if (error || !items || items.length === 0) return ''
+  if (error || !items || items.length === 0) return { text: '', ids: [], items: [] }
 
+  const marketItems = items.filter((item) => {
+    const source = Array.isArray(item.source) ? item.source[0] : item.source
+    return source?.source_category !== 'competitor'
+  })
   const keywords = topic.toLowerCase().split(/\s+/).filter((w) => w.length > 3)
   const filtered = keywords.length > 0
-    ? items.filter((item) => {
+    ? marketItems.filter((item) => {
         const text = `${item.source_title ?? ''} ${item.source_summary ?? ''}`.toLowerCase()
         return keywords.some((kw) => text.includes(kw))
       })
-    : items
+    : marketItems
+  const selected = (filtered.length > 0 ? filtered : marketItems).slice(0, limit)
 
-  return (filtered.length > 0 ? filtered : items)
-    .slice(0, limit)
-    .map((item) => `• ${item.source_title ?? ''}: ${(item.source_summary ?? '').slice(0, 200)}`)
-    .join('\n')
+  return {
+    text: selected.map((item) => `• ${item.source_title ?? ''}: ${(item.source_summary ?? '').slice(0, 200)}`).join('\n'),
+    ids: selected.map((item) => item.id),
+    items: selected.map((item) => ({ id: item.id, title: item.source_title ?? '', summary: item.source_summary ?? null })),
+  }
+}
+
+/** Backward-compatible text-only wrapper. */
+export async function getRecentEvidenceItems(topic: string, limit = 5): Promise<string> {
+  return (await getRecentEvidenceContext(topic, limit)).text
 }

@@ -22,10 +22,19 @@ Amado — B2B-маркетинг AI-платформа для команды, п
 
 - **Supabase:** обнаружилось, что рабочая база к моменту деплоя была почти пустой (только `articles`/`brand_profiles`/`prompt_templates`/`rss_items`/`rss_sources` — таблицы из самых первых миграций 000/001, ни `content_requests`, ни Brand OS, ни `knowledge_assets`). Решили не распутывать историю, а поднять **новый чистый проект Supabase**. Собран `full_schema.sql` — все 36 файлов из `supabase/migrations/` в проверенном порядке (не по алфавиту: историческая пара `022_pivot_phase1_cleanup_and_seed` должна идти **до** `022_amado_baseline`, хотя по имени файла наоборот). При сборке нашёл и поправил: `articles` создаётся дважды в истории (`000` и `001`) с разными CHECK-constraint'ами на `content_type` — версия из `000` обязана победить (её ограничение реально соответствует тому, что пишет код), но тогда колонка `book_source` (есть только в `001`) молча теряется — она была явно добавлена отдельным `ALTER TABLE` в собранный файл, с комментарием прямо в SQL.
   **Не подтверждено, реально ли выполнен `full_schema.sql`** на новой базе — если новая сессия начинается с деплоя, проверить это первым делом, не полагаться на то, что уже сделано.
-  **Также найдено, не почищено:** `content_type` CHECK ни в одном варианте не включает `telegram_post` — генерация в этот формат упадёт на constraint'е базы независимо от того, какая версия схемы победила. Отдельная точечная правка, ждёт запроса.
+  **Исправлено Sprint 11:** migration 045 расширяет `articles.content_type` CHECK и разрешает `telegram_post`.
 - **Чистка мёртвого кода** (после деплоя): удалено 14 файлов приложения (2 сиротских React-компонента, 12 API-роутов с нулём вызовов И подтверждённой рабочей заменой — не просто "не найдено использований", а именно "есть живой аналог") + `@ai-sdk/react` из зависимостей (ноль импортов). **База данных не тронута** — собственное архитектурное решение проекта (strangler-fig, см. `docs/AMADO_ROADMAP.md`) требует явного отдельного решения перед удалением таблиц; убрать роут — обратимо, уронить таблицу — нет. `full_schema.sql` от этой чистки не меняется.
   Флагнуто, но **не удалено** намеренно: `app/analytics` + `/api/analytics/pipeline` — рабочая страница, просто без ссылки в навигации `Layout.tsx` (добавить ссылку или удалить — отдельное решение, не путать с мёртвым кодом); `/api/content-requests`(+`/process`) — рабочий альтернативный путь генерации через очередь, просто не подключён в `vercel.json` cron.
   Известные оставшиеся кандидаты в `lib/` (не удалялись, не проверялись так же строго как API-роуты): `lib/api/errors.ts`, `lib/brand-os/precedence.ts`, `lib/domain/region.ts`, `lib/domain/content-request.ts` — ноль импортов при грепе, не факт что действительно мертвы (могут быть типами для будущего использования), не трогал без такой же тщательной проверки, как для роутов.
+
+## Sprint 11 — Marketer Control Center (2026-08-14)
+
+- `/overview` теперь настоящий home screen: Today, Needs attention, кампании, ближайший контент, последние показатели, market opportunities и объяснимая Content intelligence.
+- Миграция `045_marketer_control_center.sql`: `marketing_campaigns`, `articles.scheduled_for`, связи кампаний с `articles/content_requests`, bridge `content_pattern_usage` к реальным `articles`, исправление `telegram_post` CHECK.
+- Аналитика hooks/topics/content pillars/CTA/length/formats/platforms строится только по реальным performance snapshots. Классификация детерминированная с `analysis_evidence`; fatigue/recommendations не меняют Brand OS автоматически.
+- Исправлена цепочка данных: market feed теперь выдаёт `evidence_items.id`; single/batch generation сохраняют exact evidence lineage; direct competitor evidence + competitor reviews/RAG попадают в генерацию; `knowledge_chunk_ids` хранит chunk IDs; stream возвращает exact `articleId`.
+- Single/batch API теперь сами выбирают active/default brand, если клиент не передал его — Brand OS и competitor context не исчезают на first-use. `/generate` переведён с legacy UI values (`social_post`/`thread`/`carousel`) на canonical content formats — это был реальный несовместимый контракт с `/api/generate`. Batch generation теперь использует тот же canonical orchestrator.
+- Добавлен `scripts/verify-amado-chain.mjs` + unit/regression tests. Полный `--verify` по правилам проекта должен выполняться в рабочем clone с установленными dependencies.
 
 ## Как здесь ведётся разработка (важно для новой сессии)
 
@@ -42,11 +51,8 @@ Amado — B2B-маркетинг AI-платформа для команды, п
 
 - **`/api/cron/auto-generate`** — легаси-крон из до-пивотного психологического продукта, активен в `vercel.json` (06:00 UTC), пишет случайную статью в `articles` ежедневно. Ждёт решения — выключать или нет.
 - **`handsoff.md`** в корне репо — отдельный документ для ChatGPT-сессий, описывает нереализованный "Sprint 5 — grounded generation", которого нет в реальном коде. Не трогал.
-- **`app/api/generate/batch/route.ts`** — не подключён к `buildBrandSnapshot`/`buildKnowledgeContext` из Sprint 8, использует старый `buildBrandVoiceLayer`.
-- **`content_pattern_usage`** (миграция 036) — не подключена, нужна отдельная UI-таксономия разметки контента.
 - **Реальное разделение workspace/пользователей** — нет модели сессий, один общий пароль (`ACCESS_PASSWORD`).
 - **E2E-тест** (`e2e/core-journey.spec.ts`) — написан по реальным селекторам, ни разу не запускался.
-- **`content_type` CHECK не разрешает `telegram_post`** (найдено при сборке `full_schema.sql`, см. выше).
 
 ## Деплой (Vercel)
 

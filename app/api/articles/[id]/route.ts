@@ -19,7 +19,7 @@ export async function GET(_req: NextRequest, { params }: Ctx): Promise<NextRespo
   }
 }
 
-const ALLOWED_PATCH = ['final_content', 'rating', 'comment', 'status', 'published_at', 'tags', 'draft_content']
+const ALLOWED_PATCH = ['final_content', 'rating', 'comment', 'status', 'published_at', 'tags', 'draft_content', 'scheduled_for', 'marketing_campaign_id']
 
 export async function PATCH(req: NextRequest, { params }: Ctx): Promise<NextResponse> {
   try {

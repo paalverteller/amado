@@ -8,4 +8,5 @@ export interface Article {
   char_count: number | null; template_id: string | null;
   region_id: string | null; locale: string | null;
   content_request_id: string | null; brand_profile_id: string | null;
+  marketing_campaign_id?: string | null; scheduled_for?: string | null;
 }

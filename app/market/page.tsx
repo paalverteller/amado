@@ -107,7 +107,7 @@ export default function MarketPage() {
   const { selectedIds, toggleSelect, clearSelection } = useBatchSelection()
   const router = useRouter()
   const [batchLoading, setBatchLoading] = useState(false)
-  const [batchContentType, setBatchContentType] = useState('blog_post')
+  const [batchContentType, setBatchContentType] = useState('linkedin_post')
   const [batchTemplateId, setBatchTemplateId] = useState('')
   const [batchTemplates, setBatchTemplates] = useState<PromptTemplate[]>([])
 
@@ -297,7 +297,7 @@ export default function MarketPage() {
 
                 <div className="mt-auto flex flex-wrap gap-2 pt-1">
                   <Link
-                    href={`/generate?topic=${encodeURIComponent(buildDisplayTitle(item))}&context=${encodeURIComponent(buildGenerationTopic(item))}`}
+                    href={`/generate?topic=${encodeURIComponent(buildDisplayTitle(item))}&context=${encodeURIComponent(buildGenerationTopic(item))}&evidenceId=${encodeURIComponent(item.id)}`}
                     className="rounded-full bg-primary px-4 py-1.5 text-sm font-semibold text-on-primary transition-opacity hover:opacity-90"
                   >
                     Gerar
@@ -359,11 +359,15 @@ export default function MarketPage() {
                 minWidth: 0, maxWidth: 92, flexShrink: 1,
               }}
             >
-              <option value="blog_post" style={{ color: '#000' }}>{t('format.article')}</option>
-              <option value="note" style={{ color: '#000' }}>{t('format.quick_note')}</option>
-              <option value="social_post" style={{ color: '#000' }}>{t('format.linkedin_post')}</option>
-              <option value="thread" style={{ color: '#000' }}>{t('format.x_thread')}</option>
-              <option value="carousel" style={{ color: '#000' }}>{t('format.instagram_carousel')}</option>
+              <option value="article" style={{ color: '#000' }}>{t('format.article')}</option>
+              <option value="quick_note" style={{ color: '#000' }}>{t('format.quick_note')}</option>
+              <option value="linkedin_post" style={{ color: '#000' }}>{t('format.linkedin_post')}</option>
+              <option value="instagram_caption" style={{ color: '#000' }}>{t('format.instagram_caption')}</option>
+              <option value="instagram_carousel" style={{ color: '#000' }}>{t('format.instagram_carousel')}</option>
+              <option value="x_thread" style={{ color: '#000' }}>{t('format.x_thread')}</option>
+              <option value="facebook_post" style={{ color: '#000' }}>{t('format.facebook_post')}</option>
+              <option value="telegram_post" style={{ color: '#000' }}>{t('format.telegram_post')}</option>
+              <option value="short_video_script" style={{ color: '#000' }}>{t('format.short_video_script')}</option>
             </select>
 
             <select
@@ -406,6 +410,7 @@ export default function MarketPage() {
                     title: buildDisplayTitle(i),
                     context: buildGenerationTopic(i),
                     contentType: batchContentType,
+                    evidenceItemId: i.id,
                   }))
                   const res = await fetch('/api/generate/batch', {
                     method: 'POST',
