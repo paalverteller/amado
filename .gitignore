@@ -9,3 +9,6 @@ apply_*.py
 coverage/
 fix*.sh
 finalize_amado_main.py
+
+# Committed-by-accident patch-script backups
+.amado-patch-backups/
