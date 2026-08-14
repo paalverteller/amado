@@ -159,7 +159,32 @@ export default function OverviewPage() {
     }
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    const controller = new AbortController()
+
+    void fetch('/api/overview/dashboard', {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const body = await response.json() as DashboardData & { error?: string }
+        if (!response.ok) throw new Error(body.error ?? 'Не удалось загрузить обзор')
+        return body
+      })
+      .then((body) => {
+        setData(body)
+        setError('')
+      })
+      .catch((loadError: unknown) => {
+        if (controller.signal.aborted) return
+        setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить обзор')
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+
+    return () => controller.abort()
+  }, [])
 
   async function createCampaign() {
     if (!campaignForm.name.trim()) return

@@ -41,12 +41,12 @@ describe('canonical content generation chain', () => {
   beforeEach(() => { generatedPrompts.length = 0 })
 
   it('carries market evidence + competitor signals + knowledge + Brand OS into a social generation and persists exact lineage', async () => {
-    let recorded: NewContentRequestRecord | null = null
+    const recorded: NewContentRequestRecord[] = []
     let linkedEvidence: string[] = []
-    let articlePayload: Parameters<ArticleRepository['create']>[0] | null = null
+    const articlePayloads: Array<Parameters<ArticleRepository['create']>[0]> = []
 
     const contentRequests: ContentRequestRepository = {
-      record: async (data) => { recorded = data; return { id: 'request-1' } },
+      record: async (data) => { recorded.push(data); return { id: 'request-1' } },
       markCompleted: async () => undefined,
       markFailed: async () => undefined,
       getById: async () => null,
@@ -54,7 +54,7 @@ describe('canonical content generation chain', () => {
       linkEvidence: async (_requestId, ids) => { linkedEvidence = ids },
     }
     const articles: ArticleRepository = {
-      create: async (data) => { articlePayload = data; return { id: 'article-1', error: null } },
+      create: async (data) => { articlePayloads.push(data); return { id: 'article-1', error: null } },
     }
 
     const result = await generateAndPersistArticle({
@@ -66,11 +66,11 @@ describe('canonical content generation chain', () => {
     expect(generatedPrompts[0].userPrompt).toContain('<evidence_context>market evidence</evidence_context>')
     expect(generatedPrompts[0].userPrompt).toContain('<competitor_context>fresh competitor signal</competitor_context>')
     expect(generatedPrompts[0].userPrompt).toContain('<knowledge_context>competitor review + brand research</knowledge_context>')
-    expect(recorded?.knowledge_chunk_ids).toEqual(['chunk-1'])
-    expect(recorded?.evidence_item_ids).toEqual(['market-evidence-1'])
+    expect(recorded[0]?.knowledge_chunk_ids).toEqual(['chunk-1'])
+    expect(recorded[0]?.evidence_item_ids).toEqual(['market-evidence-1'])
     expect(linkedEvidence).toEqual(['market-evidence-1'])
-    expect(articlePayload?.content_type).toBe('social_post')
-    expect(articlePayload?.marketing_campaign_id).toBe('campaign-1')
+    expect(articlePayloads[0]?.content_type).toBe('social_post')
+    expect(articlePayloads[0]?.marketing_campaign_id).toBe('campaign-1')
     expect(result.articleId).toBe('article-1')
     expect(result.usedContext.competitorSignals[0].competitor).toBe('Competitor A')
   })
