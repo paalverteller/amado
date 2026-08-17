@@ -7,6 +7,8 @@ import { type ReactNode, useEffect, useState } from 'react'
 import { t } from '@/lib/i18n/config'
 import AugustDialog from '@/components/ui/AugustDialog'
 import { toast } from '@/components/ui/AugustFeedback'
+import { MarketProvider } from '@/lib/market-context'
+import MarketSwitcher from '@/components/MarketSwitcher'
 
 type NavItem = {
   href: string
@@ -190,6 +192,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const moreIsActive = MOBILE_MORE.some((item) => isActive(item.href))
 
   return (
+    <MarketProvider>
     <div className="aug-app-shell">
       <aside className="aug-sidebar" aria-label="Навигация Amado">
         <div className="aug-sidebar__brand">
@@ -236,11 +239,18 @@ export default function Layout({ children }: { children: ReactNode }) {
       <div className="aug-workspace">
         <header className="aug-mobile-header">
           <BrandMark compact />
-          <button type="button" className="aug-button aug-button--primary aug-mobile-header__create" onClick={() => setQuickCreateOpen(true)}>
-            <NavIcon name="generate" />
-            Создать
-          </button>
+          <div className="flex items-center gap-2">
+            <MarketSwitcher compact />
+            <button type="button" className="aug-button aug-button--primary aug-mobile-header__create" onClick={() => setQuickCreateOpen(true)}>
+              <NavIcon name="generate" />
+              Создать
+            </button>
+          </div>
         </header>
+
+        <div className="aug-topbar">
+          <MarketSwitcher />
+        </div>
 
         <main className="aug-workspace__main">
           <div className="aug-page-enter">{children}</div>
@@ -301,5 +311,6 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       <QuickCreateDialog open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} />
     </div>
+    </MarketProvider>
   )
 }

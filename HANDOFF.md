@@ -188,3 +188,41 @@ Spanish brand/vertical is confirmed).
    the relevant API routes.
 4. Seed Spain market sources + at least one Spain brand profile, mirroring
    the Brazil seed pattern.
+
+### Phase 2 (this delivery) — selected-market state + header dropdown UI
+
+- New `lib/market-context.tsx`: client-only module, deliberately separate
+  from `lib/i18n/config.ts`'s `Locale`/`t()` system (that's UI language --
+  ru/pt-BR/en labels; this is which market/region the workspace is scoped
+  to -- never conflate the two, per existing project convention).
+  - Storage: a plain cookie (`amado_market`), not `user_preferences`.
+    Reasoning: there is no per-user session model in this app (single
+    shared `ACCESS_PASSWORD`, see `proxy.ts`) -- there is no user row to
+    key a `user_preferences` record against today. If real accounts land
+    later, migrating is isolated to `getStoredMarketCode`/
+    `setStoredMarketCode` in this one file.
+  - `MarketProvider` fetches `GET /api/regions` (already existed, already
+    filters `active=true` -- Spain shows up automatically now that Phase 1
+    activated it) and exposes `{ marketCode, regions, setMarketCode }` via
+    a small React Context.
+- New `components/MarketSwitcher.tsx`: the dropdown itself -- flag + name +
+  chevron trigger, click-outside/Escape to close, checkmark on the active
+  option. Reused inside both the new desktop top bar and the existing dark
+  mobile header (compact variant, flag + chevron only, no label).
+- `components/Layout.tsx`: wraps the whole shell in `MarketProvider`. Added
+  a new `.aug-topbar` strip (desktop only, `>780px`) above
+  `.aug-workspace__main` holding the switcher top-right, and slotted the
+  compact switcher into the existing mobile header next to the Create
+  button. No existing nav/routing logic touched.
+- `app/globals.css`: new `.aug-topbar` / `.aug-market-switcher*` rules only,
+  appended after the existing `AUGUST_SYSTEM_V1_END` content block. Reused
+  existing tokens (`--aug-border`, `--color-primary`, `--color-primary-container`,
+  `aug-fade` keyframe) -- no new design tokens introduced.
+
+**What Phase 2 deliberately does NOT do:** the dropdown changes
+`marketCode` in React state + the cookie and nothing else yet. No API route
+reads it, `buildUserPrompt` still hardcodes Portuguese/Brazil, brand/
+competitor/market-feed queries are not filtered by it. Selecting "España"
+today only changes what the switcher itself displays -- that's expected and
+matches the phase plan; Phase 3 is what makes the selection actually do
+something.

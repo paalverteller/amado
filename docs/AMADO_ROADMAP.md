@@ -524,11 +524,18 @@ challenge; not yet challenged.
       `resolveRegionLocale()` + `REGION_LOCALES` to `lib/locale.ts` as a
       synchronous region→locale/currency/timezone lookup. Purely additive —
       no existing exports changed, no UI, no `buildUserPrompt` fix yet.
-- [ ] Phase 2 — selected-market state + top-right header dropdown UI.
-      `Layout.tsx` currently has no top-right header region on desktop at
-      all (sidebar-only shell) — this phase adds that UI surface, not just a
-      dropdown inside it. Storage mechanism (cookie vs. reviving the unused
-      `user_preferences` table) still to be decided.
+- [x] **Phase 2 — selected-market state + top-right header dropdown UI.**
+      New `lib/market-context.tsx` (cookie-backed `MarketProvider`/`useMarket`,
+      deliberately separate from the `t()`/`Locale` UI-language system) +
+      `components/MarketSwitcher.tsx` (flag/name/chevron dropdown, reused
+      compact in the mobile header). `Layout.tsx` now has a genuine desktop
+      top bar (`.aug-topbar`, new — none existed before) plus the switcher
+      slotted into the existing mobile header. Selection is read from
+      `GET /api/regions` (already existed) and written to a plain
+      `amado_market` cookie — no `user_preferences` row, since there's no
+      per-user session model to key one against. Selecting a market changes
+      only what the switcher displays right now; nothing reads the cookie
+      yet (that's Phase 3+).
 - [ ] Phase 3 — fix `buildUserPrompt` in `lib/prompts.ts` to read the
       selected region instead of hardcoding "Portuguese (Brazil)" directly in
       all 6 content-format template branches (flagged in that function's own
