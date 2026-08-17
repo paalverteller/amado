@@ -210,6 +210,12 @@ export async function buildRegionContextLayer(regionId?: string | null): Promise
     'BR': 'Brazilian market: use "você" (not "tu"), mention PIX for payments, WhatsApp as primary channel, Brazilian holidays (Carnaval, Black Friday BR in November, Dia das Mães in May), local examples (São Paulo, Rio, Mercado Livre). Avoid literal translations from English.',
     'US': 'US market: direct tone, credit card payments, email/SMS channels, US holidays (Thanksgiving, Black Friday, Memorial Day).',
     'GB': 'UK market: polite but direct, GBP currency, British spelling (colour, organise), UK holidays (Boxing Day, Bank Holidays).',
+    // Added Sprint 12 Phase 1 (region/prompt-layer scaffolding only --
+    // buildUserPrompt below still hardcodes Portuguese/Brazil directly and
+    // does not yet read this note for actual generation; see that
+    // function's own comment and docs/AMADO_ROADMAP.md Sprint 12 for the
+    // phase that wires it in).
+    'ES': 'Spanish market: use "tú" for most brands, "usted" for formal/B2B; Bizum as a common payments mention alongside cards; WhatsApp and Instagram as primary channels; Spanish holidays (Navidad, Rebajas de enero, Black Friday, Reyes Magos on Jan 6); local examples (Madrid, Barcelona, El Corte Inglés). European Spanish, not Latin American (avoid "ustedes" as the only plural, avoid Mexican/Argentine slang).',
   }
 
   const note = culturalNotes[region.code]

@@ -131,3 +131,60 @@ Database activation is additive seed `supabase/seeds/003_final_workspaces.sql`.
 It uses `ON CONFLICT (name) DO NOTHING` for prompts on purpose: future re-runs never
 overwrite human edits made in Settings. Do not use historical `supabase db push` merely
 to install this seed; the production DB still follows the manually consolidated baseline.
+
+<!-- AMADO_MULTI_MARKET_V1 -->
+## Sprint 12 — Multi-market support (in progress, phased delivery)
+
+Goal: a market switcher (top-right dropdown, Brazil default, Spain added next)
+that changes prompts, output language, and localization end-to-end when
+switched. Explicitly requested to ship **phased**, one small verified patch
+per turn, not one large sprint script — each phase gets its own
+`apply_*.py` + Supabase SQL block.
+
+**Scope decision (made by Claude, flagged for confirmation, not yet
+challenged):** switching market **filters** existing brands/competitors by
+region rather than creating a fully parallel workspace. Reasoning: every
+region touchpoint already built (`brand_profiles.region_id`,
+`rss_sources.region_id`, `articles.region_id`) is a nullable FK, not a
+partition key — building on that shape is far lower-risk than introducing
+RLS/scoping rewrites across API routes for a parallel-workspace model. Revisit
+explicitly if real workspace isolation is needed later (e.g. a customer wants
+separate seats/teams per market, not just separate content).
+
+**Phase 1 (this delivery) — schema + prompt-layer scaffolding, no UI yet:**
+- `supabase/seeds/005_spain_region.sql`: inserts and activates `ES` in
+  `regions` (es-ES, EUR, Europe/Madrid). It was never seeded before —
+  migration 023 only seeded `BR` (active) and `MX`/`IT` (inactive
+  placeholders), not `ES` at all.
+- `lib/prompts.ts`: added an `ES` entry to `buildRegionContextLayer`'s
+  `culturalNotes` map (tú/usted register, Bizum, Spanish holidays, European
+  vs Latin American Spanish). This layer is separate from and does **not**
+  fix `buildUserPrompt`, which still hardcodes Portuguese/Brazil directly in
+  every content-format template — that hardcoding is the real blocker for
+  actual Spanish output and is explicitly Phase 2+, not touched here.
+- `lib/locale.ts`: added `REGION_LOCALES` + `resolveRegionLocale()` as a
+  synchronous region-code → {locale, currency, timezone} lookup, purely
+  additive (new exports only). Existing Brazil-specific helpers
+  (`formatCpfCnpj`, `formatPhoneBR`, `hasEuropeanPortugueseMarkers`,
+  `looksLikePtBr`) are untouched — deciding what their Spain equivalents
+  should be (IBAN? DNI/NIF? a European-Spanish-vs-LatAm detector?) is a
+  product decision for a later phase, not guessed at here.
+
+**What Phase 1 deliberately does NOT do:** no dropdown UI (there is currently
+no top-right header region in `Layout.tsx` at all — desktop is sidebar-only,
+mobile is bottom-nav-only, so that's new UI surface, not a tweak); no
+selected-market state (cookie/session/`user_preferences` — table exists,
+unused by any route today, still needs a decision on read/write pattern); no
+fix to `buildUserPrompt`'s hardcoded Portuguese; no Spain-market RSS/brand
+seed (would mirror `supabase/seeds/001_brazil_sources.sql`'s pattern once a
+Spanish brand/vertical is confirmed).
+
+**Planned remaining phases** (order not fixed, revisit per conversation):
+1. Wire selected-market state (decide storage: cookie vs `user_preferences`)
+   + build the header UI region + dropdown component.
+2. Fix `buildUserPrompt` to read region instead of hardcoding pt-BR (the
+   6 template branches listed in the file's own comment).
+3. Filter brand/competitor/market-feed queries by selected region across
+   the relevant API routes.
+4. Seed Spain market sources + at least one Spain brand profile, mirroring
+   the Brazil seed pattern.

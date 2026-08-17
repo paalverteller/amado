@@ -9,6 +9,27 @@ export const DEFAULT_LOCALE = 'pt-BR'
 export const DEFAULT_CURRENCY = 'BRL'
 export const DEFAULT_TIMEZONE = 'America/Sao_Paulo'
 
+// ─── Region Locale Table (Sprint 12 Phase 1) ────────────────────────────────
+//
+// Static mirror of the `regions` table's locale/currency/timezone columns,
+// for code paths that need these values synchronously (no DB round-trip).
+// The DB row via `regions` remains the source of truth for anything that can
+// afford an async call -- see buildRegionContextLayer in lib/prompts.ts.
+// Keep in sync with supabase/seeds/005_spain_region.sql and migration 023.
+export const REGION_LOCALES: Record<string, { locale: string; currency: string; timezone: string }> = {
+  BR: { locale: 'pt-BR', currency: 'BRL', timezone: 'America/Sao_Paulo' },
+  ES: { locale: 'es-ES', currency: 'EUR', timezone: 'Europe/Madrid' },
+}
+
+/** Resolve a region code (e.g. 'ES') to its locale/currency/timezone triple.
+ *  Falls back to the Brazil defaults for unknown or missing codes, so every
+ *  existing call site that doesn't pass a region keeps behaving exactly as
+ *  before this function existed. */
+export function resolveRegionLocale(regionCode?: string | null): { locale: string; currency: string; timezone: string } {
+  if (regionCode && REGION_LOCALES[regionCode]) return REGION_LOCALES[regionCode]
+  return { locale: DEFAULT_LOCALE, currency: DEFAULT_CURRENCY, timezone: DEFAULT_TIMEZONE }
+}
+
 // ─── Date/Time Formatting ───────────────────────────────────────────────────
 
 export function formatDate(date: Date | string | number, locale: string = DEFAULT_LOCALE): string {

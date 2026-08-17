@@ -500,3 +500,40 @@ campaign decisions.
 - [x] Add editable core Brand OS + content pillars + vocabulary governance.
 - [x] Keep August desktop/PWA navigation coherent: Localization is first class; mobile
       remains four direct destinations plus More.
+
+<!-- AMADO_MULTI_MARKET_V1 -->
+### Sprint 12 — Multi-market support (IN PROGRESS — phased)
+
+Requested as a top-right market dropdown (Brazil default, Spain next) that
+changes prompts/language/localization app-wide on switch. Delivered as
+explicitly separate phases per conversation request, each its own verified
+`apply_*.py` + Supabase SQL block — not one large sprint script.
+
+Scope decision made and documented in `HANDOFF.md`: switching market
+**filters** existing brands/competitors by `region_id` rather than creating a
+fully parallel workspace, since every region FK already in the schema
+(`brand_profiles.region_id`, `rss_sources.region_id`, `articles.region_id`)
+is nullable/filterable, not a partition key. Flagged for the person to
+challenge; not yet challenged.
+
+- [x] **Phase 1 — schema + prompt-layer scaffolding.** Seed `ES` (Spain) as
+      an active region (`supabase/seeds/005_spain_region.sql`; `ES` was never
+      seeded before this, unlike the `MX`/`IT` inactive placeholders from
+      migration 023). Added Spain cultural notes to
+      `buildRegionContextLayer` in `lib/prompts.ts`. Added
+      `resolveRegionLocale()` + `REGION_LOCALES` to `lib/locale.ts` as a
+      synchronous region→locale/currency/timezone lookup. Purely additive —
+      no existing exports changed, no UI, no `buildUserPrompt` fix yet.
+- [ ] Phase 2 — selected-market state + top-right header dropdown UI.
+      `Layout.tsx` currently has no top-right header region on desktop at
+      all (sidebar-only shell) — this phase adds that UI surface, not just a
+      dropdown inside it. Storage mechanism (cookie vs. reviving the unused
+      `user_preferences` table) still to be decided.
+- [ ] Phase 3 — fix `buildUserPrompt` in `lib/prompts.ts` to read the
+      selected region instead of hardcoding "Portuguese (Brazil)" directly in
+      all 6 content-format template branches (flagged in that function's own
+      comment since before this sprint started).
+- [ ] Phase 4 — filter brand/competitor/market-feed API routes by selected
+      region.
+- [ ] Phase 5 — Spain market RSS sources + at least one Spain brand profile,
+      mirroring `supabase/seeds/001_brazil_sources.sql`'s pattern.
