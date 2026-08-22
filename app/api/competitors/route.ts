@@ -7,13 +7,30 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const brandId = request.nextUrl.searchParams.get('brand_id')
+    const regionId = request.nextUrl.searchParams.get('region_id')
+    const admin = getSupabaseAdmin()
 
-    let query = getSupabaseAdmin()
+    let query = admin
       .from('competitors')
       .select('*')
       .order('name', { ascending: true })
 
-    if (brandId) query = query.eq('brand_id', brandId)
+    if (brandId) {
+      query = query.eq('brand_id', brandId)
+    } else if (regionId) {
+      // Sprint 12 Phase 4: same brand-mediated region filter as
+      // /api/competitors/summary -- competitors have no region_id of
+      // their own, only brand_id.
+      const { data: brandsInRegion, error: brandsError } = await admin
+        .from('brand_profiles')
+        .select('id')
+        .eq('region_id', regionId)
+      if (brandsError) return NextResponse.json({ error: brandsError.message }, { status: 500 })
+
+      const brandIds = (brandsInRegion ?? []).map((b: { id: string }) => b.id)
+      if (brandIds.length === 0) return NextResponse.json({ competitors: [] })
+      query = query.in('brand_id', brandIds)
+    }
 
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

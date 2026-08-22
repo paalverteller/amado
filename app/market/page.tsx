@@ -6,6 +6,7 @@ import type { PromptTemplate } from '@/lib/domain/prompt-template'
 import Link from 'next/link'
 import Layout from '@/components/Layout'
 import { t } from '@/lib/i18n/config'
+import { useMarket } from '@/lib/market-context'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,16 @@ type Source = {
    hasEnoughItems?: boolean
    countries?: Record<string, number>
  }
+
+type CompetitorSummary = {
+  id: string
+  name: string
+  website: string | null
+  lastReviewedAt: string | null
+  sourceCount: number
+  healthySourceCount: number
+  latestReview: { title: string; snippet: string; createdAt: string } | null
+}
 
  // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -87,18 +98,34 @@ function buildDisplayTitle(item: MarketItem): string {
 
 // ─── API calls ────────────────────────────────────────────────────────────────
 
-async function fetchMarketItems(): Promise<{ items: MarketItem[]; meta: MarketMeta }> {
-  const res  = await fetch('/api/market', { cache: 'no-store' })
+async function fetchMarketItems(regionId?: string | null): Promise<{ items: MarketItem[]; meta: MarketMeta }> {
+  const url = regionId ? `/api/market?region_id=${encodeURIComponent(regionId)}` : '/api/market'
+  const res  = await fetch(url, { cache: 'no-store' })
   const data = await res.json()
   if (!res.ok) throw new Error(data?.error ?? 'Não foi possível carregar a análise de mercado')
   return { items: Array.isArray(data.items) ? data.items : [], meta: data.meta ?? {} }
 }
 
-async function refreshMarketItems(): Promise<{ items: MarketItem[]; meta: MarketMeta }> {
+async function refreshMarketItems(regionId?: string | null): Promise<{ items: MarketItem[]; meta: MarketMeta }> {
   const refreshRes  = await fetch('/api/market/refresh', { method: 'POST', cache: 'no-store' })
   const refreshData = await refreshRes.json().catch(() => ({}))
   if (!refreshRes.ok) throw new Error(refreshData?.error ?? 'Não foi possível coletar dados recentes')
-  return fetchMarketItems()
+  return fetchMarketItems(regionId)
+}
+
+async function fetchCompetitorSummaries(regionId?: string | null): Promise<CompetitorSummary[]> {
+  const url = regionId ? `/api/competitors/summary?region_id=${encodeURIComponent(regionId)}` : '/api/competitors/summary'
+  const res = await fetch(url, { cache: 'no-store' })
+  if (!res.ok) return []
+  const data = await res.json().catch(() => ({}))
+  return Array.isArray(data.competitors) ? data.competitors : []
+}
+
+function formatReviewDate(value: string | null): string {
+  if (!value) return 'ещё нет обзора'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'ещё нет обзора'
+  return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -106,6 +133,8 @@ async function refreshMarketItems(): Promise<{ items: MarketItem[]; meta: Market
 export default function MarketPage() {
   const { selectedIds, toggleSelect, clearSelection } = useBatchSelection()
   const router = useRouter()
+  const { regions, marketCode } = useMarket()
+  const currentRegionId = regions.find((r) => r.code === marketCode)?.id ?? null
   const [batchLoading, setBatchLoading] = useState(false)
   const [batchContentType, setBatchContentType] = useState('linkedin_post')
   const [batchTemplateId, setBatchTemplateId] = useState('')
@@ -124,12 +153,16 @@ export default function MarketPage() {
   const [refreshing, setRefreshing]     = useState(false)
   const [phraseIndex, setPhraseIndex]   = useState(0)
   const [error, setError]               = useState<string | null>(null)
+  const [competitors, setCompetitors]   = useState<CompetitorSummary[]>([])
+  const [competitorsLoading, setCompetitorsLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     async function load() {
+      setInitialLoading(true)
+      clearSelection()
       try {
-        const result = await fetchMarketItems()
+        const result = await fetchMarketItems(currentRegionId)
         if (!cancelled) { setItems(result.items); setMeta(result.meta); setError(null) }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Não foi possível carregar os dados')
@@ -139,7 +172,16 @@ export default function MarketPage() {
     }
     void load()
     return () => { cancelled = true }
-  }, [])
+  }, [currentRegionId])
+
+  useEffect(() => {
+    let cancelled = false
+    setCompetitorsLoading(true)
+    fetchCompetitorSummaries(currentRegionId)
+      .then((result) => { if (!cancelled) setCompetitors(result) })
+      .finally(() => { if (!cancelled) setCompetitorsLoading(false) })
+    return () => { cancelled = true }
+  }, [currentRegionId])
 
   useEffect(() => {
     if (!refreshing) return
@@ -163,7 +205,7 @@ export default function MarketPage() {
     setPhraseIndex(0)
     setError(null)
     try {
-      const result = await refreshMarketItems()
+      const result = await refreshMarketItems(currentRegionId)
       setItems(result.items)
       setMeta(result.meta)
     } catch (e) {
@@ -232,6 +274,68 @@ export default function MarketPage() {
             ) : null}
           </div>
         </section>
+
+        {/* ── Competitor intelligence summary ── */}
+        {(competitorsLoading || competitors.length > 0) && (
+          <section className="m3-card overflow-hidden p-5 sm:p-6">
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+              <p className="m3-label text-primary">{t('market.competitors')}</p>
+              <Link
+                href="/competitors"
+                className="shrink-0 text-xs font-semibold text-primary hover:opacity-80"
+              >
+                Все конкуренты →
+              </Link>
+            </div>
+
+            {competitorsLoading ? (
+              <p className="mt-3 text-sm text-on-surface-variant">Загрузка…</p>
+            ) : (
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {competitors.map((c) => (
+                  <Link
+                    key={c.id}
+                    href="/competitors"
+                    className="flex min-w-0 flex-col gap-2 rounded-2xl border border-transparent bg-surface-container p-4 transition-colors hover:border-primary/20 hover:bg-primary-container/40"
+                  >
+                    <div className="flex min-w-0 items-start justify-between gap-2">
+                      <h3 className="m-0 min-w-0 truncate text-sm font-semibold text-on-surface">
+                        {c.name}
+                      </h3>
+                      <span
+                        className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"
+                        style={{
+                          background: c.sourceCount > 0 && c.healthySourceCount === c.sourceCount
+                            ? 'var(--aug-success-bg)' : c.sourceCount === 0
+                              ? 'var(--aug-neutral-bg)' : 'var(--aug-warning-bg)',
+                          color: c.sourceCount > 0 && c.healthySourceCount === c.sourceCount
+                            ? 'var(--aug-success-fg)' : c.sourceCount === 0
+                              ? 'var(--aug-neutral-fg)' : 'var(--aug-warning-fg)',
+                        }}
+                      >
+                        {c.sourceCount === 0 ? 'нет источников' : `${c.healthySourceCount}/${c.sourceCount} источ.`}
+                      </span>
+                    </div>
+
+                    {c.latestReview ? (
+                      <p className="m-0 line-clamp-3 break-words text-xs leading-5 text-on-surface-variant [overflow-wrap:anywhere]">
+                        {c.latestReview.snippet}
+                      </p>
+                    ) : (
+                      <p className="m-0 text-xs text-on-surface-variant">
+                        Обзор ещё не сгенерирован
+                      </p>
+                    )}
+
+                    <span className="mt-auto text-[11px] font-medium text-on-surface-variant">
+                      Обновлено: {formatReviewDate(c.lastReviewedAt)}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* ── International sources grid ── */}
         {error && (
@@ -450,9 +554,6 @@ export default function MarketPage() {
             </button>
           </div>
         )}
-
-        {/* ── TRENDS BLOCK ── */}
-        
       </div>
     </Layout>
   )

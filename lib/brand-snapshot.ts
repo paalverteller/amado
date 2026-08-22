@@ -47,6 +47,29 @@ export async function resolveDefaultBrandProfileId(requested?: string | null): P
 }
 
 /**
+ * Sprint 12 Phase 4: resolve a brand's region_id, so generation can derive
+ * "which market is this content for" from the brand the caller already
+ * chose instead of requiring a second, independently-tracked regionId that
+ * could drift out of sync with it. Returns null for a brand with no region
+ * set (pre-Sprint-12 brands, or a brand deliberately left region-agnostic)
+ * -- callers should fall back to their own default in that case, exactly
+ * like resolveDefaultBrandProfileId's `requested` param falls through.
+ */
+export async function resolveBrandRegionId(brandId?: string | null): Promise<string | null> {
+  if (!brandId) return null
+  const { data, error } = await getSupabaseAdmin()
+    .from('brand_profiles')
+    .select('region_id')
+    .eq('id', brandId)
+    .maybeSingle()
+  if (error) {
+    console.warn('[brand-snapshot] brand region lookup failed:', error.message)
+    return null
+  }
+  return data?.region_id ?? null
+}
+
+/**
  * Compiles the structured Brand OS tables (Sprint 4: audiences, pain
  * points, products, claims, vocabulary, content pillars, active
  * compliance rules, platform playbook) into one prompt layer, plus a

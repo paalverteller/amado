@@ -226,3 +226,217 @@ competitor/market-feed queries are not filtered by it. Selecting "España"
 today only changes what the switcher itself displays -- that's expected and
 matches the phase plan; Phase 3 is what makes the selection actually do
 something.
+
+### Phase 3 (this delivery) — buildUserPrompt reads region instead of hardcoding pt-BR
+
+- `lib/prompts.ts`:
+  - New `resolveRegionProfile(regionId)`: resolves a regionId to
+    `{ code, name, locale, languageName }`. Deliberately separate from
+    `buildRegionContextLayer`, whose `Promise<string>` return is
+    interpolated directly into system prompts at both call sites -- changing
+    its shape would have silently broken those. Falls back to the Brazil
+    profile for a missing/inactive/unknown region, so every call site that
+    doesn't pass a `regionId` keeps generating byte-identical output to
+    before this phase.
+  - New `resolveLanguageProfile()` internal helper picks
+    `{ languageName, marketAdjective, marketLabel, seasonalityExample }`
+    from `spec.regionContext`. Currently branches Brazil vs. Spain
+    explicitly (checked by `locale === 'es-ES'`, not by fuzzy name
+    matching) and falls through to a generic "use the resolved name"
+    branch for any other region added later without market-specific
+    copy written yet.
+  - `buildUserPrompt`: every hardcoded "Portuguese (Brazil)" / "Brazilian
+    market" / "Brazilian dates" string across all 4 branches (quick_note,
+    x_thread, instagram_carousel, long-form) now reads from the resolved
+    language profile. No regionContext passed -> identical Brazil wording
+    as before (verified in `lib/prompts.test.ts`, new file).
+  - `buildLocalizationNotesPrompt`: gained an optional 4th `regionProfile`
+    param, defaults to Brazil when omitted -- existing 3-arg call sites
+    unaffected.
+- `lib/content-generation/generate-article.ts` (`generateAndPersistArticle`,
+  the canonical pipeline both `/api/generate` and `/api/generate/batch`
+  already delegate to -- confirmed by reading both routes, neither has its
+  own hardcoded-Portuguese copy of this logic):
+  - Resolves `regionProfile` via `resolveRegionProfile(input.regionId)` and
+    threads it into `contentSpec.regionContext` so `buildUserPrompt`
+    actually receives it (it didn't before -- `contentSpec` only carried
+    `topic/format/seoMode/brandProfileId`).
+  - `"BRAZILIAN MARKET SIGNALS:"` section label -> `${regionProfile.name.toUpperCase()} MARKET SIGNALS:`.
+  - Both `locale: 'pt-BR'` hardcodes (content_requests record + article
+    create) -> `regionProfile.locale`.
+  - Localization-notes system prompt ("Respond in Portuguese (Brazil)")
+    and `buildLocalizationNotesPrompt` call -> both now pass/use
+    `regionProfile`.
+  - **Caught and fixed while editing:** an early `str_replace` pass briefly
+    dropped `seo_mode: seoMode` from the `content_requests.record()` call
+    when disambiguating two similar-looking `locale:` lines in the same
+    file. Caught immediately by re-reading the diff before packaging this
+    delivery -- verified `seo_mode` is present in the final file and
+    covered by the existing test's implicit shape check.
+- `lib/content-generation/generate-article.test.ts`: the existing
+  `vi.mock('@/lib/prompts', ...)` didn't include `resolveRegionProfile` --
+  since Vitest module mocks replace the entire module, this would have
+  failed with "resolveRegionProfile is not a function" the moment the code
+  under test called it. Added the mock, added a `locale` assertion to the
+  existing Brazil test, and added a new second test that overrides the
+  mock to return a Spain profile and asserts `es-ES` reaches both the
+  `content_requests` record and the `articles` create payload.
+- `lib/prompts.test.ts` (**new file**): direct, unmocked tests of
+  `buildUserPrompt`'s branching -- `buildUserPrompt` has no async
+  dependencies, so no Supabase mocking is needed. Pins both the
+  no-regionContext-equals-old-Brazil-output guarantee and the
+  Spain-regionContext-swaps-everlanguage-not-just-one-spot behavior,
+  across all 4 format branches (quick_note, x_thread, instagram_carousel,
+  long-form).
+
+**What Phase 3 deliberately does NOT do:** nothing currently sends a
+non-null `regionId` in any real request -- no frontend page reads the
+Phase 2 market-switcher cookie and puts it in a generate request body yet.
+So today, in production, every real generation still resolves to the
+Brazil profile and produces identical output to before this phase; the
+new branching is exercised only by tests until Phase 4 wires the cookie
+into `/api/generate` (and friends) request bodies, and Phase 5 filters
+brand/competitor/source data by the selected region. This is intentional
+sequencing, not an oversight.
+
+### Phase 4 (this delivery) — region actually flows: brand-derived + read filtering
+
+Key design call: **`regionId` is derived from the selected brand, not
+tracked as a second independent field the caller must keep in sync.** A
+brand already belongs to exactly one region (`brand_profiles.region_id`,
+since migration 023). Requiring every caller to separately pass a matching
+`regionId` risked the two silently drifting apart -- e.g. a UI bug sending
+a Spain `brandProfileId` with a stale cached Brazil `regionId`. Deriving it
+from the brand makes that class of bug structurally impossible instead of
+something to remember to test for.
+
+- `lib/brand-snapshot.ts`: new `resolveBrandRegionId(brandId)`, same shape
+  and error-handling style as the existing `resolveDefaultBrandProfileId`
+  in the same file. Returns `null` for a brand with no region set (every
+  pre-Sprint-12 brand) or no `brandId` at all.
+- `lib/content-generation/generate-article.ts`:
+  `effectiveRegionId = input.regionId ?? await resolveBrandRegionId(input.brandProfileId)`.
+  An explicit `input.regionId` always wins and skips the brand lookup
+  entirely (confirmed `??` short-circuits the `await` on its right side --
+  verified in a Node REPL before relying on it, not assumed). Both
+  persisted `region_id` fields (`content_requests`, `articles`) now use
+  `effectiveRegionId` so what's stored matches what was actually used to
+  generate, not just what the caller happened to pass.
+- `app/api/market/route.ts`: `region_id` added to the source select in
+  both the main-feed and search queries; a source belonging to a
+  *different* region than the one requested is filtered out post-fetch
+  (same pattern the existing `source_category === 'competitor'` exclusion
+  already used -- Supabase's nested-embed select doesn't reliably support
+  filtering by an embedded table's column via `.eq()`). A source with no
+  `region_id` stays visible in every market rather than being hidden
+  everywhere, so this can't silently empty the feed for any row that
+  predates region tagging.
+- `app/api/competitors/route.ts` + `app/api/competitors/summary/route.ts`:
+  both gained `?region_id=` support. `competitors` has no `region_id`
+  column of its own (only `brand_id` -- confirmed by reading the actual
+  `CREATE TABLE competitors` statement before writing this, not assumed
+  from the brand_profiles pattern). So `region_id` resolves to the set of
+  `brand_profiles.id` in that region first, then competitors are filtered
+  `brand_id IN (...)`. An explicit `brand_id` param still takes precedence
+  over `region_id` when both are passed, matching the explicit-wins
+  precedence used everywhere else in this sprint.
+- `app/generate/page.tsx`: the brand dropdown now fetches
+  `/api/brand-profiles?region_id=` from `useMarket()`'s resolved region id,
+  re-fetching whenever the market switcher changes selection. **Bug fixed
+  while wiring this, not just a nice-to-have:** the previous fallback logic
+  (`if (fallback) setBrandProfileId(fallback.id)`) left a stale
+  `brandProfileId` in place when no fallback matched -- switching to a
+  region with zero brands would keep silently sending the previous
+  region's brand id in the next generate request. Now explicitly clears to
+  `''` (which the existing `brandProfileId || undefined` send-path already
+  handled correctly) when nothing in the new region matches.
+- `app/market/page.tsx`: wired `useMarket()` into both the market-feed
+  fetch and the competitor-summary fetch (`currentRegionId` in both
+  effects' dependency arrays). Also added `setInitialLoading(true)` and
+  `clearSelection()` at the top of the items-load effect -- without these,
+  switching markets would silently keep showing the previous market's
+  stale feed/selection state while the new one loaded in the background.
+- `lib/content-generation/generate-article.test.ts`: same missing-mock
+  failure class caught in Phase 3, this time for `resolveBrandRegionId` --
+  added it, plus two new tests (region derived from brand when no explicit
+  `regionId`; explicit `regionId` skips the brand lookup entirely). **Caught
+  a real test-isolation bug while writing these**, not just a code bug:
+  the "explicit wins" test initially asserted `resolveBrandRegionId` was
+  never called, but Vitest mocks share call history across tests in the
+  same file -- earlier tests' calls were still on the mock's history,
+  failing the assertion for the wrong reason. Fixed with a local
+  `spy.mockClear()` rather than adding a file-wide `afterEach` reset,
+  since only this one test actually needs clean call-count isolation and
+  a global reset risked changing behavior for the untouched existing
+  tests. Full suite (10 tests across both files) run 3x in a row against
+  the real, unmocked business logic (isolated Vitest harness, stubbed only
+  Supabase/AI-SDK-level externals) to rule out order-dependent flakiness --
+  stable every time.
+
+**What Phase 4 deliberately does NOT do:** `POST /api/market/refresh` still
+refreshes every active source regardless of region -- collection stays
+global by design; only the read/display layer filters. The standalone
+`/competitors` management page's own UI does not force region filtering by
+default (the backend now supports `?region_id=` there too, for future use,
+but hiding competitors from a management view without being asked felt
+like scope creep beyond "filter... API routes"). No Spain brand or
+competitor data exists yet to actually exercise any of this end-to-end in
+production -- that's Phase 5.
+
+### Phase 5 (this delivery) — Spain market sources + first Spain brand profile
+
+**This is the last planned phase of Sprint 12.** Mirrors
+`supabase/seeds/001_brazil_sources.sql`'s exact pattern for a new file
+`supabase/seeds/006_spain_market_and_brand.sql`.
+
+- **5 Spain RSS/source rows**, region-linked to `ES` (activated in Phase 1):
+  Cinco Días — El País (`rss`, confirmed live feed, business), El
+  Economista — Empresas (`html_index`, business), Marketing Directo
+  (`html_index`, marketing), IAB Spain (`html_index`, marketing), 
+  Hipertextual — Tecnología (`html_index`, technology). Every URL was
+  verified live via web search immediately before writing the file --
+  same discipline as the earlier Brazil business-source seed. `html_index`
+  used everywhere an RSS endpoint wasn't independently confirmed, matching
+  the project's own stated convention ("less brittle than assuming an
+  undocumented RSS endpoint exists forever").
+- **One Spain brand profile — deliberately a minimal placeholder, not a
+  finished brand voice.** The existing Bitrix24 Brasil brand carries an
+  extensive, hand-authored template/prompt library
+  (`supabase/seeds/003_final_workspaces.sql`) built up over many sprints.
+  Reproducing that depth for Spain via find-replace would fabricate a
+  brand voice nobody actually decided on -- out of scope for a
+  schema-seeding phase. The placeholder row is clearly labeled
+  (`brand_name = 'Marca España (placeholder)'`, `voice_description`
+  explicitly says "completar en Configuración → Brand OS"), region-linked
+  to `ES`, `is_active = true`, and **`is_default = false` on purpose** --
+  `resolveDefaultBrandProfileId()` in `lib/brand-snapshot.ts` picks the
+  global default brand with no region filter of its own, so a
+  Spain-default brand could otherwise compete with the existing
+  Brazil-default brand for that fallback slot. Idempotent via
+  `WHERE NOT EXISTS (... WHERE region_id = v_region_id)`, matching seed
+  002's own guard pattern for competitors (no natural unique key like
+  `url` exists for brand rows).
+
+**What this phase enables end-to-end for the first time:** switching the
+market-switcher (Phase 2 UI) to España now has real data behind it --
+`/generate`'s brand dropdown will show the Spain placeholder brand,
+selecting it flows through Phase 4's `resolveBrandRegionId` ->
+Phase 3's `buildUserPrompt` Spanish-language branch, and `/market`'s feed
+will show the 5 Spain sources once `/api/market/refresh` has pulled from
+them at least once.
+
+**What remains deliberately unfinished, for the person to do in Settings,
+not guessed at here:** the Spain brand's actual voice, positioning,
+forbidden words, example posts, target audience, and competitors are all
+empty or placeholder text. No Spain competitors are seeded (no real
+competitor set was given). No `AMADO_MULTI_MARKET_V1`-tagged template
+library exists for Spain the way it does for Brazil -- generation will
+work and produce Spanish output (Phase 3 covers that), but without the
+brand-specific prompt depth Bitrix24 Brasil has accumulated.
+
+**This closes the originally planned Sprint 12 phase list (1-5).** Further
+multi-market work (a second Spain brand, actual Spain competitors, a
+Spain-specific template library, a decision on whether `/competitors`'
+UI should also filter by region by default) would be a new sprint, not a
+continuation of this numbered list.
+

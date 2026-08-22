@@ -1,5 +1,5 @@
-import { buildSystemPrompt, buildUserPrompt, buildLocalizationNotesPrompt, buildRegionContextLayer, buildEvidenceContext, buildKnowledgeContext, buildCompetitorContext } from '@/lib/prompts'
-import { buildBrandSnapshot } from '@/lib/brand-snapshot'
+import { buildSystemPrompt, buildUserPrompt, buildLocalizationNotesPrompt, buildRegionContextLayer, resolveRegionProfile, buildEvidenceContext, buildKnowledgeContext, buildCompetitorContext } from '@/lib/prompts'
+import { buildBrandSnapshot, resolveBrandRegionId } from '@/lib/brand-snapshot'
 import { getRecentEvidenceContext } from '@/lib/evidence'
 import { generateArticleWithFallback, generateWithFallback } from '@/lib/ai'
 import { recordAiUsage } from '@/lib/ai-usage'
@@ -96,7 +96,16 @@ export async function generateAndPersistArticle(
 
   const built = await buildSystemPrompt(input.templateId)
   const brandSnapshot = await buildBrandSnapshot(input.brandProfileId, input.contentType)
-  const regionContext = await buildRegionContextLayer(input.regionId)
+  // Sprint 12 Phase 4: derive the region from the chosen brand when the
+  // caller didn't pass one explicitly. A brand is scoped to one market --
+  // trusting the caller to also independently pass a matching regionId
+  // risks the two silently drifting apart (e.g. a future UI bug sends a
+  // Spain brandProfileId with the previous session's Brazil regionId still
+  // cached). input.regionId stays authoritative when a caller does pass
+  // it explicitly -- this is a fallback, not an override.
+  const effectiveRegionId = input.regionId ?? await resolveBrandRegionId(input.brandProfileId)
+  const regionContext = await buildRegionContextLayer(effectiveRegionId)
+  const regionProfile = await resolveRegionProfile(effectiveRegionId)
   const knowledge = await buildKnowledgeContext(promptTopic, input.brandProfileId)
   const competitorContext = await buildCompetitorContext(promptTopic, input.brandProfileId)
 
@@ -106,6 +115,11 @@ export async function generateAndPersistArticle(
     format: input.contentType,
     seoMode,
     brandProfileId: input.brandProfileId ?? null,
+    regionContext: {
+      locale: regionProfile.locale,
+      regionName: regionProfile.name,
+      languageName: regionProfile.languageName,
+    },
   }
 
   const systemPrompt = `${built.systemPrompt}${brandSnapshot.promptText ? '\n\n' + brandSnapshot.promptText : ''}${regionContext ? '\n\n' + regionContext : ''}
@@ -114,7 +128,7 @@ STRICT OUTPUT FORMAT:
 Write only the final clean text for publication. No think tags. No Markdown.`
 
   const sections: string[] = []
-  if (rssText) sections.push(`BRAZILIAN MARKET SIGNALS:\n${rssText}`)
+  if (rssText) sections.push(`${regionProfile.name.toUpperCase()} MARKET SIGNALS:\n${rssText}`)
   if (selectedEvidenceContext) sections.push(`EVIDENCE:\n${selectedEvidenceContext}`)
   if (competitorContext.promptText) sections.push(competitorContext.promptText)
   if (knowledge.promptText) sections.push(knowledge.promptText)
@@ -141,13 +155,13 @@ Write only the final clean text for publication. No think tags. No Markdown.`
     status: 'processing',
     topic: trimmedTopic,
     content_format: input.contentType,
-    locale: 'pt-BR',
+    locale: regionProfile.locale,
     seo_mode: seoMode,
     context: input.context || null,
     evidence_item_ids: evidenceIdsUsed.length ? evidenceIdsUsed : null,
     rss_context: rssText || null,
     brand_profile_id: input.brandProfileId || null,
-    region_id: input.regionId || null,
+    region_id: effectiveRegionId || null,
     template_id: input.templateId || null,
     generated_content: cleanText,
     generation_model: generated.model,
@@ -173,8 +187,8 @@ Write only the final clean text for publication. No think tags. No Markdown.`
   try {
     const { textStream } = await generateWithFallback({
       task: 'utility',
-      systemPrompt: 'You are a cultural localization consultant. Respond in Portuguese (Brazil).',
-      userPrompt: buildLocalizationNotesPrompt(trimmedTopic, input.contentType, rssText),
+      systemPrompt: `You are a cultural localization consultant. Respond in ${regionProfile.languageName}.`,
+      userPrompt: buildLocalizationNotesPrompt(trimmedTopic, input.contentType, rssText, regionProfile),
       maxTokens: 400,
     })
     for await (const chunk of textStream) {
@@ -198,8 +212,8 @@ Write only the final clean text for publication. No think tags. No Markdown.`
     word_count: words,
     char_count: cleanText.length,
     content_request_id: contentRequestId,
-    locale: 'pt-BR',
-    region_id: input.regionId || null,
+    locale: regionProfile.locale,
+    region_id: effectiveRegionId || null,
     marketing_campaign_id: input.marketingCampaignId ?? null,
   })
 

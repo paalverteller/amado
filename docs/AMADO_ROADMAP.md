@@ -536,11 +536,58 @@ challenge; not yet challenged.
       per-user session model to key one against. Selecting a market changes
       only what the switcher displays right now; nothing reads the cookie
       yet (that's Phase 3+).
-- [ ] Phase 3 — fix `buildUserPrompt` in `lib/prompts.ts` to read the
-      selected region instead of hardcoding "Portuguese (Brazil)" directly in
-      all 6 content-format template branches (flagged in that function's own
-      comment since before this sprint started).
-- [ ] Phase 4 — filter brand/competitor/market-feed API routes by selected
-      region.
-- [ ] Phase 5 — Spain market RSS sources + at least one Spain brand profile,
-      mirroring `supabase/seeds/001_brazil_sources.sql`'s pattern.
+- [x] **Phase 3 — `buildUserPrompt` reads region instead of hardcoding
+      pt-BR.** Added `resolveRegionProfile()` + internal
+      `resolveLanguageProfile()` to `lib/prompts.ts`; every hardcoded
+      Portuguese/Brazil string across all 4 `buildUserPrompt` branches
+      (quick_note, x_thread, instagram_carousel, long-form) now reads from
+      the resolved profile, defaulting to identical Brazil output when no
+      region is passed. `lib/content-generation/generate-article.ts`
+      (the canonical pipeline both `/api/generate` and
+      `/api/generate/batch` already delegate to) now threads
+      `resolveRegionProfile(input.regionId)` into `contentSpec`, the
+      market-signals label, both persisted `locale` fields, and the
+      localization-notes prompt. New `lib/prompts.test.ts` pins the
+      Brazil-unchanged and Spain-swaps-everything behaviors directly.
+      Updated `generate-article.test.ts`'s mock (was missing
+      `resolveRegionProfile`, would have failed at runtime) and added a
+      Spain-locale regression case. **Still true after this phase:**
+      nothing sends a non-null `regionId` in a real request yet — no page
+      reads the Phase 2 cookie into a generate call — so production
+      behavior is unchanged until Phase 4.
+- [x] **Phase 4 — region actually flows: brand-derived + read filtering.**
+      `regionId` is now derived from the selected brand
+      (`resolveBrandRegionId` in `lib/brand-snapshot.ts`) rather than a
+      second field callers must independently pass — an explicit
+      `regionId` still wins when given. `app/api/market/route.ts` filters
+      by `region_id` (sources with no region stay visible everywhere,
+      backward compatible). `competitors` has no `region_id` of its own
+      (only `brand_id`) so `app/api/competitors/route.ts` and
+      `.../summary/route.ts` resolve region → brands in that region →
+      competitors on those brands. `app/generate/page.tsx`'s brand
+      dropdown and `app/market/page.tsx`'s feed + competitor summary are
+      now wired to `useMarket()` and re-fetch on market switch. Fixed a
+      real bug while wiring the brand dropdown: switching to a region with
+      no matching brand used to leave the *previous* region's brand id
+      selected instead of clearing it. `POST /api/market/refresh`
+      deliberately still refreshes every source regardless of region —
+      collection stays global, only reads are filtered. 10/10 tests pass,
+      run 3x to rule out order-dependent flakiness from shared Vitest mock
+      state (caught and fixed one such flake while writing the tests).
+- [x] **Phase 5 — Spain market sources + first Spain brand profile (last
+      planned phase of this sprint).** `supabase/seeds/006_spain_market_and_brand.sql`:
+      5 Spain sources (Cinco Días — El País confirmed live RSS; El
+      Economista, Marketing Directo, IAB Spain, Hipertextual via
+      `html_index` at confirmed-live URLs), all region-linked to `ES`. One
+      Spain brand profile — **deliberately a minimal, clearly-labeled
+      placeholder** (`'Marca España (placeholder)'`), not a fabricated
+      brand voice: the existing Bitrix24 Brasil brand has an extensive
+      hand-authored template library built over many sprints, and
+      find-replacing that into a Spanish "voice" nobody decided on was
+      out of scope. `is_default = false` on purpose so it can't compete
+      with the Brazil default brand in `resolveDefaultBrandProfileId`'s
+      global fallback lookup. This is the first phase where switching to
+      España in the market switcher has real data behind it end-to-end.
+      **This closes the originally planned 5-phase Sprint 12 list.**
+      Further work (real Spain brand voice, Spain competitors, a
+      Spain template library) is new scope, not a continuation.

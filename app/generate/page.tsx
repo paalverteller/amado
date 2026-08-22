@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import Layout from '@/components/Layout'
 import { PromptTemplate } from '@/lib/domain/prompt-template'
 import { BrandProfile } from '@/lib/domain/brand-profile'
+import { useMarket } from '@/lib/market-context'
 const FORMATS = [
   { value: 'article', label: 'Статья' },
   { value: 'linkedin_post', label: 'LinkedIn' },
@@ -112,6 +113,8 @@ function SegmentedOutput({ contentType, raw }: { contentType: string; raw: strin
 function GenerateContent() {
   const searchParams = useSearchParams()
   const abortRef = useRef<AbortController | null>(null)
+  const { regions, marketCode } = useMarket()
+  const currentRegionId = regions.find((r) => r.code === marketCode)?.id ?? null
 
   const [topic, setTopic] = useState(() => {
     const t = searchParams.get('topic')
@@ -186,21 +189,29 @@ function GenerateContent() {
   }, [brandProfileId])
 
   useEffect(() => {
-    fetch('/api/brand-profiles')
+    // Sprint 12 Phase 4: scope the brand dropdown to the selected market.
+    // currentRegionId starts null on first render (regions haven't loaded
+    // from /api/regions yet) -- that's fine, it just means "show every
+    // brand" until MarketProvider resolves the cookie, same as before this
+    // phase. Re-runs whenever the market switcher changes selection, so
+    // switching markets refreshes which brands are selectable.
+    const url = currentRegionId ? `/api/brand-profiles?region_id=${encodeURIComponent(currentRegionId)}` : '/api/brand-profiles'
+    fetch(url)
       .then((r) => r.json() as Promise<{ profiles: BrandProfile[] }>)
       .then((d) => {
-        setBrandProfiles(d.profiles ?? [])
+        const profiles = d.profiles ?? []
+        setBrandProfiles(profiles)
         const savedBp = localStorage.getItem('amado_brand_profile')
-        if (savedBp && d.profiles?.some((p: BrandProfile) => p.id === savedBp)) {
+        if (savedBp && profiles.some((p: BrandProfile) => p.id === savedBp)) {
           setBrandProfileId(savedBp)
         } else {
-          const fallback = d.profiles?.find((profile: BrandProfile) => profile.is_default && profile.is_active)
-            ?? d.profiles?.find((profile: BrandProfile) => profile.is_active)
-          if (fallback) setBrandProfileId(fallback.id)
+          const fallback = profiles.find((profile: BrandProfile) => profile.is_default && profile.is_active)
+            ?? profiles.find((profile: BrandProfile) => profile.is_active)
+          setBrandProfileId(fallback ? fallback.id : '')
         }
       })
       .catch(() => {})
-  }, [])
+  }, [currentRegionId])
 
   useEffect(() => {
     fetch('/api/templates')

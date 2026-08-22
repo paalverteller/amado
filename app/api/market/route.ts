@@ -16,6 +16,7 @@ type Src = {
   country?: string | null
   source_type?: string | null
   source_category?: string | null
+  region_id?: string | null
 }
 
 type EvidenceRow = {
@@ -57,11 +58,18 @@ function itemTs(row: EvidenceRow): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function toMarketItem(row: EvidenceRow): MarketItem | null {
+function toMarketItem(row: EvidenceRow, regionId?: string | null): MarketItem | null {
   const source = normSrc(row.source)
   // Competitor evidence has its own workspace and is injected separately
   // into generation. The market feed should remain a market/trend feed.
   if (source?.source_category === 'competitor') return null
+
+  // Sprint 12 Phase 4: when a market is selected, only show sources scoped
+  // to that region. A source with no region_id (pre-Sprint-12 rows, or a
+  // deliberately global source) is treated as visible in every market
+  // rather than hidden everywhere -- excluding it outright would silently
+  // empty the feed for existing Brazil sources that predate region_id.
+  if (regionId && source?.region_id && source.region_id !== regionId) return null
 
   const title = clean(row.source_title)
   if (!title) return null
@@ -94,13 +102,13 @@ function pick(items: MarketItem[]): MarketItem[] {
   return out
 }
 
-async function searchEvidence(rawQuery: string): Promise<NextResponse> {
+async function searchEvidence(rawQuery: string, regionId?: string | null): Promise<NextResponse> {
   try {
     const term = rawQuery.trim().slice(0, 200)
     if (!term) return NextResponse.json({ items: [], meta: { total: 0, query: rawQuery } })
 
     const pattern = `%${term.replace(/[%_]/g, '\\$&')}%`
-    const columns = 'id, source_title, source_summary, full_text, canonical_url, published_at, discovered_at, hydration_status, source:source_id(name, url, country, source_type, source_category)'
+    const columns = 'id, source_title, source_summary, full_text, canonical_url, published_at, discovered_at, hydration_status, source:source_id(name, url, country, source_type, source_category, region_id)'
 
     const [byTitle, bySummary, byFullText] = await Promise.all([
       getSupabaseAdmin().from('evidence_items').select(columns).ilike('source_title', pattern).order('published_at', { ascending: false }).limit(MAX_SEARCH_PER_QUERY),
@@ -120,10 +128,15 @@ async function searchEvidence(rawQuery: string): Promise<NextResponse> {
     const lowerTerm = term.toLowerCase()
     const items = Array.from(byId.values())
       .filter((row) => normSrc(row.source)?.source_category !== 'competitor')
+      .filter((row) => {
+        if (!regionId) return true
+        const rowRegionId = normSrc(row.source)?.region_id
+        return !rowRegionId || rowRegionId === regionId
+      })
       .sort((a, b) => itemTs(b) - itemTs(a))
       .slice(0, MAX_SEARCH_RESULTS)
       .map((row) => {
-        const item = toMarketItem(row)
+        const item = toMarketItem(row, regionId)
         return item ? {
           ...item,
           matchedInFullText: Boolean(row.full_text?.toLowerCase().includes(lowerTerm)),
@@ -139,13 +152,14 @@ async function searchEvidence(rawQuery: string): Promise<NextResponse> {
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const q = request.nextUrl.searchParams.get('q')
-  if (q?.trim()) return searchEvidence(q)
+  const regionId = request.nextUrl.searchParams.get('region_id')
+  if (q?.trim()) return searchEvidence(q, regionId)
 
   try {
     const cutoff = new Date(Date.now() - FEED_WINDOW_MS).toISOString()
     const { data, error } = await getSupabaseAdmin()
       .from('evidence_items')
-      .select('id, source_title, source_summary, canonical_url, published_at, discovered_at, hydration_status, source:source_id(name, url, country, source_type, source_category)')
+      .select('id, source_title, source_summary, canonical_url, published_at, discovered_at, hydration_status, source:source_id(name, url, country, source_type, source_category, region_id)')
       .gte('discovered_at', cutoff)
       .order('discovered_at', { ascending: false })
       .limit(500)
@@ -153,7 +167,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     const available = ((data ?? []) as unknown as EvidenceRow[])
-      .map(toMarketItem)
+      .map((row) => toMarketItem(row, regionId))
       .filter((item): item is MarketItem => item !== null)
       .sort((a, b) => Date.parse(b.published_at ?? b.collected_at ?? '') - Date.parse(a.published_at ?? a.collected_at ?? ''))
 
