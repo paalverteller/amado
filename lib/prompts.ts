@@ -85,7 +85,7 @@ interface ContentSpec {
   brandProfileId?: string | null
   wordCount?: number | null
   charCount?: number | null
-  regionContext?: { locale?: string; regionName?: string; culturalNotes?: string | null }
+  regionContext?: { locale?: string; regionName?: string; languageName?: string; culturalNotes?: string | null }
   evidenceItems?: { title?: string; source?: string; summary?: string; url?: string }[]
   brandVoice?: { tone?: string; style?: string }
   customInstructions?: string
@@ -188,6 +188,63 @@ function buildFormatInstruction(spec: ContentSpec): string {
   return parts.join('\n')
 }
 
+export interface RegionProfile {
+  code: string
+  name: string
+  locale: string
+  languageName: string
+}
+
+// Human-readable language names for prompt authoring (output_contract lines,
+// role descriptions). Deliberately separate from lib/locale.ts's
+// REGION_LOCALES, which only carries locale/currency/timezone -- this map is
+// prompt-specific content, not a generic locale utility. Keep the code list
+// in sync with REGION_LOCALES and the culturalNotes map below.
+const LANGUAGE_NAMES: Record<string, string> = {
+  BR: 'Portuguese (Brazil)',
+  ES: 'Spanish (Spain)',
+  US: 'English (US)',
+  GB: 'English (UK)',
+}
+
+const DEFAULT_REGION_PROFILE: RegionProfile = {
+  code: 'BR',
+  name: 'Brazil',
+  locale: 'pt-BR',
+  languageName: 'Portuguese (Brazil)',
+}
+
+/**
+ * Resolves a regionId to the structured profile buildUserPrompt needs to
+ * pick the right output language and cultural framing. Separate from
+ * buildRegionContextLayer below on purpose: that function's Promise<string>
+ * return is interpolated directly into system prompts at existing call
+ * sites (lib/content-generation/generate-article.ts, /api/generate/batch) --
+ * changing its shape would silently break those. This is new, additive.
+ * Falls back to the Brazil profile for a missing/inactive/unknown region,
+ * so every call site that doesn't pass a regionId keeps today's exact
+ * pt-BR behavior.
+ */
+export async function resolveRegionProfile(regionId?: string | null): Promise<RegionProfile> {
+  if (!regionId) return DEFAULT_REGION_PROFILE
+
+  const { data: region, error } = await getSupabaseAdmin()
+    .from('regions')
+    .select('code, name, locale_code')
+    .eq('id', regionId)
+    .eq('active', true)
+    .maybeSingle()
+
+  if (error || !region) return DEFAULT_REGION_PROFILE
+
+  return {
+    code: region.code,
+    name: region.name,
+    locale: region.locale_code,
+    languageName: LANGUAGE_NAMES[region.code] ?? DEFAULT_REGION_PROFILE.languageName,
+  }
+}
+
 export async function buildRegionContextLayer(regionId?: string | null): Promise<string> {
   if (!regionId) return ''
 
@@ -210,11 +267,6 @@ export async function buildRegionContextLayer(regionId?: string | null): Promise
     'BR': 'Brazilian market: use "você" (not "tu"), mention PIX for payments, WhatsApp as primary channel, Brazilian holidays (Carnaval, Black Friday BR in November, Dia das Mães in May), local examples (São Paulo, Rio, Mercado Livre). Avoid literal translations from English.',
     'US': 'US market: direct tone, credit card payments, email/SMS channels, US holidays (Thanksgiving, Black Friday, Memorial Day).',
     'GB': 'UK market: polite but direct, GBP currency, British spelling (colour, organise), UK holidays (Boxing Day, Bank Holidays).',
-    // Added Sprint 12 Phase 1 (region/prompt-layer scaffolding only --
-    // buildUserPrompt below still hardcodes Portuguese/Brazil directly and
-    // does not yet read this note for actual generation; see that
-    // function's own comment and docs/AMADO_ROADMAP.md Sprint 12 for the
-    // phase that wires it in).
     'ES': 'Spanish market: use "tú" for most brands, "usted" for formal/B2B; Bizum as a common payments mention alongside cards; WhatsApp and Instagram as primary channels; Spanish holidays (Navidad, Rebajas de enero, Black Friday, Reyes Magos on Jan 6); local examples (Madrid, Barcelona, El Corte Inglés). European Spanish, not Latin American (avoid "ustedes" as the only plural, avoid Mexican/Argentine slang).',
   }
 
@@ -400,26 +452,76 @@ export async function buildEvidenceContext(evidenceItemIds?: string[] | null): P
   return parts.join('\n')
 }
 
+/** Everything buildUserPrompt's templates need to phrase themselves in the
+ *  right language/market -- resolved once per call so every branch below
+ *  stays a plain string template, not scattered conditionals. Falls back to
+ *  the existing Brazil/pt-BR wording exactly when spec.regionContext is
+ *  absent, so every call site that predates Sprint 12 Phase 3 keeps
+ *  generating identical output to before this change. */
+function resolveLanguageProfile(spec: ContentSpec): {
+  languageName: string
+  marketAdjective: string
+  marketLabel: string
+  seasonalityExample: string
+} {
+  const ctx = spec.regionContext
+  if (!ctx) {
+    return {
+      languageName: 'Portuguese (Brazil)',
+      marketAdjective: 'Brazilian',
+      marketLabel: 'BRAZILIAN MARKET SIGNALS',
+      seasonalityExample: 'Brazilian dates (Carnaval, Black Friday BR, Dia das Mães)',
+    }
+  }
+
+  const code = ctx.locale === 'es-ES' ? 'ES' : null
+
+  if (code === 'ES') {
+    return {
+      languageName: ctx.languageName || 'Spanish (Spain)',
+      marketAdjective: 'Spanish',
+      marketLabel: 'SPANISH MARKET SIGNALS',
+      seasonalityExample: 'Spanish dates (Navidad, Rebajas de enero, Reyes Magos on Jan 6)',
+    }
+  }
+
+  // Any other configured region: use the resolved name/language generically
+  // rather than guessing market-specific phrasing we haven't written yet.
+  if (ctx.languageName && ctx.languageName !== 'Portuguese (Brazil)') {
+    return {
+      languageName: ctx.languageName,
+      marketAdjective: ctx.regionName || ctx.languageName,
+      marketLabel: `${(ctx.regionName || ctx.languageName).toUpperCase()} MARKET SIGNALS`,
+      seasonalityExample: 'locally relevant seasonal dates',
+    }
+  }
+
+  return {
+    languageName: 'Portuguese (Brazil)',
+    marketAdjective: 'Brazilian',
+    marketLabel: 'BRAZILIAN MARKET SIGNALS',
+    seasonalityExample: 'Brazilian dates (Carnaval, Black Friday BR, Dia das Mães)',
+  }
+}
+
 export function buildUserPrompt(spec: ContentSpec): string {
-  // NOTE: `locale` is accepted here but every template below hardcodes
-  // Portuguese (Brazil) directly — multi-locale support isn't actually
-  // wired into these prompts yet. Flagging rather than silently guessing.
   const { topic, format } = spec
+  const lang = resolveLanguageProfile(spec)
   
   if (format === 'quick_note') {
     return `<task>Raw user text:
 "${topic}"</task>
-<role>You are a ghostwriter who transforms rough notes into professional content for the Brazilian market.</role>
+<role>You are a ghostwriter who transforms rough notes into professional content for the ${lang.marketAdjective} market.</role>
 <format>${buildFormatInstruction(spec)}</format>
 <rules>
 - Preserve the original idea, tone, and intent — do not substitute your own idea.
 - Develop the idea into cohesive text: add structure, examples, explain context, but do not invent facts.
 - Write like a real person: natural sentences, varied rhythm (short and long mixed), light irony when appropriate.
-- Zero AI-tells: no "no mundo moderno", "é importante notar", "vamos analisar", symmetric 3-item lists.
+- Zero AI-tells: no generic filler openers ("in today's world", "it's important to note", "let's analyze"), symmetric 3-item lists.
 - No bureaucracy or academic introductions — straight to the point, like telling a friend.
 - CTA at the end: what should the reader do next.
 </rules>
-<output_contract>Only the final text in Portuguese (Brazil). No markdown, no preambles, no "Artigo:" title.</output_contract>`
+<output_contract>Only the final text in ${lang.languageName}. No markdown, no preambles, no title label prefix.</output_contract>`
   }
   
   if (format === 'x_thread') {
@@ -432,7 +534,7 @@ export function buildUserPrompt(spec: ContentSpec): string {
 - Last post: conclusion or invitation to reflect, not direct propaganda.
 - Subtle CTA: "share", "what do you think?" when appropriate.
 </rules>
-<output_contract>Return ONLY a valid JSON array of strings, no markdown, no preambles:
+<output_contract>Return ONLY a valid JSON array of strings in ${lang.languageName}, no markdown, no preambles:
 ["post 1 text", "post 2 text", ...]</output_contract>`
   }
   
@@ -445,7 +547,7 @@ export function buildUserPrompt(spec: ContentSpec): string {
 - Last slide: conclusion or question for the audience.
 - CTA on last slide: "save", "share", "comment" when appropriate.
 </rules>
-<output_contract>Return ONLY a valid JSON array of objects, no markdown, no preambles:
+<output_contract>Return ONLY a valid JSON array of objects in ${lang.languageName}, no markdown, no preambles:
 [{ "title": "...", "body": "..." }, ...]
 For first and last slide, "body" may be empty string.</output_contract>`
   }
@@ -482,29 +584,35 @@ For first and last slide, "body" may be empty string.</output_contract>`
   parts.push(`<format>${formatInstruction}</format>`)
   parts.push(`<rules>
 - Title: catchy, precise, no clickbait — first line.
-- Zero literal translations: adapt concepts to Brazilian context (e.g., "parcelamento" instead of "installments", "WhatsApp" as main channel).
+- Zero literal translations: adapt concepts to the ${lang.marketAdjective} context and channel conventions (payments, primary messaging app, local phrasing) instead of translating word for word.
 - Paragraphs: 3-4 sentences, direct, answer the essence in first lines.
 - Mandatory CTA at the end: what the reader should do (visit, buy, share, comment).
-- Seasonality: when relevant, mention Brazilian dates (Carnaval, Black Friday BR, Dia das Mães).
+- Seasonality: when relevant, mention ${lang.seasonalityExample}.
 </rules>
-<output_contract>Only the final text in Portuguese (Brazil). No markdown, no preambles.</output_contract>`)
+<output_contract>Only the final text in ${lang.languageName}. No markdown, no preambles.</output_contract>`)
   
   return parts.join('\n')
 }
 
-export function buildLocalizationNotesPrompt(topic: string, contentType: string, rssContext: string): string {
-  return `<task>Generate LOCALIZATION NOTES for head office explaining why this content was adapted this way for Brazil.</task>
+export function buildLocalizationNotesPrompt(
+  topic: string,
+  contentType: string,
+  rssContext: string,
+  regionProfile?: RegionProfile,
+): string {
+  const profile = regionProfile ?? DEFAULT_REGION_PROFILE
+  return `<task>Generate LOCALIZATION NOTES for head office explaining why this content was adapted this way for ${profile.name}.</task>
 <context>
 Topic: "${topic}"
 Format: ${contentType}
-Brazilian market signals:
+${profile.name} market signals:
 ${rssContext || 'No specific signals available.'}
 </context>
 <rules>
 - Explain 2-3 cultural adaptation decisions (why something was said a certain way).
-- Mention Brazilian cultural references used and why they work.
-- Point out pitfalls avoided (what does NOT work in Brazil).
-- Format: short bullet points, in Portuguese (Brazil).
+- Mention ${profile.name} cultural references used and why they work.
+- Point out pitfalls avoided (what does NOT work in ${profile.name}).
+- Format: short bullet points, in ${profile.languageName}.
 - Maximum 400 characters.
 </rules>
 <output_contract>Only the localization notes. No introductions, no markdown.</output_contract>`
