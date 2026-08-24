@@ -1,14 +1,22 @@
-node_modules
+node_modules/
 .next/
 tsconfig.tsbuildinfo
 repomix-output*.xml
-apply_*.py
 
-# Local generated and temporary files
+# Local patch / recovery artifacts
+apply_*.py
+fix*.py
+cleanup_*.py
+finalize_*.py
+*_recovery.py
+__pycache__/
+*.pyc
+
+# Generated / temporary output
 .turbo/
 coverage/
-fix*.sh
-finalize_amado_main.py
+playwright-report/
+test-results/
 
-# Committed-by-accident patch-script backups
+# Local patch backups
 .amado-patch-backups/
