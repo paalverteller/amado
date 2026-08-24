@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { fetchJson } from '@/lib/api-client'
 
 interface Pillar {
   id: string
@@ -16,11 +17,9 @@ export default function ContentPillarsTab({ brandId }: { brandId: string }) {
   const [loading, setLoading] = useState(true)
 
   const fetchPillars = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/brands/${brandId}/pillars`)
-      if (res.ok) setPillars((await res.json()).pillars || [])
-    } catch (err) { console.error(err) }
-    finally { setLoading(false) }
+    const data = await fetchJson<{ pillars?: Pillar[] }>(`/api/brands/${brandId}/pillars`)
+    if (data) setPillars(data.pillars ?? [])
+    setLoading(false)
   }, [brandId])
 
   useEffect(() => {

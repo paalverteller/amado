@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { fetchJson } from '@/lib/api-client'
 
 interface Example {
   id: string
@@ -18,11 +19,9 @@ export default function ExamplesTab({ brandId }: { brandId: string }) {
   const [filter, setFilter] = useState<{ platform?: string; format?: string }>({})
 
   const fetchExamples = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/brands/${brandId}/examples`)
-      if (res.ok) setExamples((await res.json()).examples || [])
-    } catch (err) { console.error(err) }
-    finally { setLoading(false) }
+    const data = await fetchJson<{ examples?: Example[] }>(`/api/brands/${brandId}/examples`)
+    if (data) setExamples(data.examples ?? [])
+    setLoading(false)
   }, [brandId])
 
   useEffect(() => {

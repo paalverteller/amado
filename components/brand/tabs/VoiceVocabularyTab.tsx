@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { fetchJson } from '@/lib/api-client'
 
 interface Term {
   id: string
@@ -16,11 +17,9 @@ export default function VoiceVocabularyTab({ brandId }: { brandId: string }) {
   const [filter, setFilter] = useState<'all' | 'forbidden' | 'preferred' | 'discouraged'>('all')
 
   const fetchTerms = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/brands/${brandId}/terms`)
-      if (res.ok) setTerms((await res.json()).terms || [])
-    } catch (err) { console.error(err) }
-    finally { setLoading(false) }
+    const data = await fetchJson<{ terms?: Term[] }>(`/api/brands/${brandId}/terms`)
+    if (data) setTerms(data.terms ?? [])
+    setLoading(false)
   }, [brandId])
 
   useEffect(() => {

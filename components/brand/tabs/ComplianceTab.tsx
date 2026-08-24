@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { fetchJson } from '@/lib/api-client'
 
 interface QaFinding {
   id: string
@@ -17,11 +18,9 @@ export default function ComplianceTab({ brandId }: { brandId: string }) {
   const [filter, setFilter] = useState<'all' | 'open' | 'critical'>('all')
 
   const fetchFindings = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/brands/${brandId}/qa-findings`)
-      if (res.ok) setFindings((await res.json()).findings || [])
-    } catch (err) { console.error(err) }
-    finally { setLoading(false) }
+    const data = await fetchJson<{ findings?: QaFinding[] }>(`/api/brands/${brandId}/qa-findings`)
+    if (data) setFindings(data.findings ?? [])
+    setLoading(false)
   }, [brandId])
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { fetchJson } from '@/lib/api-client'
 
 interface Playbook {
   id: string
@@ -22,11 +23,9 @@ export default function PlatformPlaybooksTab({ brandId }: { brandId: string }) {
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
 
   const fetchPlaybooks = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/brands/${brandId}/playbooks`)
-      if (res.ok) setPlaybooks((await res.json()).playbooks || [])
-    } catch (err) { console.error(err) }
-    finally { setLoading(false) }
+    const data = await fetchJson<{ playbooks?: Playbook[] }>(`/api/brands/${brandId}/playbooks`)
+    if (data) setPlaybooks(data.playbooks ?? [])
+    setLoading(false)
   }, [brandId])
 
   useEffect(() => {

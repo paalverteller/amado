@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { fetchJson } from '@/lib/api-client'
 
 interface BrandOverview {
   id: string
@@ -25,17 +26,9 @@ export default function OverviewTab({ brandId }: { brandId: string }) {
   const [loading, setLoading] = useState(true)
 
   const fetchOverview = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/brands/${brandId}/overview`)
-      if (res.ok) {
-        const data = await res.json()
-        setOverview(data.overview)
-      }
-    } catch (err) {
-      console.error('Failed to fetch overview:', err)
-    } finally {
-      setLoading(false)
-    }
+    const data = await fetchJson<{ overview?: BrandOverview }>(`/api/brands/${brandId}/overview`)
+    if (data) setOverview(data.overview ?? null)
+    setLoading(false)
   }, [brandId])
 
   useEffect(() => {
