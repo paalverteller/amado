@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import PwaInstallPrompt from '@/components/PwaInstallPrompt'
 import AugustFeedbackProvider from '@/components/ui/AugustFeedback'
+import { MarketProvider } from '@/lib/market-context'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -43,7 +44,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ru">
       <body>
         <AugustFeedbackProvider>
-          {children}
+          <MarketProvider>
+            {children}
+          </MarketProvider>
           <PwaInstallPrompt />
         </AugustFeedbackProvider>
       </body>

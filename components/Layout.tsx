@@ -7,7 +7,6 @@ import { type ReactNode, useEffect, useState } from 'react'
 import { t } from '@/lib/i18n/config'
 import AugustDialog from '@/components/ui/AugustDialog'
 import { toast } from '@/components/ui/AugustFeedback'
-import { MarketProvider } from '@/lib/market-context'
 import MarketSwitcher from '@/components/MarketSwitcher'
 
 type NavItem = {
@@ -192,7 +191,6 @@ export default function Layout({ children }: { children: ReactNode }) {
   const moreIsActive = MOBILE_MORE.some((item) => isActive(item.href))
 
   return (
-    <MarketProvider>
     <div className="aug-app-shell">
       <aside className="aug-sidebar" aria-label="Навигация Amado">
         <div className="aug-sidebar__brand">
@@ -311,6 +309,5 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       <QuickCreateDialog open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} />
     </div>
-    </MarketProvider>
   )
 }
