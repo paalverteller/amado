@@ -7,6 +7,7 @@ import Link from 'next/link'
 import Layout from '@/components/Layout'
 import { t } from '@/lib/i18n/config'
 import { useMarket } from '@/lib/market-context'
+import type { CompetitorSummary } from '@/lib/domain/competitor'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,16 +36,6 @@ type Source = {
    hasEnoughItems?: boolean
    countries?: Record<string, number>
  }
-
-type CompetitorSummary = {
-  id: string
-  name: string
-  website: string | null
-  lastReviewedAt: string | null
-  sourceCount: number
-  healthySourceCount: number
-  latestReview: { title: string; snippet: string; createdAt: string } | null
-}
 
  // ─── Constants ────────────────────────────────────────────────────────────────
 

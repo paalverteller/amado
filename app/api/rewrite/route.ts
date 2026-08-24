@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateArticleWithFallback } from '@/lib/ai'
 import { cleanPlainTextOutput } from '@/lib/text-cleanup'
+import { apiError } from '@/lib/api/errors'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -107,7 +108,6 @@ export async function POST(req: NextRequest): Promise<Response> {
     })
   } catch (err) {
     console.error('[rewrite] error:', err)
-    const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return apiError(err)
   }
 }

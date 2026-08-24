@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { getErrorMessage } from '@/lib/api/error-message'
+import type { CompetitorSummary } from '@/lib/domain/competitor'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,16 +30,6 @@ type ReviewRow = {
   title: string
   raw_text: string
   created_at: string
-}
-
-export type CompetitorSummary = {
-  id: string
-  name: string
-  website: string | null
-  lastReviewedAt: string | null
-  sourceCount: number
-  healthySourceCount: number
-  latestReview: { title: string; snippet: string; createdAt: string } | null
 }
 
 function snippet(text: string, max = 220): string {

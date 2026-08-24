@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase/client'
+import { apiError } from '@/lib/api/errors'
 export interface BrandListConfig {
   /** Supabase table to query. */
   table: string
@@ -41,7 +42,7 @@ export function createBrandListHandler(config: BrandListConfig) {
       return NextResponse.json({ [config.responseKey]: data ?? [] })
     } catch (error) {
       console.error(`[${config.table}] list error:`, error)
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+      return apiError(error)
     }
   }
 }

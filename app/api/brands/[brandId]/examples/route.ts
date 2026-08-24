@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase/client'
+import { apiError } from '@/lib/api/errors'
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ brandId: string }> }
@@ -27,6 +28,6 @@ export async function GET(
     return NextResponse.json({ examples: formatted })
   } catch (error) {
     console.error('Examples API error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError(error)
   }
 }
