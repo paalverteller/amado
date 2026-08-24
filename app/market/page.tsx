@@ -40,10 +40,10 @@ type Source = {
  // ─── Constants ────────────────────────────────────────────────────────────────
 
  const LOADING_PHRASES = [
-   'Coletando dados…',
-   'Analisando o mercado…',
-   'Lendo a imprensa…',
-   'Verificando fontes…',
+   'Собираю данные…',
+   'Анализирую рынок…',
+   'Читаю публикации…',
+   'Проверяю источники…',
    'Обрабатываю свежие материалы…',
    'Собираю контекст…',
  ]
@@ -51,9 +51,9 @@ type Source = {
  // ─── Helpers ──────────────────────────────────────────────────────────────────
 
  function formatDate(value: string | null): string {
-   if (!value) return 'data não informada'
+   if (!value) return 'дата не указана'
    const date = new Date(value)
-   if (Number.isNaN(date.getTime())) return 'data não informada'
+   if (Number.isNaN(date.getTime())) return 'дата не указана'
    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
  }
 
@@ -78,7 +78,7 @@ function useBatchSelection() {
 
 function buildGenerationTopic(item: MarketItem): string {
   const sourceName = item.source?.name ? `Источник: ${item.source.name}. ` : ''
-  const summary = item.description ? ` Contexto: ${item.description.slice(0, 360)}` : ''
+  const summary = item.description ? ` Контекст: ${item.description.slice(0, 360)}` : ''
   return `${sourceName}${item.title ?? ''}.${summary}`.replace(/\s+/g, ' ').trim()
 }
 
@@ -186,7 +186,7 @@ export default function MarketPage() {
   const countrySummary = useMemo(() => {
     const countries = meta.countries ?? {}
     return Object.entries(countries)
-      .sort(([a], [b]) => a.localeCompare(b, 'pt-BR'))
+      .sort(([a], [b]) => a.localeCompare(b, 'ru-RU'))
       .map(([country, count]) => `${country}: ${count}`)
       .join(' · ')
   }, [meta.countries])
@@ -219,7 +219,7 @@ export default function MarketPage() {
             <div className="min-w-0">
               <p className="m3-label text-primary">{t('market.title')}</p>
               <h1 className="m-0 mt-2 text-3xl font-semibold tracking-tight text-on-surface sm:text-4xl">
-                Tendências e Sinais
+                Тренды и сигналы
               </h1>
             </div>
 
@@ -228,7 +228,7 @@ export default function MarketPage() {
                 type="button"
                 onClick={handleRefresh}
                 disabled={refreshing}
-                title="Coletar materiais recentes"
+                title="Собрать свежие материалы"
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {refreshing ? (

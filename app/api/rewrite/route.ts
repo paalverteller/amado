@@ -13,35 +13,20 @@ type RewriteBody = {
   regionId?: string
 }
 
-const INTENSITY_INSTRUCTIONS: Record<string, Record<string, string>> = {
-  light: {
-    'pt-BR': 'Reformulação leve: altere a ordem das palavras em cerca de 30–40% das frases, use sinônimos naturais e preserve a estrutura dos parágrafos.',
-    'es-ES': 'Reescritura ligera: cambia el orden de las palabras en aproximadamente el 30–40% de las frases, usa sinónimos naturales y conserva la estructura de los párrafos.',
-    'de-DE': 'Leichte Überarbeitung: Ändere die Wortstellung in etwa 30–40 % der Sätze, verwende natürliche Synonyme und behalte die Absatzstruktur bei.',
-    'en-US': 'Light rewrite: change wording and sentence order in roughly 30–40% of sentences, use natural synonyms, and preserve paragraph structure.',
-  },
-  medium: {
-    'pt-BR': 'Reformulação média: reconstrua cerca de 60–70% das frases, ajuste a estrutura dos parágrafos quando fizer sentido e preserve integralmente o significado.',
-    'es-ES': 'Reescritura media: reconstruye aproximadamente el 60–70% de las frases, ajusta la estructura de los párrafos cuando tenga sentido y conserva íntegramente el significado.',
-    'de-DE': 'Mittlere Überarbeitung: Formuliere etwa 60–70 % der Sätze neu, passe die Absatzstruktur bei Bedarf an und bewahre die Bedeutung vollständig.',
-    'en-US': 'Medium rewrite: reconstruct roughly 60–70% of sentences, adjust paragraph structure where useful, and fully preserve the meaning.',
-  },
-  deep: {
-    'pt-BR': 'Reformulação profunda: reescreva completamente com palavras próprias, preservando fatos, ideia central e lógica. Mude estrutura, formulações e exemplos quando possível sem inventar nada.',
-    'es-ES': 'Reescritura profunda: reescribe por completo con tus propias palabras, conservando hechos, idea central y lógica. Cambia estructura, formulaciones y ejemplos cuando sea posible sin inventar nada.',
-    'de-DE': 'Tiefe Überarbeitung: Schreibe den Text vollständig in eigenen Worten neu und erhalte Fakten, Kernaussage und Logik. Ändere Struktur, Formulierungen und Beispiele, ohne etwas zu erfinden.',
-    'en-US': 'Deep rewrite: rewrite the text completely in your own words while preserving facts, core idea, and logic. Change structure, phrasing, and examples where possible without inventing anything.',
-  },
+const INTENSITY_INSTRUCTIONS: Record<string, string> = {
+  light: `Light rewrite: preserve paragraph structure and meaning, but change wording and sentence construction where useful.`,
+  medium: `Medium rewrite: substantially reconstruct wording and sentence structure while preserving facts, meaning and professional tone.`,
+  deep: `Deep rewrite: rewrite the text completely in your own words while preserving factual accuracy, key ideas and logical relationships. You may change paragraph structure and argument order when this improves clarity.`,
 }
+
 function estimateUniqueness(original: string, rewritten: string): number {
-  // Heurística simples baseada na interseção de shingles de 4 palavras.
-  // Não substitui um serviço real de anti-plágio, mas dá uma orientação.
   const shingles = (text: string): Set<string> => {
     const words = text
       .toLowerCase()
       .replace(/[^\p{L}\p{N}\s]/gu, '')
       .split(/\s+/)
       .filter(Boolean)
+
     const out = new Set<string>()
     for (let i = 0; i <= words.length - 4; i++) {
       out.add(words.slice(i, i + 4).join(' '))
@@ -49,26 +34,26 @@ function estimateUniqueness(original: string, rewritten: string): number {
     return out
   }
 
-  const origShingles = shingles(original)
-  const newShingles   = shingles(rewritten)
-  if (origShingles.size === 0) return 100
+  const originalSet = shingles(original)
+  const rewrittenSet = shingles(rewritten)
 
-  let overlap = 0
-  for (const s of newShingles) {
-    if (origShingles.has(s)) overlap++
+  if (originalSet.size === 0) return 100
+
+  let intersection = 0
+  for (const shingle of originalSet) {
+    if (rewrittenSet.has(shingle)) intersection += 1
   }
 
-  const overlapRatio = overlap / Math.max(newShingles.size, 1)
-  const uniqueness = Math.max(0, Math.round((1 - overlapRatio) * 100))
-  return uniqueness
+  const overlap = intersection / originalSet.size
+  return Math.max(0, Math.min(100, Math.round((1 - overlap) * 100)))
 }
 
-export async function POST(req: NextRequest): Promise<Response> {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const body = (await req.json()) as RewriteBody
-    const sourceText = (body.sourceText ?? '').trim()
-    const intensity  = body.intensity ?? 'deep'
+    const body = await request.json() as RewriteBody
     const regionProfile = await resolveRegionProfile(body.regionId)
+    const sourceText = body.sourceText?.trim() ?? ''
+    const intensity = body.intensity ?? 'deep'
 
     if (!sourceText) {
       return NextResponse.json({ error: 'Исходный текст обязателен' }, { status: 400 })
@@ -76,28 +61,25 @@ export async function POST(req: NextRequest): Promise<Response> {
     if (sourceText.length < 200) {
       return NextResponse.json({ error: 'Текст слишком короткий: минимум 200 знаков' }, { status: 400 })
     }
-    if (sourceText.length > 20000) {
+    if (sourceText.length > 20_000) {
       return NextResponse.json({ error: 'Текст слишком длинный: максимум 20 000 знаков' }, { status: 400 })
     }
 
-    const intensityInstruction = INTENSITY_INSTRUCTIONS[intensity]?.[regionProfile.locale]
-      ?? INTENSITY_INSTRUCTIONS.deep[regionProfile.locale]
-      ?? INTENSITY_INSTRUCTIONS.deep['en-US']
-
     const systemPrompt = [
       'You are a professional editor and copywriter.',
-      `Target market: ${regionProfile.name}.`,
-      `Target locale: ${regionProfile.locale}.`,
-      `Output language: ${regionProfile.languageName}.`,
-      'Rewrite the provided text so that it fully preserves factual accuracy, meaning and intent.',
-      'The result must sound native in the target locale and must not look like a literal translation.',
-      'Do not invent facts, claims, examples, numbers or product capabilities.',
-      'Avoid generic AI/corporate filler.',
-      intensityInstruction,
-      'Return ONLY the rewritten text. No preamble, no markdown, no process notes.',
+      `Rewrite in ${regionProfile.languageName} (${regionProfile.locale}) for ${regionProfile.name}.`,
+      'Preserve all factual claims, names, numbers, dates, conditions and the key meaning of the original.',
+      'Use natural native-market syntax, vocabulary, punctuation and register.',
+      'Do not translate sentence structures literally.',
+      'Avoid generic AI phrasing, corporate filler, unnecessary jargon and invented facts.',
+      INTENSITY_INSTRUCTIONS[intensity] ?? INTENSITY_INSTRUCTIONS.deep,
+      '',
+      'STRICT OUTPUT FORMAT:',
+      'Return ONLY the rewritten final text.',
+      'No preamble, no markdown wrapper, no alternatives and no commentary about the rewrite process.',
     ].join('\n')
 
-    const userPrompt = `SOURCE TEXT TO REWRITE:\n\n${sourceText}`
+    const userPrompt = `ORIGINAL TEXT:\n\n${sourceText}`
 
     const result = await generateArticleWithFallback({
       systemPrompt,

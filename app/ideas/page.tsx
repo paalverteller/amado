@@ -89,7 +89,7 @@ export default function IdeasPage() {
                 </div>
 
                 <h3 className="m-0 text-base font-semibold leading-6 text-on-surface mb-2">
-                  {item.title ?? 'Sem título'}
+                  {item.title ?? 'Без названия'}
                 </h3>
 
                 <p className="m-0 text-sm leading-relaxed text-on-surface-variant line-clamp-3">

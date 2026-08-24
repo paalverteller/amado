@@ -502,8 +502,6 @@ function resolveLanguageProfile(spec: ContentSpec): {
     }
   }
 
-  // Any other configured region: use the resolved name/language generically
-  // rather than guessing market-specific phrasing we haven't written yet.
   if (ctx.languageName && ctx.languageName !== 'Portuguese (Brazil)') {
     return {
       languageName: ctx.languageName,

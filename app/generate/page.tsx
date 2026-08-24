@@ -360,8 +360,8 @@ function GenerateContent() {
     setAiCheck(null)
     setAiCheckLoading(true)
     try {
-      const selectedBrand = brandProfiles.find((p) => p.id === brandProfileId)
-      const res = await fetch('/api/ai-check', {
+      const selectedBrand = brandProfiles.find((profile) => profile.id === brandProfileId)
+      const response = await fetch('/api/ai-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -372,11 +372,11 @@ function GenerateContent() {
           regionId: currentRegionId || undefined,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Ошибка проверки')
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Не удалось проверить текст')
       setAiCheck(data)
-    } catch (e) {
-      setAiCheckError(e instanceof Error ? e.message : 'Неизвестная ошибка')
+    } catch (error) {
+      setAiCheckError(error instanceof Error ? error.message : 'Неизвестная ошибка')
     } finally {
       setAiCheckLoading(false)
     }

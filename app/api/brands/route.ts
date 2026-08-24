@@ -12,14 +12,17 @@ export const dynamic = 'force-dynamic'
  * had exactly one hardcoded option ("Bitrix24 Brasil"); this is what
  * makes it possible to make that selector real instead.
  */
-export async function GET(_req: NextRequest): Promise<NextResponse> {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
-    const { data, error } = await getSupabaseAdmin()
+    const regionId = req.nextUrl.searchParams.get('region_id')
+    let query = getSupabaseAdmin()
       .from('brand_profiles')
       .select('id, brand_name, is_active, is_default, region_id, updated_at')
       .order('is_default', { ascending: false })
       .order('brand_name', { ascending: true })
 
+    if (regionId) query = query.eq('region_id', regionId)
+    const { data, error } = await query
     if (error) throw new Error(error.message)
     return NextResponse.json({ items: data ?? [] })
   } catch (error) {

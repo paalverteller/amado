@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Layout from '@/components/Layout'
 import { t } from '@/lib/i18n/config'
+import { useMarket } from '@/lib/market-context'
 
 type Competitor = {
   id: string
@@ -261,6 +262,8 @@ function CompetitorCard({ competitor, onChanged }: { competitor: Competitor; onC
 }
 
 export default function CompetitorsPage() {
+  const { regions, marketCode } = useMarket()
+  const currentRegionId = regions.find((region) => region.code === marketCode)?.id ?? null
   const [competitors, setCompetitors] = useState<Competitor[]>([])
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [showAddForm, setShowAddForm] = useState(false)
@@ -270,14 +273,14 @@ export default function CompetitorsPage() {
   const [adding, setAdding] = useState(false)
 
   const load = useCallback(() => {
-    fetch('/api/competitors')
+    fetch(currentRegionId ? `/api/competitors?region_id=${encodeURIComponent(currentRegionId)}` : '/api/competitors')
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('failed'))))
       .then((data: { competitors: Competitor[] }) => {
         setCompetitors(data.competitors ?? [])
         setLoadState('ready')
       })
       .catch(() => setLoadState('error'))
-  }, [])
+  }, [currentRegionId])
 
   useEffect(() => load(), [load])
 

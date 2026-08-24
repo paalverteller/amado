@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Layout from '@/components/Layout'
 import BrandOsEditor from '@/components/brand/BrandOsEditor'
 import { t } from '@/lib/i18n/config'
+import { useMarket } from '@/lib/market-context'
 import OverviewTab from '@/components/brand/tabs/OverviewTab'
 import AudiencePainsTab from '@/components/brand/tabs/AudiencePainsTab'
 import ProductsClaimsTab from '@/components/brand/tabs/ProductsClaimsTab'
@@ -52,7 +53,7 @@ const TABS: Tab[] = [
   { id: 'audience-pains', label: 'Аудитория и боли' },
   { id: 'products-claims', label: 'Продукты и утверждения' },
   { id: 'voice-vocabulary', label: 'Голос и словарь' },
-  { id: 'content-pillars', label: 'Контент-пилары' },
+  { id: 'content-pillars', label: 'Темы контента' },
   { id: 'platform-playbooks', label: 'Правила площадок' },
   { id: 'examples', label: 'Примеры' },
   { id: 'compliance', label: 'Проверка' },
@@ -61,6 +62,8 @@ const TABS: Tab[] = [
 ]
 
 export default function BrandBrainPage() {
+  const { regions, marketCode } = useMarket()
+  const currentRegionId = regions.find((region) => region.code === marketCode)?.id ?? null
   const [activeTab, setActiveTab] = useState<TabId>('overview')
   const [brands, setBrands] = useState<BrandListItem[]>([])
   const [brandId, setBrandId] = useState<string>('')
@@ -68,7 +71,7 @@ export default function BrandBrainPage() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/brands')
+    fetch(currentRegionId ? `/api/brands?region_id=${encodeURIComponent(currentRegionId)}` : '/api/brands')
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('request failed'))))
       .then((data: { items?: BrandListItem[] }) => {
         if (cancelled) return
@@ -86,7 +89,7 @@ export default function BrandBrainPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [currentRegionId])
 
   const renderTab = () => {
     switch (activeTab) {

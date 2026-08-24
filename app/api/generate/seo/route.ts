@@ -34,12 +34,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
-      admin.from('brand_profiles')
-        .select('id')
-        .eq('is_default', true)
-        .eq('is_active', true)
-        .limit(1)
-        .maybeSingle(),
+      (() => {
+        let query = admin.from('brand_profiles').select('id').eq('is_active', true)
+        if (body.regionId) query = query.eq('region_id', body.regionId)
+        return query.order('is_default', { ascending: false }).limit(1).maybeSingle()
+      })(),
     ])
 
     if (!template?.id) {
