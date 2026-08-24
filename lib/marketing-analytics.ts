@@ -68,7 +68,7 @@ const LABELS: Record<string, string> = {
   whatsapp: 'WhatsApp', link: 'Переход по ссылке', comment: 'Комментарий', share: 'Поделиться', save: 'Сохранить', register: 'Регистрация', demo: 'Демо', learn_more: 'Узнать больше', none: 'Без явного CTA',
   micro: 'До 300 знаков', short: '301–900 знаков', medium: '901–1800 знаков', long: 'Более 1800 знаков',
   article: 'Статья', linkedin_post: 'LinkedIn', instagram_caption: 'Instagram — подпись', instagram_carousel: 'Instagram — карусель',
-  x_thread: 'X — тред', facebook_post: 'Facebook', telegram_post: 'Telegram', short_video_script: 'Короткое видео', email: 'Email', quick_note: 'Короткая заметка',
+  x_thread: 'X — тред', threads_post: 'Threads', facebook_post: 'Facebook', telegram_post: 'Telegram', short_video_script: 'Короткое видео', email: 'Email', quick_note: 'Короткая заметка',
   social_post: 'Социальный пост (legacy)', thread: 'Тред (legacy)', carousel: 'Карусель (legacy)', note: 'Заметка (legacy)', unknown: 'Не определён',
 }
 

@@ -13,6 +13,7 @@ const FORMATS = [
   { value: 'instagram_caption', label: 'Instagram — подпись' },
   { value: 'instagram_carousel', label: 'Instagram — карусель' },
   { value: 'x_thread', label: 'X — тред' },
+  { value: 'threads_post', label: 'Threads' },
   { value: 'facebook_post', label: 'Facebook' },
   { value: 'telegram_post', label: 'Telegram' },
   { value: 'short_video_script', label: 'Короткое видео — сценарий' },

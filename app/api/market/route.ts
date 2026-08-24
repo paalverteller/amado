@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { getErrorMessage } from '@/lib/api/error-message'
-
+import { isMarketEvidenceEligible } from '@/lib/market-source-policy'
 export const dynamic = 'force-dynamic'
 
 const MAX_TOTAL = 100
@@ -63,6 +63,12 @@ function toMarketItem(row: EvidenceRow, regionId?: string | null): MarketItem | 
   // Competitor evidence has its own workspace and is injected separately
   // into generation. The market feed should remain a market/trend feed.
   if (source?.source_category === 'competitor') return null
+
+  if (!isMarketEvidenceEligible({
+    sourceCategory: source?.source_category,
+    title: row.source_title,
+    summary: row.source_summary,
+  })) return null
 
   // Sprint 12 Phase 4: when a market is selected, only show sources scoped
   // to that region. A source with no region_id (pre-Sprint-12 rows, or a

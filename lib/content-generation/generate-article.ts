@@ -15,6 +15,7 @@ import {
   createSupabaseArticleRepository,
   type ArticleRepository,
 } from '@/lib/repositories/article-repository'
+import { buildSocialPlaybookContext } from '@/lib/social-generation-policy'
 
 export interface GenerateArticleInput {
   topic: string
@@ -88,9 +89,13 @@ export async function generateAndPersistArticle(
   }
   const threadId = parent?.thread_id ?? crypto.randomUUID()
 
+  // Resolve the market before automatic evidence selection so recent
+  // context from one region cannot leak into another region's generation.
+  const effectiveRegionId = input.regionId ?? await resolveBrandRegionId(input.brandProfileId)
+
   // Stage 3: Use evidence_items instead of rss_items
   const selectedEvidenceContext = await buildEvidenceContext(input.evidenceItemIds)
-  const recentEvidence = selectedEvidenceContext ? { text: '', ids: [], items: [] } : await getRecentEvidenceContext(trimmedTopic)
+  const recentEvidence = selectedEvidenceContext ? { text: '', ids: [], items: [] } : await getRecentEvidenceContext(trimmedTopic, 5, effectiveRegionId)
   const rssText = selectedEvidenceContext || recentEvidence.text
   const evidenceIdsUsed = input.evidenceItemIds?.length ? input.evidenceItemIds : recentEvidence.ids
 
@@ -103,11 +108,11 @@ export async function generateAndPersistArticle(
   // Spain brandProfileId with the previous session's Brazil regionId still
   // cached). input.regionId stays authoritative when a caller does pass
   // it explicitly -- this is a fallback, not an override.
-  const effectiveRegionId = input.regionId ?? await resolveBrandRegionId(input.brandProfileId)
   const regionContext = await buildRegionContextLayer(effectiveRegionId)
   const regionProfile = await resolveRegionProfile(effectiveRegionId)
   const knowledge = await buildKnowledgeContext(promptTopic, input.brandProfileId)
   const competitorContext = await buildCompetitorContext(promptTopic, input.brandProfileId)
+  const socialPlaybookContext = await buildSocialPlaybookContext(input.contentType, input.brandProfileId)
 
   // Build structured content spec — no contradictory length rules
   const contentSpec = {
@@ -122,7 +127,7 @@ export async function generateAndPersistArticle(
     },
   }
 
-  const systemPrompt = `${built.systemPrompt}${brandSnapshot.promptText ? '\n\n' + brandSnapshot.promptText : ''}${regionContext ? '\n\n' + regionContext : ''}
+  const systemPrompt = `${built.systemPrompt}${brandSnapshot.promptText ? '\n\n' + brandSnapshot.promptText : ''}${socialPlaybookContext ? '\n\n' + socialPlaybookContext : ''}${regionContext ? '\n\n' + regionContext : ''}
 
 TARGET MARKET OVERRIDE:
 - Target market: ${regionProfile.name}

@@ -6,7 +6,7 @@ import { createSupabaseKnowledgeRepository } from '@/lib/repositories/knowledge-
 import { processKnowledgeAsset } from '@/lib/knowledge/process-asset'
 import { getErrorMessage } from '@/lib/api/error-message'
 import { resolveRegionProfile } from '@/lib/prompts'
-
+import { isMarketEvidenceEligible } from '@/lib/market-source-policy'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
@@ -76,6 +76,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const rows = body.regionId
       ? allRows.filter((row) => !row.source?.region_id || row.source.region_id === body.regionId)
       : allRows
+    const eligibleRows = rows.filter((row) => {
+      const source = Array.isArray(row.source) ? row.source[0] : row.source
+      return isMarketEvidenceEligible({
+        sourceCategory: source?.source_category,
+        title: row.source_title,
+        summary: row.source_summary,
+      })
+    })
+
+    rows.splice(0, rows.length, ...eligibleRows)
+
     if (rows.length < 5) {
       return NextResponse.json({
         error: `Недостаточно свежих источников за 60 дней (${rows.length}). Сначала обновите источники в разделе Рынок.`,

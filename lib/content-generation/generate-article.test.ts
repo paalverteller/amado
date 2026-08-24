@@ -4,6 +4,10 @@ import type { ContentRequestRepository, NewContentRequestRecord } from '@/lib/re
 
 const generatedPrompts: Array<{ systemPrompt: string; userPrompt: string }> = []
 
+vi.mock('@/lib/social-generation-policy', () => ({
+  buildSocialPlaybookContext: vi.fn(async () => '<social_execution_contract>TEST SOCIAL RULES</social_execution_contract>'),
+}))
+
 vi.mock('@/lib/prompts', () => ({
   buildSystemPrompt: vi.fn(async () => ({ systemPrompt: 'SYSTEM', version: 'test-v1' })),
   buildUserPrompt: vi.fn(() => '<task>FINAL TASK</task>'),

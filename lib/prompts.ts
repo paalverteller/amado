@@ -553,6 +553,19 @@ export function buildUserPrompt(spec: ContentSpec): string {
 ["post 1 text", "post 2 text", ...]</output_contract>`
   }
   
+  if (format === 'threads_post') {
+    return `<task>Topic: "${topic}"</task>
+<format>${buildFormatInstruction(spec)}</format>
+<rules>
+- One clear idea.
+- Write as a native Threads conversation starter, not as a compressed LinkedIn or X post.
+- A reply invitation is optional; never add engagement bait.
+- Use at most one precise topic tag when it genuinely classifies the conversation.
+- Preserve facts and supplied evidence. Do not invent topical claims.
+</rules>
+<output_contract>Only the final post text in ${lang.languageName}. No markdown, no preamble, no explanation.</output_contract>`
+  }
+
   if (format === 'instagram_carousel') {
     return `<task>Topic: "${topic}"</task>
 <format>${buildFormatInstruction(spec)}</format>

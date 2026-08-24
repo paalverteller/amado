@@ -7,7 +7,7 @@ import { t, setLocale, getLocale, SUPPORTED_LOCALES, DEFAULT_LOCALE } from './co
 const REQUIRED_SECTIONS: Record<string, string[]> = {
   nav: ['overview', 'generate', 'market', 'ideas', 'rewrite', 'history', 'settings', 'knowledge', 'brand', 'competitors'],
   action: ['create', 'save', 'delete', 'edit', 'cancel', 'confirm', 'generate', 'approve', 'reject', 'export', 'publish', 'schedule', 'dismiss', 'watch', 'refresh', 'test', 'add', 'remove', 'search', 'filter', 'sort'],
-  format: ['article', 'linkedin_post', 'instagram_caption', 'instagram_carousel', 'x_thread', 'facebook_post', 'telegram_post', 'short_video_script', 'email', 'quick_note', 'rewrite'],
+  format: ['article', 'linkedin_post', 'instagram_caption', 'instagram_carousel', 'x_thread', 'threads_post', 'facebook_post', 'telegram_post', 'short_video_script', 'email', 'quick_note', 'rewrite'],
   status: ['draft', 'review', 'approved', 'scheduled', 'published', 'dismissed', 'active', 'inactive'],
   settings: ['title', 'subtitle', 'sources', 'templates', 'brands', 'regions', 'language'],
   market: ['title', 'signals', 'no_items', 'source', 'published', 'collected'],

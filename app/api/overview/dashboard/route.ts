@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { getErrorMessage } from '@/lib/api/error-message'
 import { loadMarketingInsights, resolveDefaultBrandId } from '@/lib/marketing-analytics'
-
+import { isMarketEvidenceEligible } from '@/lib/market-source-policy'
 export const dynamic = 'force-dynamic'
 
 function first<T>(value: T | T[] | null): T | null {
@@ -147,7 +147,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         .limit(30)
       if (error) throw new Error(error.message)
       opportunities = (data ?? [])
-        .filter((row) => first(row.source)?.source_category !== 'competitor')
+        .filter((row) => isMarketEvidenceEligible({
+          sourceCategory: first(row.source)?.source_category,
+          title: row.source_title,
+          summary: row.source_summary,
+        }))
         .slice(0, 6)
         .map((row, index) => ({
           id: `evidence-${row.id}`,

@@ -6,7 +6,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import crypto from 'crypto'
-
+import { isMarketEvidenceEligible } from '@/lib/market-source-policy'
 export interface EvidenceInput {
   sourceId: string
   canonicalUrl: string
@@ -265,32 +265,73 @@ export interface RecentEvidenceContext {
  * Get recent general-market evidence for context injection. Competitor-tagged
  * sources are deliberately excluded here; they have a separate context layer.
  */
-export async function getRecentEvidenceContext(topic: string, limit = 5): Promise<RecentEvidenceContext> {
-  const { data: items, error } = await getSupabaseAdmin()
+export async function getRecentEvidenceContext(
+  topic: string,
+  limit = 5,
+  regionId?: string | null,
+): Promise<RecentEvidenceContext> {
+  type RecentRow = {
+    id: string
+    source_title: string | null
+    source_summary: string | null
+    source_language: string | null
+    published_at: string | null
+    source:
+      | { source_category?: string | null; region_id?: string | null }
+      | Array<{ source_category?: string | null; region_id?: string | null }>
+      | null
+  }
+
+  const { data, error } = await getSupabaseAdmin()
     .from('evidence_items')
-    .select('id, source_title, source_summary, source_language, published_at, source:source_id(source_category)')
+    .select('id, source_title, source_summary, source_language, published_at, source:source_id(source_category, region_id)')
     .order('discovered_at', { ascending: false })
-    .limit(80)
+    .limit(120)
 
-  if (error || !items || items.length === 0) return { text: '', ids: [], items: [] }
+  if (error || !data || data.length === 0) {
+    return { text: '', ids: [], items: [] }
+  }
 
-  const marketItems = items.filter((item) => {
+  const rows = data as unknown as RecentRow[]
+
+  const marketItems = rows.filter((item) => {
     const source = Array.isArray(item.source) ? item.source[0] : item.source
-    return source?.source_category !== 'competitor'
+
+    if (regionId && source?.region_id && source.region_id !== regionId) {
+      return false
+    }
+
+    return isMarketEvidenceEligible({
+      sourceCategory: source?.source_category,
+      title: item.source_title,
+      summary: item.source_summary,
+    })
   })
-  const keywords = topic.toLowerCase().split(/\s+/).filter((w) => w.length > 3)
+
+  const keywords = topic
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((word) => word.length > 3)
+
   const filtered = keywords.length > 0
     ? marketItems.filter((item) => {
         const text = `${item.source_title ?? ''} ${item.source_summary ?? ''}`.toLowerCase()
-        return keywords.some((kw) => text.includes(kw))
+        return keywords.some((keyword) => text.includes(keyword))
       })
     : marketItems
+
   const selected = (filtered.length > 0 ? filtered : marketItems).slice(0, limit)
 
   return {
-    text: selected.map((item) => `• ${item.source_title ?? ''}: ${(item.source_summary ?? '').slice(0, 200)}`).join('\n'),
+    text: selected
+      .map((item) => `• ${item.source_title ?? ''}: ${(item.source_summary ?? '').slice(0, 200)}`)
+      .join('\n'),
     ids: selected.map((item) => item.id),
-    items: selected.map((item) => ({ id: item.id, title: item.source_title ?? '', summary: item.source_summary ?? null })),
+    items: selected.map((item) => ({
+      id: item.id,
+      title: item.source_title ?? '',
+      summary: item.source_summary ?? null,
+    })),
   }
 }
 

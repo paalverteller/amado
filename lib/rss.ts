@@ -17,7 +17,7 @@ import { isFeatureEnabled, INGESTION_CONFIG } from '@/lib/amado-config'
 import { saveEvidence, recordSourceHealth, recordIngestionRun } from '@/lib/evidence'
 import type { ConnectorType } from '@/lib/ingestion/types'
 import { getErrorMessage } from '@/lib/api/error-message'
-
+import { isMarketEvidenceEligible } from '@/lib/market-source-policy'
 const RSS_TIMEOUT_MS = INGESTION_CONFIG.sourceTimeoutMs
 const MAX_ITEMS_PER_SOURCE = INGESTION_CONFIG.maxItemsPerSource
 const MAX_DESC_CHARS = INGESTION_CONFIG.maxSnippetChars
@@ -98,23 +98,59 @@ function isIrrelevantContent(title: string, description: string): boolean {
 
 async function saveRows(sourceId: string, rows: RssRow[], connectorType: string): Promise<number> {
   if (rows.length === 0) return 0
-  const unique = Array.from(new Map(rows.map((r) => [r.link, r])).values())
-  
-  // Legacy: write to rss_items
+
+  const deduplicated = Array.from(new Map(rows.map((row) => [row.link, row])).values())
+
+  const { data: sourceMeta } = await getSupabaseAdmin()
+    .from('rss_sources')
+    .select('source_category')
+    .eq('id', sourceId)
+    .maybeSingle()
+
+  // Competitor monitoring is a separate workflow and must preserve its
+  // own evidence. The market-news policy applies to ordinary sources.
+  const eligibleRows = sourceMeta?.source_category === 'competitor'
+    ? deduplicated
+    : deduplicated.filter((row) => isMarketEvidenceEligible({
+        sourceCategory: sourceMeta?.source_category,
+        title: row.title,
+        summary: row.description,
+      }))
+
+  if (eligibleRows.length === 0) {
+    await recordIngestionRun({
+      sourceId,
+      connectorType,
+      itemsDiscovered: rows.length,
+      itemsSaved: 0,
+      success: true,
+      metadata: {
+        filteredByMarketEvidencePolicy: deduplicated.length,
+      },
+    })
+    await recordSourceHealth({
+      sourceId,
+      eventType: 'success',
+      itemsYielded: 0,
+    })
+    return 0
+  }
+
+  // Legacy compatibility: keep rss_items synchronized with the normalized
+  // evidence layer until the legacy table is retired.
   const { data, error } = await getSupabaseAdmin()
     .from('rss_items')
-    .upsert(unique, { onConflict: 'link', ignoreDuplicates: true })
+    .upsert(eligibleRows, { onConflict: 'link', ignoreDuplicates: true })
     .select('id')
+
   if (error) throw new Error(`Save failed: ${error.message}`)
-  
-  // Stage 2: Dual-write to evidence_items (best-effort), with full-text
-  // hydration when budget and config allow. Concurrent per source (rows is
-  // already capped upstream, worst case 15 for PubMed) rather than
-  // sequential, so one source's hydration can't multiply the outer
-  // per-source loop's wall-clock time by MAX_ITEMS_PER_SOURCE.
+
+  // Dual-write to evidence_items. Hydration remains best-effort and uses
+  // the existing per-run shared budget.
   let evidenceSaved = 0
-  const settled = await Promise.allSettled(unique.map(async (row) => {
+  const settled = await Promise.allSettled(eligibleRows.map(async (row) => {
     let fullText: string | null = row.fullText ?? null
+
     if (!fullText && INGESTION_CONFIG.hydrationEnabled && hydrationBudgetRemaining > 0) {
       hydrationBudgetRemaining--
       try {
@@ -134,6 +170,7 @@ async function saveRows(sourceId: string, rows: RssRow[], connectorType: string)
       fullText,
     })
   }))
+
   for (const outcome of settled) {
     if (outcome.status === 'fulfilled') {
       evidenceSaved++
@@ -141,26 +178,28 @@ async function saveRows(sourceId: string, rows: RssRow[], connectorType: string)
       console.warn('[rss] Evidence save error (non-critical):', getErrorMessage(outcome.reason))
     }
   }
-  if (evidenceSaved < unique.length) {
-    console.warn(`[rss] Evidence dual-write: ${evidenceSaved}/${unique.length} saved`)
+
+  if (evidenceSaved < eligibleRows.length) {
+    console.warn(`[rss] Evidence dual-write: ${evidenceSaved}/${eligibleRows.length} saved`)
   }
-  
-  // Record ingestion run
+
   await recordIngestionRun({
     sourceId,
     connectorType,
     itemsDiscovered: rows.length,
     itemsSaved: data?.length ?? 0,
     success: true,
+    metadata: {
+      filteredByMarketEvidencePolicy: deduplicated.length - eligibleRows.length,
+    },
   })
-  
-  // Record source health
+
   await recordSourceHealth({
     sourceId,
     eventType: 'success',
     itemsYielded: data?.length ?? 0,
   })
-  
+
   return data?.length ?? 0
 }
 

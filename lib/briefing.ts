@@ -2,7 +2,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { generateArticleWithFallback } from '@/lib/ai'
 import { getErrorMessage } from '@/lib/api/error-message'
 import { recordAiUsage, checkDailyAiBudget } from '@/lib/ai-usage'
-
+import { isMarketEvidenceEligible } from '@/lib/market-source-policy'
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const CANDIDATE_WINDOW_HOURS = 48
@@ -42,18 +42,35 @@ export interface BriefingRunResult {
 // ─── Stage 1: heuristic candidate selection (no AI call) ─────────────────────
 
 async function selectCandidates(): Promise<CandidateRow[]> {
+  type CandidateWithSource = CandidateRow & {
+    source:
+      | { source_category?: string | null }
+      | Array<{ source_category?: string | null }>
+      | null
+  }
+
   const since = new Date(Date.now() - CANDIDATE_WINDOW_HOURS * 60 * 60 * 1000).toISOString()
 
   const { data, error } = await getSupabaseAdmin()
     .from('evidence_items')
-    .select('id, source_title, source_summary, full_text, hydration_status, published_at, created_at, source_authority, topics')
+    .select('id, source_title, source_summary, full_text, hydration_status, published_at, created_at, source_authority, topics, source:source_id(source_category)')
     .gte('created_at', since)
     .order('source_authority', { ascending: false, nullsFirst: false })
     .order('published_at', { ascending: false, nullsFirst: false })
-    .limit(MAX_CANDIDATES)
+    .limit(MAX_CANDIDATES * 2)
 
   if (error) throw new Error(`Candidate select failed: ${error.message}`)
-  return (data ?? []) as CandidateRow[]
+
+  return ((data ?? []) as unknown as CandidateWithSource[])
+    .filter((row) => {
+      const source = Array.isArray(row.source) ? row.source[0] : row.source
+      return isMarketEvidenceEligible({
+        sourceCategory: source?.source_category,
+        title: row.source_title,
+        summary: row.source_summary,
+      })
+    })
+    .slice(0, MAX_CANDIDATES)
 }
 
 // ─── Stage 2: one AI call — rank the shortlist + write why-it-matters ─────────
