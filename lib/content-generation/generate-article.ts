@@ -124,6 +124,12 @@ export async function generateAndPersistArticle(
 
   const systemPrompt = `${built.systemPrompt}${brandSnapshot.promptText ? '\n\n' + brandSnapshot.promptText : ''}${regionContext ? '\n\n' + regionContext : ''}
 
+TARGET MARKET OVERRIDE:
+- Target market: ${regionProfile.name}
+- Target locale: ${regionProfile.locale}
+- Output language: ${regionProfile.languageName}
+- These target-market instructions override any Brazil/Portuguese market assumptions in the stored base template when the target market is not Brazil.
+
 STRICT OUTPUT FORMAT:
 Write only the final clean text for publication. No think tags. No Markdown.`
 

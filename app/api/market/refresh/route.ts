@@ -55,8 +55,8 @@ function parseBlock(raw: string): TResult | null {
   const text = nws(stripThinkBlocks(raw)).replace(/\*+/g, '')
   if (!text) return null
 
-  const titleM = text.match(/(?:Título|Title)\s*:\s*(.*?)(?=\s+(?:Resumo|Snippet|Descrição|Description)\s*:|$)/i)
-  const snippetM = text.match(/(?:Resumo|Snippet|Descrição|Description)\s*:\s*(.+)$/i)
+  const titleM = text.match(/(?:Заголовок|Título|Title)\s*:\s*(.*?)(?=\s+(?:Резюме|Resumo|Snippet|Descrição|Description)\s*:|$)/i)
+  const snippetM = text.match(/(?:Резюме|Resumo|Snippet|Descrição|Description)\s*:\s*(.+)$/i)
 
   let title = nws(titleM?.[1])
   let summary = nws(snippetM?.[1])
@@ -86,20 +86,20 @@ async function translateOne(item: CandidateRow): Promise<(TResult & { id: string
     const { textStream } = await generateWithFallback({
       task: 'translation',
       systemPrompt: [
-        'You are a marketing journalist writing for a Brazilian audience.',
-        'Translate the article title and preview into natural, engaging Brazilian Portuguese.',
+        'You are a marketing editor preparing market-feed copy for a Russian-speaking marketing team.',
+        'Translate the article title and preview into concise, natural Russian.',
         'RULES:',
-        '- Título: sharp, curious headline (≤ 120 chars). No "Neste artigo".',
-        '- Resumo: the most interesting finding or insight, written directly.',
+        '- Заголовок: точный и живой, до 120 знаков. Без канцелярских вводных.',
+        '- Резюме: главный факт или вывод, сформулированный прямо.',
         '  • Write as if telling a friend what the article is about.',
-        '  • NO "Neste artigo investiga-se", NO "O autor analisa", NO academic 3rd-person.',
-        '  • Start with the finding/fact, not "This article...".',
+        '  • Без формул вроде «в статье рассматривается» и «автор анализирует».',
+        '  • Начинай с факта или вывода, а не с описания статьи.',
         '  • ≤ 420 characters.',
-        '- ABSOLUTELY NO Chinese, Japanese, or any non-Latin characters.',
+        '- Используй нормальный русский текст; не добавляй символы других письменностей без необходимости.',
         '- NO chain-of-thought, NO <think> tags, NO meta-commentary.',
         '- Reply ONLY in this exact format, nothing else:',
-        'Título: [Portuguese headline]',
-        'Resumo: [Engaging description of the key finding]',
+        'Заголовок: [русский заголовок]',
+        'Резюме: [краткое описание главного вывода]',
       ].join('\n'),
       userPrompt: `Title: ${srcTitle}\nPreview: ${srcDesc}`,
       maxTokens: 400,
@@ -110,7 +110,7 @@ async function translateOne(item: CandidateRow): Promise<(TResult & { id: string
 
     const parsed = parseBlock(raw)
     if (!parsed) {
-      console.warn(`[refresh] non-Portuguese output for "${srcTitle.slice(0, 50)}" — raw="${raw.slice(0, 100)}"`)
+      console.warn(`[refresh] invalid localized output for "${srcTitle.slice(0, 50)}" — raw="${raw.slice(0, 100)}"`)
       return null
     }
     return { id: item.id, ...parsed }

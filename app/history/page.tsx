@@ -47,11 +47,11 @@ export default function HistoryPage() {
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-on-background" style={{ fontFamily: 'var(--font-display)' }}>
-              Histórico de Conteúdo
+              История контента
             </h1>
           </div>
           <Link href="/generate" className="m3-button-tonal no-underline text-sm py-2 px-4">
-            + Novo conteúdo
+            + Новый материал
           </Link>
         </div>
 
@@ -61,7 +61,7 @@ export default function HistoryPage() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por tema..."
+            placeholder="Поиск по теме…"
             className="m3-input-outlined w-full h-11"
           />
         </div>
@@ -73,8 +73,8 @@ export default function HistoryPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="m3-card text-center py-20 px-4">
-            <p className="font-semibold text-on-surface m-0">Nada encontrado</p>
-            <p className="text-sm text-on-surface-variant mt-1.5 m-0">Tente alterar o termo de busca</p>
+            <p className="font-semibold text-on-surface m-0">Ничего не найдено</p>
+            <p className="text-sm text-on-surface-variant mt-1.5 m-0">Измените поисковый запрос</p>
           </div>
         ) : (
           <div className="flex flex-col gap-3 min-w-0 max-w-full mx-auto" style={{ maxWidth: 720 }}>

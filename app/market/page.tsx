@@ -44,8 +44,8 @@ type Source = {
    'Analisando o mercado…',
    'Lendo a imprensa…',
    'Verificando fontes…',
-   'Processando materiais recentes…',
-   'Coletando contexto para conteúdo futuro…',
+   'Обрабатываю свежие материалы…',
+   'Собираю контекст…',
  ]
 
  // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -54,7 +54,7 @@ type Source = {
    if (!value) return 'data não informada'
    const date = new Date(value)
    if (Number.isNaN(date.getTime())) return 'data não informada'
-   return date.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })
+   return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
  }
 
 function useBatchSelection() {
@@ -77,7 +77,7 @@ function useBatchSelection() {
 }
 
 function buildGenerationTopic(item: MarketItem): string {
-  const sourceName = item.source?.name ? `Fonte: ${item.source.name}. ` : ''
+  const sourceName = item.source?.name ? `Источник: ${item.source.name}. ` : ''
   const summary = item.description ? ` Contexto: ${item.description.slice(0, 360)}` : ''
   return `${sourceName}${item.title ?? ''}.${summary}`.replace(/\s+/g, ' ').trim()
 }
@@ -93,14 +93,14 @@ async function fetchMarketItems(regionId?: string | null): Promise<{ items: Mark
   const url = regionId ? `/api/market?region_id=${encodeURIComponent(regionId)}` : '/api/market'
   const res  = await fetch(url, { cache: 'no-store' })
   const data = await res.json()
-  if (!res.ok) throw new Error(data?.error ?? 'Não foi possível carregar a análise de mercado')
+  if (!res.ok) throw new Error(data?.error ?? 'Не удалось загрузить анализ рынка')
   return { items: Array.isArray(data.items) ? data.items : [], meta: data.meta ?? {} }
 }
 
 async function refreshMarketItems(regionId?: string | null): Promise<{ items: MarketItem[]; meta: MarketMeta }> {
   const refreshRes  = await fetch('/api/market/refresh', { method: 'POST', cache: 'no-store' })
   const refreshData = await refreshRes.json().catch(() => ({}))
-  if (!refreshRes.ok) throw new Error(refreshData?.error ?? 'Não foi possível coletar dados recentes')
+  if (!refreshRes.ok) throw new Error(refreshData?.error ?? 'Не удалось собрать свежие данные')
   return fetchMarketItems(regionId)
 }
 
@@ -156,7 +156,7 @@ export default function MarketPage() {
         const result = await fetchMarketItems(currentRegionId)
         if (!cancelled) { setItems(result.items); setMeta(result.meta); setError(null) }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Não foi possível carregar os dados')
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Не удалось загрузить данные')
       } finally {
         if (!cancelled) setInitialLoading(false)
       }
@@ -200,7 +200,7 @@ export default function MarketPage() {
       setItems(result.items)
       setMeta(result.meta)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Não foi possível coletar dados')
+      setError(e instanceof Error ? e.message : 'Не удалось собрать данные')
     } finally {
       setRefreshing(false)
     }
@@ -255,9 +255,9 @@ export default function MarketPage() {
 
           <div className="mt-5 flex min-w-0 flex-col gap-2 rounded-3xl bg-surface-container px-4 py-3 text-sm text-on-surface-variant lg:flex-row lg:items-center lg:justify-between">
             <span className="min-w-0 break-words">
-              Fontes internacionais: <strong className="text-on-surface">{items.length}</strong> materiais
+              Источники: <strong className="text-on-surface">{items.length}</strong> materiais
               {typeof meta.total === 'number' && meta.total !== items.length
-                ? <> · exibidos: <strong className="text-on-surface">{meta.total}</strong></>
+                ? <> · показано: <strong className="text-on-surface">{meta.total}</strong></>
                 : null}
             </span>
             {countrySummary ? (
@@ -344,7 +344,7 @@ export default function MarketPage() {
           {!initialLoading && !refreshing && items.length === 0 && !error && (
             <div className="m3-card p-6 text-center">
               <p className="text-sm text-on-surface-variant">
-                Nenhum material salvo. Clique em 🔄 para coletar recentes.
+                Материалов пока нет. Нажмите 🔄, чтобы собрать свежие.
               </p>
             </div>
           )}
@@ -360,7 +360,7 @@ export default function MarketPage() {
                 <button
                   type="button"
                   onClick={() => toggleSelect(item.id)}
-                  aria-label="Selecionar para geração em lote"
+                  aria-label="Выбрать для пакетной генерации"
                   style={{
                     position: 'absolute', top: 12, right: 12, zIndex: 1,
                     width: 24, height: 24, borderRadius: 8,
@@ -398,7 +398,7 @@ export default function MarketPage() {
                     href={`/generate?topic=${encodeURIComponent(buildDisplayTitle(item))}&context=${encodeURIComponent(buildGenerationTopic(item))}&evidenceId=${encodeURIComponent(item.id)}`}
                     className="rounded-full bg-primary px-4 py-1.5 text-sm font-semibold text-on-primary transition-opacity hover:opacity-90"
                   >
-                    Gerar
+                    Создать
                   </Link>
                   {item.link && (
                     <a
@@ -407,7 +407,7 @@ export default function MarketPage() {
                       rel="noreferrer"
                       className="rounded-full bg-surface-container-highest px-4 py-1.5 text-sm font-semibold text-on-surface-variant transition-colors hover:text-on-surface"
                     >
-                      Fonte
+                      Источник
                     </a>
                   )}
                 </div>
@@ -442,7 +442,7 @@ export default function MarketPage() {
             }}
           >
             <span style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>
-              Selecionados: {selectedIds.size}
+              Выбрано: {selectedIds.size}
             </span>
 
             <select
@@ -516,11 +516,11 @@ export default function MarketPage() {
                     body: JSON.stringify({ topics, templateId: batchTemplateId || undefined }),
                   })
                   const data = await res.json()
-                  if (!res.ok) throw new Error(data.error ?? 'Erro na geração em lote')
+                  if (!res.ok) throw new Error(data.error ?? 'Ошибка пакетной генерации')
                   clearSelection()
                   router.push('/history')
                 } catch (e) {
-                  alert(e instanceof Error ? e.message : 'Erro na geração em lote')
+                  alert(e instanceof Error ? e.message : 'Ошибка пакетной генерации')
                 } finally {
                   setBatchLoading(false)
                 }
@@ -538,10 +538,10 @@ export default function MarketPage() {
               }}
             >
               {batchLoading
-                ? 'Gerando...'
+                ? 'Создаю…'
                 : selectedIds.size > 10
                   ? 'Máximo 10'
-                  : `Gerar (${selectedIds.size})`}
+                  : `Создать (${selectedIds.size})`}
             </button>
           </div>
         )}

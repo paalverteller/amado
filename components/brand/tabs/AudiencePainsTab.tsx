@@ -197,7 +197,7 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
 
               {pain.approvedBrazilianExamples && pain.approvedBrazilianExamples.length > 0 && (
                 <div className="mt-4 p-4 bg-yellow-50 rounded-lg">
-                  <h4 className="text-sm font-medium text-yellow-800 mb-2">Одобренные бразильские примеры</h4>
+                  <h4 className="text-sm font-medium text-yellow-800 mb-2">Одобренные примеры</h4>
                   <div className="flex flex-wrap gap-2">
                     {pain.approvedBrazilianExamples.map((example, i) => (
                       <span key={i} className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm">

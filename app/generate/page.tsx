@@ -93,7 +93,7 @@ function SegmentedOutput({ contentType, raw }: { contentType: string; raw: strin
               {i + 1}
             </span>
             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-on-surface-variant)' }}>
-              {contentType === 'x_thread' ? `Post ${i + 1}/${segments.length}` : `Slide ${i + 1}/${segments.length}`}
+              {contentType === 'x_thread' ? `Пост ${i + 1}/${segments.length}` : `Слайд ${i + 1}/${segments.length}`}
             </span>
           </div>
           {typeof seg === 'string' ? (
@@ -258,6 +258,7 @@ function GenerateContent() {
           contentType,
           templateId,
           brandProfileId: brandProfileId || undefined,
+          regionId: currentRegionId || undefined,
           seoMode,
           parentRequestId: refinement?.parentRequestId,
           refinementNote: refinement?.note,
@@ -269,7 +270,7 @@ function GenerateContent() {
 
       if (!res.ok) {
         const err = await res.json() as { error: string }
-        throw new Error(err.error ?? 'Erro de geração')
+        throw new Error(err.error ?? 'Ошибка генерации')
       }
 
       const reader = res.body!.getReader()
@@ -368,13 +369,14 @@ function GenerateContent() {
           brandVoice: selectedBrand?.voice_description,
           forbiddenWords: selectedBrand?.forbidden_words,
           examples: selectedBrand?.example_posts,
+          regionId: currentRegionId || undefined,
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Erro de verificação')
+      if (!res.ok) throw new Error(data.error ?? 'Ошибка проверки')
       setAiCheck(data)
     } catch (e) {
-      setAiCheckError(e instanceof Error ? e.message : 'Erro desconhecido')
+      setAiCheckError(e instanceof Error ? e.message : 'Неизвестная ошибка')
     } finally {
       setAiCheckLoading(false)
     }
@@ -386,10 +388,10 @@ function GenerateContent() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-on-background">
-          Geração de conteúdo
+          Генерация контента
         </h1>
         <p className="mt-1 text-base text-on-surface-variant">
-          Insira o tema — o AI escreve o rascunho em português (Brasil)
+          Введите тему — Amado создаст черновик для выбранного рынка
         </p>
       </div>
 
@@ -398,12 +400,12 @@ function GenerateContent() {
         {/* Topic */}
         <div>
           <label className="block text-sm font-medium mb-1.5 text-on-surface-variant">
-            Tema do material
+            Тема материала
           </label>
           <textarea
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            placeholder="Ex: Como aumentar conversão no e-commerce brasileiro usando WhatsApp"
+            placeholder="Например: как повысить конверсию интернет-магазина с помощью WhatsApp"
             rows={3}
             disabled={loading}
             className="m3-input-outlined w-full resize-none min-h-[80px]"
@@ -414,7 +416,7 @@ function GenerateContent() {
           {/* Format */}
           <div>
             <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5 text-on-surface-variant">
-              Formato
+              Формат
             </label>
             <select
               value={contentType}
@@ -429,7 +431,7 @@ function GenerateContent() {
           {/* Profile */}
           <div>
             <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5 text-on-surface-variant">
-              Perfil de prompt
+              Профиль промпта
             </label>
             <select
               value={templateId}
@@ -437,7 +439,7 @@ function GenerateContent() {
               disabled={loading}
               className="m3-input-outlined w-full appearance-none cursor-pointer"
             >
-              <option value="">— Sem perfil —</option>
+              <option value="">— Без профиля —</option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
@@ -451,7 +453,7 @@ function GenerateContent() {
             )}
             {templates.length === 0 && (
               <p className="text-[11px] mt-1.5 text-error font-medium">
-                Templates não carregados (migração SQL)
+                Профили не загружены
               </p>
             )}
           </div>
@@ -460,7 +462,7 @@ function GenerateContent() {
         {/* Brand Profile */}
         <div>
           <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5 text-on-surface-variant">
-            Marca (Brand Profile)
+            Бренд
           </label>
           <select
             value={brandProfileId}
@@ -468,7 +470,7 @@ function GenerateContent() {
             disabled={loading}
             className="m3-input-outlined w-full appearance-none cursor-pointer"
           >
-            <option value="">— Sem marca —</option>
+            <option value="">— Без бренда —</option>
             {brandProfiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.brand_name}
@@ -477,7 +479,7 @@ function GenerateContent() {
           </select>
           {brandProfiles.length === 0 && (
             <p className="text-[11px] mt-1.5 text-error font-medium">
-              Nenhuma marca cadastrada. Adicione em Configurações.
+              Для этого рынка нет бренда. Добавьте его в настройках.
             </p>
           )}
         </div>
@@ -510,13 +512,13 @@ function GenerateContent() {
               boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
             }} />
           </div>
-          <span>Modo SEO</span>
+          <span>Режим SEO</span>
           {seoMode && (
             <span style={{
               marginLeft: 'auto', fontSize: 10, fontWeight: 700,
               padding: '2px 7px', borderRadius: 6,
               background: '#6E5CF6', color: '#fff',
-            }}>ON</span>
+            }}>Вкл.</span>
           )}
         </button>
 
@@ -525,7 +527,7 @@ function GenerateContent() {
           disabled={loading || !topic.trim()}
           className={`w-full m3-button-filled mt-2 text-base h-12 ${loading || !topic.trim() ? 'opacity-50 cursor-not-allowed bg-surface-variant text-on-surface-variant hover:shadow-none hover:bg-surface-variant' : ''}`}
         >
-          {loading ? 'Gerando...' : 'Criar material'}
+          {loading ? 'Создаю…' : 'Создать материал'}
         </button>
       </form>
 
@@ -552,7 +554,7 @@ function GenerateContent() {
 
           {output && (
             <div className="mt-4 text-xs font-medium text-on-surface-variant text-right">
-              Caracteres: {output.length}
+              Знаков: {output.length}
             </div>
           )}
 
@@ -652,7 +654,7 @@ function GenerateContent() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.383a14.406 14.406 0 0 1-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 1 0-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
                 </svg>
                 <span className="text-sm font-bold" style={{ color: 'var(--color-on-surface)' }}>
-                  Notas de localização
+                  Заметки по локализации
                 </span>
               </div>
               <p className="text-sm m-0" style={{ color: 'var(--color-on-surface-variant)', lineHeight: 1.6 }}>
@@ -666,7 +668,7 @@ function GenerateContent() {
 
               {/* Stars */}
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-on-surface-variant">Avaliar:</span>
+                <span className="text-sm font-medium text-on-surface-variant">Оценка:</span>
                 <div className="flex gap-0.5">
                   {[1, 2, 3, 4, 5].map((st) => (
                     <button
@@ -674,7 +676,7 @@ function GenerateContent() {
                       onClick={() => handleRate(st)}
                       className="text-2xl transition-transform duration-200 ease-m3-emphasized hover:scale-110 active:scale-75 bg-transparent border-none cursor-pointer focus:outline-none"
                       style={{ color: rating >= st ? '#6E5CF6' : 'var(--color-surface-variant)' }}
-                      aria-label={`${st} estrela`}
+                      aria-label={`${st} из 5`}
                     >
                       ★
                     </button>
@@ -684,20 +686,20 @@ function GenerateContent() {
 
               {/* Action buttons */}
               <div className="flex items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto">
-                <button onClick={handleCopy} title="Copiar" className="flex items-center justify-center p-2 rounded-full w-10 h-10 bg-surface-container-high text-on-surface hover:bg-surface-variant border-none cursor-pointer transition-colors">
+                <button onClick={handleCopy} title="Копировать" className="flex items-center justify-center p-2 rounded-full w-10 h-10 bg-surface-container-high text-on-surface hover:bg-surface-variant border-none cursor-pointer transition-colors">
                   {copied ? (
                     <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
                   ) : (
                     <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" /></svg>
                   )}
                 </button>
-                <button onClick={() => handleGenerate()} title="Repetir" className="flex items-center justify-center p-2 rounded-full w-10 h-10 bg-surface-container-high text-on-surface hover:bg-surface-variant border-none cursor-pointer transition-colors">
+                <button onClick={() => handleGenerate()} title="Создать заново" className="flex items-center justify-center p-2 rounded-full w-10 h-10 bg-surface-container-high text-on-surface hover:bg-surface-variant border-none cursor-pointer transition-colors">
                   <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
                 </button>
                 <button
                   onClick={handleAiCheck}
                   disabled={aiCheckLoading}
-                  title="Verificar AI"
+                  title="Проверить текст"
                   className="flex items-center justify-center p-2 rounded-full w-10 h-10 bg-surface-container-high text-on-surface hover:bg-surface-variant border-none cursor-pointer transition-colors disabled:opacity-50"
                 >
                   {aiCheckLoading ? (
@@ -707,7 +709,7 @@ function GenerateContent() {
                   )}
                 </button>
                 {articleId && (
-                  <a href={`/history/${articleId}`} title="Histórico" className="flex items-center justify-center p-2 rounded-full w-10 h-10 bg-surface-container-high text-on-surface hover:bg-surface-variant border-none cursor-pointer text-inherit transition-colors">
+                  <a href={`/history/${articleId}`} title="История" className="flex items-center justify-center p-2 rounded-full w-10 h-10 bg-surface-container-high text-on-surface hover:bg-surface-variant border-none cursor-pointer text-inherit transition-colors">
                     <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
                   </a>
                 )}
@@ -725,7 +727,7 @@ function GenerateContent() {
             <div className="mt-6 pt-6 border-t border-surface-variant/50">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-bold" style={{ color: 'var(--color-on-surface)' }}>
-                  Verificação AI
+                  Проверка текста
                 </span>
                 <span
                   style={{
@@ -779,10 +781,10 @@ export default function GeneratePage() {
   return (
     <Layout>
       <div className="mb-6 flex flex-wrap gap-3">
-        <a href="/generate/seo" className="aug-button aug-button--growth">SEO-статья · PMEs Brazil</a>
+        <a href="/generate/seo" className="aug-button aug-button--growth">SEO-статья</a>
         <a href="/settings#prompt-library" className="aug-button aug-button--secondary">Профили каналов</a>
       </div>
-      <Suspense fallback={<div className="p-8 text-on-surface-variant font-medium">Carregando workspace...</div>}>
+      <Suspense fallback={<div className="p-8 text-on-surface-variant font-medium">Загрузка…</div>}>
         <GenerateContent />
       </Suspense>
     </Layout>

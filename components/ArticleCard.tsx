@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { Article } from '@/lib/domain/article'
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })
+  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
 }
 
 function safeText(value: string | null | undefined): string {
@@ -101,7 +101,7 @@ export default function ArticleCard({ article }: { article: Article }) {
           </span>
 
           {article.rating !== null ? (
-            <div className="flex shrink-0 gap-0.5 text-sm" aria-label={`Avaliação: ${article.rating} de 5`}>
+            <div className="flex shrink-0 gap-0.5 text-sm" aria-label={`Оценка: ${article.rating} из 5`}>
               {[1, 2, 3, 4, 5].map((i) => (
                 <span key={i} className={i <= (article.rating ?? 0) ? 'text-[#6E5CF6]' : 'text-surface-variant'}>
                   ★

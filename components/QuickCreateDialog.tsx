@@ -4,8 +4,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import AugustDialog from '@/components/ui/AugustDialog'
 import { toast } from '@/components/ui/AugustFeedback'
+import { useMarket } from '@/lib/market-context'
 
 export default function QuickCreateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { regions, marketCode } = useMarket()
+  const currentRegionId = regions.find((region) => region.code === marketCode)?.id ?? null
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
@@ -22,7 +25,7 @@ export default function QuickCreateDialog({ open, onClose }: { open: boolean; on
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: value, contentType: 'quick_note' }),
+        body: JSON.stringify({ topic: value, contentType: 'quick_note', regionId: currentRegionId || undefined }),
       })
       const data = await response.json().catch(() => ({})) as { error?: string }
       if (!response.ok) throw new Error(data.error ?? 'Не удалось создать материал')
@@ -42,7 +45,7 @@ export default function QuickCreateDialog({ open, onClose }: { open: boolean; on
       open={open}
       onClose={onClose}
       title="Быстрое создание"
-      eyebrow="Amado Create"
+      eyebrow="Создание"
       description="Зафиксируйте мысль как есть. Контекст бренда и правила генерации подключатся автоматически."
       footer={(
         <>
@@ -59,7 +62,7 @@ export default function QuickCreateDialog({ open, onClose }: { open: boolean; on
           autoFocus
           value={text}
           onChange={(event) => setText(event.target.value)}
-          placeholder="Например: объяснить, почему CRM полезнее таблицы для follow-up в небольшой бразильской компании…"
+          placeholder="Например: объяснить, почему CRM удобнее таблицы для контроля продаж в небольшой компании…"
           rows={7}
         />
         <small>{text.length} знаков · минимум 20</small>

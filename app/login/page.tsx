@@ -42,24 +42,24 @@ export default function LoginPage() {
               <img src="/amado-icon.svg" alt="" className="aug-brand__mark" />
               <span className="aug-brand__copy">
                 <strong>amado</strong>
-                <small>marketing intelligence</small>
+                <small>маркетинговая аналитика</small>
               </span>
             </div>
 
             <h1>Рабочий стол маркетолога, который <mark>понимает контекст.</mark></h1>
             <p>
-              Рынок, конкуренты, Brand OS, контент и результаты — в одном спокойном рабочем пространстве для команды, которая развивает бренд в Бразилии.
+              Рынок, конкуренты, бренд, контент и результаты — в одном рабочем пространстве для маркетинговой команды.
             </p>
           </div>
 
           <div className="aug-auth__signal">
             <span className="aug-growth-note__dot" />
-            Brazil · Brand · Evidence · Performance
+            Рынок · Бренд · Источники · Результаты
           </div>
         </section>
 
         <section className="aug-auth__card">
-          <span className="aug-eyebrow">Private workspace</span>
+          <span className="aug-eyebrow">Закрытое пространство</span>
           <h2>Войти в Amado</h2>
           <p>Используйте пароль рабочего пространства.</p>
 

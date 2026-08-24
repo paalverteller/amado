@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { normalizeConnectorType } from '@/lib/ingestion/types'
 import { getErrorMessage } from '@/lib/api/error-message'
+import { resolveRegionProfile } from '@/lib/prompts'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,6 +59,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       if (region?.id) regionId = region.id
     }
 
+    const resolvedRegion = regionId ? await resolveRegionProfile(regionId) : null
+
     const { data, error } = await getSupabaseAdmin()
       .from('rss_sources')
       .insert({
@@ -66,7 +69,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         source_type: sourceType,
         country,
         region_id: regionId,
-        language_code: body.language_code ?? 'pt-BR',
+        language_code: body.language_code ?? resolvedRegion?.locale ?? 'pt-BR',
         parser_config: body.parser_config ?? {},
         active: body.active ?? true,
         competitor_id: body.competitor_id ?? null,

@@ -134,7 +134,7 @@ export default function PwaInstallPrompt() {
       <div className="aug-pwa-prompt__row">
         <img className="aug-pwa-prompt__icon" src="/amado-icon.svg" alt="" />
         <div>
-          <span className="aug-eyebrow">Amado PWA</span>
+          <span className="aug-eyebrow">Приложение Amado</span>
           <h2 id="pwa-install-title">Добавить Amado на экран</h2>
           <p>Быстрый доступ к обзору, рынку и созданию контента без лишней вкладки браузера.</p>
 

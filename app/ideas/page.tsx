@@ -25,7 +25,7 @@ export default function IdeasPage() {
     try {
       const res = await fetch('/api/market?limit=20', { cache: 'no-store' })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Erro ao carregar tendências')
+      if (!res.ok) throw new Error(data.error || 'Не удалось загрузить тренды')
       setTrends(data.items || [])
     } catch (err) {
       setError(getErrorMessage(err))
@@ -45,15 +45,15 @@ export default function IdeasPage() {
     if (!value) return ''
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return ''
-    return date.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })
+    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
   }
 
   return (
     <Layout>
       <div className="space-y-8 max-w-3xl mx-auto">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-on-background">Local Pulse</h1>
-          <p className="mt-1 text-base text-on-surface-variant">O que está acontecendo no mercado brasileiro agora</p>
+          <h1 className="text-3xl font-bold tracking-tight text-on-background">Пульс рынка</h1>
+          <p className="mt-1 text-base text-on-surface-variant">Что происходит на выбранном рынке сейчас</p>
         </div>
 
         {error && (
@@ -101,7 +101,7 @@ export default function IdeasPage() {
                     href={`/generate?topic=${encodeURIComponent(item.title ?? '')}&context=${encodeURIComponent(item.description ?? '')}`}
                     className="rounded-full bg-primary px-4 py-1.5 text-sm font-semibold text-on-primary transition-opacity hover:opacity-90 no-underline"
                   >
-                    Gerar conteúdo
+                    Создать контент
                   </Link>
                   {item.link && (
                     <a
@@ -110,7 +110,7 @@ export default function IdeasPage() {
                       rel="noreferrer"
                       className="rounded-full bg-surface-container-highest px-4 py-1.5 text-sm font-semibold text-on-surface-variant transition-colors hover:text-on-surface no-underline"
                     >
-                      Fonte
+                      Источник
                     </a>
                   )}
                 </div>

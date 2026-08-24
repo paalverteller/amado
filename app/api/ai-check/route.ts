@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateArticleWithFallback } from '@/lib/ai'
+import { resolveRegionProfile } from '@/lib/prompts'
 
 export const maxDuration = 45
 export const dynamic = 'force-dynamic'
 
-type CheckBody = { text?: string; brandVoice?: string; forbiddenWords?: string; examples?: string }
+type CheckBody = { text?: string; brandVoice?: string; forbiddenWords?: string; examples?: string; regionId?: string }
 
 type Flag = {
   type: string
@@ -19,36 +20,29 @@ type Verdict = {
   summary: string
 }
 
-const JUDGE_SYSTEM_PROMPT = `Você é um especialista em análise de texto para marketing digital no Brasil. Avalie o texto quanto a:
-1. Marcadores de IA (clichês, estrutura simétrica excessiva, generalizações vazias, tom sem emoção)
-2. Consistência de voz da marca (se brand voice for fornecido)
-3. Adequação ao público brasileiro (localização, gírias naturais, referências culturais)
+function buildJudgeSystemPrompt(languageName: string, marketName: string): string {
+  return `You are a senior marketing copy editor. Evaluate the supplied text as copy written for ${marketName} in ${languageName}.
 
-Critérios de marcadores de IA em pt-BR:
-- Clichês corporativos ("é importante destacar", "no cenário atual", "desempenha papel fundamental")
-- Estrutura simétrica artificial (listas sempre com 3 itens, parágrafos do mesmo tamanho)
-- Generalizações sem dados ("muitos especialistas dizem", "pesquisas mostram" sem fonte)
-- Tom excessivamente neutro, sem personalidade de marca
-- Construções sintáticas repetidas (mesmo início de frase)
-- Conectivos artificiais em excesso: "além disso", "dessa forma", "em conclusão"
-- Falta de detalhes concretos, números, nomes — frases genéricas
+Evaluate:
+1. AI-writing markers: clichés, repetitive syntax, artificial symmetry, vague generalizations and emotionally flat prose.
+2. Brand-voice consistency when brand guidance is supplied.
+3. Native-market fit: idiom, register, terminology and cultural naturalness for ${marketName}.
+4. Factual discipline: flag unsupported claims or invented specificity when visible in the text.
 
-Critérios de consistência de voz (se aplicável):
-- O tom corresponde à descrição da voz da marca?
-- Há palavras proibidas sendo usadas?
-- O estilo se assemelha aos exemplos fornecidos?
+Do not penalize a text merely for being concise or professional. Judge whether it sounds naturally written by a strong local professional.
 
-FORMATO DA RESPOSTA — JSON válido, sem markdown, sem preâmbulo:
+Return valid JSON only, with no markdown or preamble:
 {
-  "score": <número 0-100, onde 0 = parece humano, 100 = claramente IA>,
-  "verdictLabel": "<Parece humano / Alguns marcadores de IA / Muito parecido com IA>",
+  "score": <0-100, where 0 = convincingly human and 100 = clearly AI-like>,
+  "verdictLabel": "<Похоже на человека / Есть признаки ИИ / Сильно похоже на ИИ>",
   "flags": [
-    { "type": "<categoria>", "excerpt": "<citação do texto, max 15 palavras>", "suggestion": "<correção específica>" }
+    { "type": "<категория по-русски>", "excerpt": "<цитата, максимум 15 слов>", "suggestion": "<конкретное исправление по-русски>" }
   ],
-  "summary": "<2-3 frases de conclusão>"
+  "summary": "<краткий вывод на русском, 2–3 предложения>"
 }
 
-Máximo 5 flags. Se o texto estiver bom, retorne array vazio.`
+Maximum 5 flags. If the text is strong, return an empty flags array.`
+}
 
 export async function POST(req: NextRequest): Promise<Response> {
   try {
@@ -57,27 +51,28 @@ export async function POST(req: NextRequest): Promise<Response> {
     const brandVoice = (body.brandVoice ?? '').trim()
     const forbiddenWords = (body.forbiddenWords ?? '').trim()
     const examples = (body.examples ?? '').trim()
+    const regionProfile = await resolveRegionProfile(body.regionId)
 
     if (!text) {
-      return NextResponse.json({ error: 'Texto para verificação é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: 'Текст для проверки обязателен' }, { status: 400 })
     }
     if (text.length < 100) {
-      return NextResponse.json({ error: 'Texto muito curto para análise' }, { status: 400 })
+      return NextResponse.json({ error: 'Текст слишком короткий для анализа' }, { status: 400 })
     }
 
-    let userPrompt = `TEXTO PARA VERIFICAÇÃO:\n\n${text.slice(0, 8000)}`
+    let userPrompt = `TEXT TO CHECK:\n\n${text.slice(0, 8000)}`
     if (brandVoice) {
-      userPrompt += `\n\nVOZ DA MARCA:\n${brandVoice.slice(0, 2000)}`
+      userPrompt += `\n\nBRAND VOICE:\n${brandVoice.slice(0, 2000)}`
     }
     if (forbiddenWords) {
-      userPrompt += `\n\nPALAVRAS PROIBIDAS:\n${forbiddenWords.slice(0, 500)}`
+      userPrompt += `\n\nFORBIDDEN WORDS:\n${forbiddenWords.slice(0, 500)}`
     }
     if (examples) {
-      userPrompt += `\n\nEXEMPLOS DE REFERÊNCIA:\n${examples.slice(0, 2000)}`
+      userPrompt += `\n\nREFERENCE EXAMPLES:\n${examples.slice(0, 2000)}`
     }
 
     const result = await generateArticleWithFallback({
-      systemPrompt: JUDGE_SYSTEM_PROMPT,
+      systemPrompt: buildJudgeSystemPrompt(regionProfile.languageName, regionProfile.name),
       userPrompt,
     })
 
@@ -87,7 +82,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       verdict = JSON.parse(cleaned)
     } catch {
       return NextResponse.json(
-        { error: 'Não foi possível analisar a resposta do modelo. Tente novamente.' },
+        { error: 'Не удалось разобрать ответ модели. Попробуйте ещё раз.' },
         { status: 502 },
       )
     }
@@ -99,7 +94,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     return NextResponse.json(verdict)
   } catch (err) {
     console.error('[ai-check] error:', err)
-    const message = err instanceof Error ? err.message : 'Erro desconhecido'
+    const message = err instanceof Error ? err.message : 'Неизвестная ошибка'
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

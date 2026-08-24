@@ -10,7 +10,7 @@ import { getErrorMessage } from '@/lib/api/error-message'
 type Tab = 'draft' | 'final'
 
 const STATUS_OPTIONS: { value: Article['status']; label: string }[] = [
-  { value: 'draft',     label: 'Rascunho' },
+  { value: 'draft',     label: 'Черновик' },
   { value: 'reviewed',  label: 'Revisado' },
   { value: 'published', label: 'Publicado' },
 ]
@@ -26,7 +26,7 @@ const CONTENT_TYPE_LABELS: Record<string, string> = {
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('pt-BR', {
+  return new Date(dateStr).toLocaleDateString('ru-RU', {
     day: 'numeric', month: 'long', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
@@ -89,7 +89,7 @@ export default function ArticlePage({ params }: PageProps) {
   useEffect(() => {
     let cancelled = false
     fetch(`/api/articles/${id}`)
-      .then((r) => { if (!r.ok) throw new Error('Conteúdo não encontrado'); return r.json() as Promise<Article> })
+      .then((r) => { if (!r.ok) throw new Error('Материал не найден'); return r.json() as Promise<Article> })
       .then((data) => { if (!cancelled) {
         setArticle(data)
         setFinalContent(data.final_content ?? '')
@@ -110,13 +110,13 @@ export default function ArticlePage({ params }: PageProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ final_content: finalContent }),
       })
-      if (!res.ok) throw new Error('Erro ao salvar')
+      if (!res.ok) throw new Error('Не удалось сохранить')
       const updated = await res.json() as Article
       setArticle(updated)
       setSavedMsg('Salvo ✓')
       setTimeout(() => setSavedMsg(''), 2000)
     } catch (err) {
-      setSavedMsg(`Erro: ${getErrorMessage(err)}`)
+      setSavedMsg(`Ошибка: ${getErrorMessage(err)}`)
     } finally {
       setSavingFinal(false)
     }
@@ -131,7 +131,7 @@ export default function ArticlePage({ params }: PageProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus, published_at: newStatus === 'published' ? new Date().toISOString() : null }),
       })
-      if (!res.ok) throw new Error('Erro ao atualizar')
+      if (!res.ok) throw new Error('Не удалось обновить')
       setArticle(await res.json() as Article)
     } catch (err) { console.error('[article/id] status error:', err) }
     finally { setSavingStatus(false) }
@@ -239,8 +239,8 @@ export default function ArticlePage({ params }: PageProps) {
     return (
       <Layout>
         <div className="m3-card text-center py-16 px-4">
-          <p className="mb-4 text-on-surface font-medium">Conteúdo não encontrado</p>
-          <Link href="/history" className="text-primary underline text-sm">← Voltar ao histórico</Link>
+          <p className="mb-4 text-on-surface font-medium">Материал не найден</p>
+          <Link href="/history" className="text-primary underline text-sm">← Вернуться к истории</Link>
         </div>
       </Layout>
     )
@@ -250,7 +250,7 @@ export default function ArticlePage({ params }: PageProps) {
     <Layout>
       <div className="max-w-3xl space-y-6">
         <Link href="/history" className="inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-on-surface transition-colors no-underline">
-          ← Voltar ao histórico
+          ← Вернуться к истории
         </Link>
 
         {/* Title + meta */}
@@ -283,7 +283,7 @@ export default function ArticlePage({ params }: PageProps) {
                     : 'border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/30 rounded-t-lg'
                 }`}
               >
-                {tab === 'draft' ? 'Rascunho IA' : 'Edição final'}
+                {tab === 'draft' ? 'Черновик ИИ' : 'Edição final'}
               </button>
             ))}
           </div>
@@ -298,12 +298,12 @@ export default function ArticlePage({ params }: PageProps) {
                   {article.draft_content}
                 </div>
               ) : (
-                <p className="text-on-surface-variant text-sm text-center py-4">Rascunho vazio</p>
+                <p className="text-on-surface-variant text-sm text-center py-4">Черновик пуст</p>
               )}
             </div>
             {article.draft_content && (
               <div className="flex justify-end">
-                <button onClick={handleCopyDraft} title="Copiar rascunho" className="flex items-center justify-center p-2 rounded-full w-10 h-10 bg-surface-container-high text-on-surface hover:bg-surface-variant border-none cursor-pointer transition-colors">
+                <button onClick={handleCopyDraft} title="Копировать черновик" className="flex items-center justify-center p-2 rounded-full w-10 h-10 bg-surface-container-high text-on-surface hover:bg-surface-variant border-none cursor-pointer transition-colors">
                   {copied ? (
                     <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
                   ) : (
@@ -318,13 +318,13 @@ export default function ArticlePage({ params }: PageProps) {
             <textarea
               value={finalContent}
               onChange={(e) => setFinalContent(e.target.value)}
-              placeholder="Cole ou escreva a versão final do conteúdo..."
+              placeholder="Вставьте или напишите финальную версию…"
               rows={20}
               className="m3-input-outlined min-h-[300px] w-full max-w-full resize-y break-words [overflow-wrap:anywhere]"
             />
             <div className="flex items-center gap-3">
               <button onClick={handleSaveFinal} disabled={savingFinal} className={`m3-button-filled ${savingFinal ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                {savingFinal ? 'Salvando...' : 'Salvar versão final'}
+                {savingFinal ? 'Сохраняю…' : 'Сохранить финальную версию'}
               </button>
               {savedMsg && <span className="text-sm font-medium text-on-surface-variant">{savedMsg}</span>}
             </div>
@@ -355,7 +355,7 @@ export default function ArticlePage({ params }: PageProps) {
                   <option key={value} value={value}>{label}</option>
                 ))}
               </select>
-              {savingStatus && <span className="text-xs font-medium text-on-surface-variant">Atualizando...</span>}
+              {savingStatus && <span className="text-xs font-medium text-on-surface-variant">Обновляю…</span>}
               <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
               <label className="text-xs font-medium text-on-surface-variant">
                 Запланировать публикацию

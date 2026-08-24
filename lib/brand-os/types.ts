@@ -324,7 +324,7 @@ export interface ContentPlanningRequest {
   workspaceId: string
   brandId: string
   regionId: string
-  locale: 'pt-BR'
+  locale: 'pt-BR' | 'es-ES' | 'de-DE' | 'en-US'
   source:
     | { type: 'signal'; signalId: string; opportunityId?: string }
     | { type: 'manual'; topic: string; context?: string }

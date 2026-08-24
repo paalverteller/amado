@@ -28,7 +28,7 @@ export default function RatingWidget({ articleId, currentRating, currentComment,
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ rating: selected, comment }),
       })
-      if (!res.ok) throw new Error('Erro ao salvar')
+      if (!res.ok) throw new Error('Не удалось сохранить')
       setSavedMsg('Salvo ✓')
       onSaved(selected, comment)
       setTimeout(() => setSavedMsg(''), 2000)
@@ -42,7 +42,7 @@ export default function RatingWidget({ articleId, currentRating, currentComment,
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm font-medium text-on-surface-variant m-0">
-        Avaliação do rascunho
+        Оценка черновика
       </p>
 
       <div className="flex gap-1">
@@ -65,7 +65,7 @@ export default function RatingWidget({ articleId, currentRating, currentComment,
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="Notas sobre o rascunho..."
+            placeholder="Комментарий к черновику…"
             rows={2}
             className="m3-input-outlined w-full resize-none"
           />
@@ -75,7 +75,7 @@ export default function RatingWidget({ articleId, currentRating, currentComment,
               disabled={saving || selected === 0}
               className={`m3-button-filled ${saving || selected === 0 ? 'opacity-50 cursor-not-allowed bg-surface-variant text-on-surface-variant hover:shadow-none hover:bg-surface-variant' : ''}`}
             >
-              {saving ? 'Salvando...' : 'Salvar avaliação'}
+              {saving ? 'Сохраняю…' : 'Сохранить оценку'}
             </button>
             {savedMsg && (
               <span className="text-sm font-medium text-on-surface-variant">{savedMsg}</span>

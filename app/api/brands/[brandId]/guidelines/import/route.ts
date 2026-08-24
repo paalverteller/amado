@@ -3,6 +3,8 @@ import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { extractGuidelineRules, calculateExtractionStats } from '@/lib/brand-os/guideline-extractor'
 import type { ExtractionInput } from '@/lib/brand-os/guideline-extractor'
 import { getErrorMessage } from '@/lib/api/error-message'
+import { resolveBrandRegionId } from '@/lib/brand-snapshot'
+import { resolveRegionProfile } from '@/lib/prompts'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,6 +14,7 @@ export async function POST(
 ): Promise<NextResponse> {
   try {
     const { brandId } = await params
+    const regionProfile = await resolveRegionProfile(await resolveBrandRegionId(brandId))
     const body = await request.json()
     const {
       sourceText,
@@ -19,7 +22,7 @@ export async function POST(
       documentType = 'brand_core',
       platform = null,
       documentTitle = 'Imported Guideline',
-      locale = 'pt-BR',
+      locale = regionProfile.locale,
       sourceType = 'manual',
       sourceUrl,
     } = body

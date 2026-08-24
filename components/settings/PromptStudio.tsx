@@ -106,12 +106,12 @@ export default function PromptStudio() {
         body: JSON.stringify(payload),
       })
       const data = await response.json()
-      if (!response.ok) throw new Error(data?.error ?? 'Не удалось сохранить prompt')
+      if (!response.ok) throw new Error(data?.error ?? 'Не удалось сохранить промпт')
       await reload()
       setOpen(false)
-      toast.success(draft.id ? 'Профиль обновлён.' : 'Новый профиль создан.', 'Prompt Library')
+      toast.success(draft.id ? 'Профиль обновлён.' : 'Новый профиль создан.', 'Промпты')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Неизвестная ошибка', 'Prompt Library')
+      toast.error(error instanceof Error ? error.message : 'Неизвестная ошибка', 'Промпты')
     } finally {
       setSaving(false)
     }
@@ -122,10 +122,10 @@ export default function PromptStudio() {
       <section id="prompt-library" className="m3-card mb-6 p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <span className="aug-eyebrow">Prompt Library</span>
+            <span className="aug-eyebrow">Промпты</span>
             <h2 className="mt-2 text-2xl font-extrabold tracking-tight">Профили генерации</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-on-surface-variant">
-              Канальные правила, локализация, SEO и market analysis хранятся как данные. Их можно менять без deploy и создавать новые профили.
+              Правила каналов, локализация, SEO и анализ рынка хранятся как данные. Их можно менять без нового развёртывания.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -135,7 +135,7 @@ export default function PromptStudio() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Найти профиль…"
             />
-            <button type="button" className="aug-button aug-button--primary" onClick={create}>+ Новый prompt</button>
+            <button type="button" className="aug-button aug-button--primary" onClick={create}>+ Новый промпт</button>
           </div>
         </div>
 
@@ -165,9 +165,9 @@ export default function PromptStudio() {
       <AugustDialog
         open={open}
         onClose={() => setOpen(false)}
-        title={draft.id ? 'Редактировать prompt' : 'Новый prompt'}
-        eyebrow="Prompt Library"
-        description="System prompt применяется перед Brand OS, evidence и контекстом конкретной задачи."
+        title={draft.id ? 'Редактировать промпт' : 'Новый промпт'}
+        eyebrow="Промпты"
+        description="Системный промпт применяется перед правилами бренда, источниками и контекстом задачи."
         size="wide"
         footer={(
           <>
@@ -183,11 +183,11 @@ export default function PromptStudio() {
           <label className="aug-field"><span>Версия</span><input value={draft.version} onChange={(e) => setDraft((d) => ({ ...d, version: e.target.value }))} /></label>
           <label className="aug-field md:col-span-2"><span>Краткое назначение</span><input value={draft.tone_description} onChange={(e) => setDraft((d) => ({ ...d, tone_description: e.target.value }))} /></label>
           <label className="aug-field md:col-span-2">
-            <span>Content types · через запятую</span>
+            <span>Типы контента · через запятую</span>
             <input value={draft.content_types} onChange={(e) => setDraft((d) => ({ ...d, content_types: e.target.value }))} placeholder="linkedin_post, article, localization" />
           </label>
           <label className="aug-field md:col-span-2">
-            <span>System prompt</span>
+            <span>Системный промпт</span>
             <textarea value={draft.system_prompt} onChange={(e) => setDraft((d) => ({ ...d, system_prompt: e.target.value }))} rows={22} />
             <small>{draft.system_prompt.length.toLocaleString('ru-RU')} знаков</small>
           </label>

@@ -18,7 +18,7 @@ function formatDate(value: string | null): string {
   if (!value) return 'sem data'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return 'sem data'
-  return date.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })
+  return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
 export default function MarketBasePage() {
@@ -38,7 +38,7 @@ export default function MarketBasePage() {
         <div className="m3-card p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="m3-label text-primary">Base de Mercado</p>
+              <p className="m3-label text-primary">База рынка</p>
               <h1 className="m-0 mt-2 text-3xl font-semibold tracking-tight text-on-surface">
                 50 últimos materiais coletados
               </h1>
@@ -47,12 +47,12 @@ export default function MarketBasePage() {
               </p>
             </div>
             <Link href="/market" className="rounded-full bg-surface-container-highest px-4 py-2 text-sm font-semibold text-primary">
-              Voltar para análise
+              Вернуться к анализу
             </Link>
           </div>
         </div>
 
-        {loading ? <div className="m3-card p-6 text-sm text-on-surface-variant">Carregando base…</div> : null}
+        {loading ? <div className="m3-card p-6 text-sm text-on-surface-variant">Загрузка…</div> : null}
 
         <div className="grid min-w-0 grid-cols-1 gap-4">
           {items.map((item) => (
@@ -61,7 +61,7 @@ export default function MarketBasePage() {
                 <span className="rounded-full bg-secondary-container px-2.5 py-1 text-on-secondary-container">
                   {item.source?.country ?? 'Mundo'}
                 </span>
-                <span>{item.source?.name ?? 'Fonte'}</span>
+                <span>{item.source?.name ?? 'Источник'}</span>
                 <span>{formatDate(item.published_at ?? item.collected_at)}</span>
               </div>
 
@@ -74,7 +74,7 @@ export default function MarketBasePage() {
 
               {item.link ? (
                 <a href={item.link} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-full bg-primary px-4 py-2 text-sm font-semibold text-on-primary">
-                  Abrir fonte
+                  Открыть источник
                 </a>
               ) : null}
             </article>

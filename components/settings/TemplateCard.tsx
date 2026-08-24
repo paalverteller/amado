@@ -37,7 +37,7 @@ export default function TemplateCard({ template, onToggleActive }: TemplateCardP
             {template.name}
             {template.is_default && (
               <span className="bg-primary-container text-on-primary-container text-[10px] uppercase px-2 py-0.5 rounded-full font-bold tracking-wider">
-                Padrão
+                Базовый
               </span>
             )}
           </h4>
@@ -46,20 +46,20 @@ export default function TemplateCard({ template, onToggleActive }: TemplateCardP
           </span>
         </div>
         <p className="text-sm text-on-surface-variant mt-2 leading-relaxed m-0">
-          {template.tone_description || 'Descrição do estilo não disponível.'}
+          {template.tone_description || 'Описание не указано.'}
         </p>
       </div>
 
       <div className="pt-4 border-t border-surface-variant/50 flex items-center justify-between">
         <div className="text-xs font-medium text-on-surface-variant">
-          Usado: <span className="font-bold text-on-surface">{template.usage_count || 0} vezes</span>
+          Использован: <span className="font-bold text-on-surface">{template.usage_count || 0} раз</span>
         </div>
         <button
           onClick={handleToggle}
           disabled={loading}
           className={`m3-button-tonal text-xs py-1.5 px-3 shadow-none ${!template.is_active ? 'bg-primary-container text-on-primary-container hover:bg-primary-container/80' : 'bg-surface-variant text-on-surface-variant hover:bg-error-container hover:text-on-error-container'} ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          {loading ? '...' : (template.is_active ? 'Desativar' : 'Ativar')}
+          {loading ? '...' : (template.is_active ? 'Выключить' : 'Включить')}
         </button>
       </div>
     </div>

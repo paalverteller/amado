@@ -57,7 +57,7 @@ const TABS: Tab[] = [
   { id: 'examples', label: 'Примеры' },
   { id: 'compliance', label: 'Проверка' },
   { id: 'versions', label: 'История изменений' },
-  { id: 'guideline-import', label: 'Импорт гайдлайнов' },
+  { id: 'guideline-import', label: 'Импорт правил' },
 ]
 
 export default function BrandBrainPage() {

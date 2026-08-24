@@ -23,6 +23,12 @@ describe('knowledge/chunking — detectLanguage', () => {
   it('detects Portuguese (Brazil) from diacritics and function words', () => {
     expect(detectLanguage('Não é possível criar isso agora, você está em uma situação complicada.')).toBe('pt-BR')
   })
+  it('detects Spanish (Spain) from distinctive words and punctuation', () => {
+    expect(detectLanguage('¿Cómo puede una empresa mejorar el trabajo con sus clientes sin perder tiempo?')).toBe('es-ES')
+  })
+  it('detects German (Germany) from distinctive words and characters', () => {
+    expect(detectLanguage('Für Unternehmen ist es wichtig, dass die Kunden nicht unnötig lange warten müssen.')).toBe('de-DE')
+  })
   it('falls back to English for plain Latin text', () => {
     expect(detectLanguage('This is a plain English sentence with no special characters at all.')).toBe('en')
   })

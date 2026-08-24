@@ -2,16 +2,19 @@
 
 import { useState } from 'react'
 import Layout from '@/components/Layout'
+import { useMarket } from '@/lib/market-context'
 
 const INTENSITIES = [
-  { id: 'light',  label: 'Leve',   desc: 'Mínimas alterações' },
-  { id: 'medium', label: 'Média',  desc: 'Reformulação notável' },
-  { id: 'deep',   label: 'Profunda', desc: 'Paráfrase completa' },
+  { id: 'light',  label: 'Лёгкая',   desc: 'Минимальные изменения' },
+  { id: 'medium', label: 'Средняя',  desc: 'Заметная переработка' },
+  { id: 'deep',   label: 'Глубокая', desc: 'Полная переработка' },
 ] as const
 
 type Intensity = typeof INTENSITIES[number]['id']
 
 export default function RewritePage() {
+  const { regions, marketCode } = useMarket()
+  const currentRegionId = regions.find((region) => region.code === marketCode)?.id ?? null
   const [sourceText, setSourceText]   = useState('')
   const [intensity, setIntensity]     = useState<Intensity>('deep')
   const [rewritten, setRewritten]     = useState('')
@@ -26,7 +29,7 @@ export default function RewritePage() {
     setUniqueness(null)
 
     if (sourceText.trim().length < 200) {
-      setError('Texto muito curto (mínimo 200 caracteres)')
+      setError('Текст слишком короткий: минимум 200 знаков')
       return
     }
 
@@ -35,15 +38,15 @@ export default function RewritePage() {
       const res = await fetch('/api/rewrite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceText: sourceText.trim(), intensity }),
+        body: JSON.stringify({ sourceText: sourceText.trim(), intensity, regionId: currentRegionId || undefined }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Erro na reformulação')
+      if (!res.ok) throw new Error(data.error ?? 'Не удалось переписать текст')
 
       setRewritten(data.rewritten)
       setUniqueness(data.uniqueness)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro desconhecido')
+      setError(e instanceof Error ? e.message : 'Неизвестная ошибка')
     } finally {
       setLoading(false)
     }
@@ -73,7 +76,7 @@ export default function RewritePage() {
             Rewrite
           </h1>
           <p className="text-sm m-0 mt-1" style={{ color: 'var(--color-on-surface-variant)' }}>
-            Cole um artigo — obtenha uma versão reformulada para verificação de plágio
+            Вставьте текст и получите естественно переписанную версию для выбранного рынка
           </p>
         </div>
 
@@ -81,7 +84,7 @@ export default function RewritePage() {
         <div className="m3-card p-4 mb-4">
           <label className="text-xs font-semibold uppercase tracking-wide mb-3 block"
                  style={{ color: 'var(--color-on-surface-variant)' }}>
-            Intensidade da reformulação
+            Степень переработки
           </label>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             {INTENSITIES.map(({ id, label, desc }) => (
@@ -118,19 +121,19 @@ export default function RewritePage() {
         <div className="m3-card p-4 mb-4">
           <label className="text-xs font-semibold uppercase tracking-wide mb-2 block"
                  style={{ color: 'var(--color-on-surface-variant)' }}>
-            Texto original
+            Исходный текст
           </label>
           <textarea
             value={sourceText}
             onChange={(e) => setSourceText(e.target.value)}
-            placeholder="Cole o artigo completo aqui..."
+            placeholder="Вставьте исходный текст…"
             rows={10}
             className="m3-input-outlined"
             style={{ resize: 'vertical', fontFamily: 'var(--font-sans)', lineHeight: 1.6 }}
           />
           <div className="flex justify-between items-center mt-2">
             <span style={{ fontSize: 11, color: 'var(--color-on-surface-variant)' }}>
-              {sourceText.length} caracteres
+              {sourceText.length} знаков
             </span>
           </div>
         </div>
@@ -148,7 +151,7 @@ export default function RewritePage() {
           disabled={loading || sourceText.trim().length < 200}
           className="m3-button-filled w-full h-12 text-base disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {loading ? 'Reformulando...' : 'Reformular'}
+          {loading ? 'Переписываю…' : 'Переписать'}
         </button>
 
         {/* Result */}
@@ -157,7 +160,7 @@ export default function RewritePage() {
             <div className="flex justify-between items-center mb-3">
               <label className="text-xs font-semibold uppercase tracking-wide"
                      style={{ color: 'var(--color-on-surface-variant)' }}>
-                Resultado
+                Результат
               </label>
               {uniqueness !== null && (
                 <span style={{
@@ -165,7 +168,7 @@ export default function RewritePage() {
                   background: `${uniquenessColor(uniqueness)}1A`,
                   color: uniquenessColor(uniqueness),
                 }}>
-                  Originalidade ~{uniqueness}%
+                  Уникальность ~{uniqueness}%
                 </span>
               )}
             </div>
@@ -187,7 +190,7 @@ export default function RewritePage() {
               onClick={handleCopy}
               className="m3-button-tonal mt-3"
             >
-              {copied ? 'Copiado ✓' : 'Copiar texto'}
+              {copied ? 'Скопировано ✓' : 'Копировать текст'}
             </button>
           </div>
         )}

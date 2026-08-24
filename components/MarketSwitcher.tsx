@@ -3,6 +3,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMarket, MARKET_FLAGS } from '@/lib/market-context'
 
+const MARKET_NAMES_RU: Record<string, string> = {
+  BR: 'Бразилия',
+  ES: 'Испания',
+  DE: 'Германия',
+  US: 'США',
+  GB: 'Великобритания',
+  MX: 'Мексика',
+  IT: 'Италия',
+}
+
+function marketName(code?: string, fallback?: string): string {
+  if (!code) return fallback || 'Бразилия'
+  return MARKET_NAMES_RU[code] ?? fallback ?? code
+}
+
 /** Dropdown showing the active market (Brazil by default) with other active
  *  regions to switch to. Sprint 12 Phase 2: selection only, does not yet
  *  change prompts/content language/API filtering (see docs/AMADO_ROADMAP.md
@@ -43,7 +58,7 @@ export default function MarketSwitcher({ compact = false }: { compact?: boolean 
         aria-expanded={open}
       >
         <span className="aug-market-switcher__flag" aria-hidden="true">{currentFlag}</span>
-        {!compact && <span className="aug-market-switcher__label">{current?.name ?? 'Brasil'}</span>}
+        {!compact && <span className="aug-market-switcher__label">{marketName(current?.code, current?.name)}</span>}
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="m6 9 6 6 6-6" />
         </svg>
@@ -65,7 +80,7 @@ export default function MarketSwitcher({ compact = false }: { compact?: boolean 
               data-active={region.code === marketCode ? 'true' : undefined}
             >
               <span className="aug-market-switcher__flag" aria-hidden="true">{MARKET_FLAGS[region.code] ?? '🌐'}</span>
-              <span>{region.name}</span>
+              <span>{marketName(region.code, region.name)}</span>
               {region.code === marketCode && (
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginInlineStart: 'auto' }}>
                   <path d="m5 12 5 5 9-9" />

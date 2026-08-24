@@ -12,7 +12,6 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { isShortFormat, isSegmentedFormat, getFormatMeta, type ContentFormat } from './content-formats'
-import { DEFAULT_LOCALE } from './locale'
 import { createSupabaseKnowledgeRepository } from '@/lib/repositories/knowledge-repository'
 import { embedTexts, isEmbeddingConfigured } from '@/lib/knowledge/embeddings'
 import { isFeatureEnabled } from '@/lib/amado-config'
@@ -22,11 +21,11 @@ export const CURRENT_PROMPT_VERSION = 'v1.0_amado_stage0'
 // Re-export format helpers for backward compatibility
 export { isShortFormat, isSegmentedFormat }
 
-const PROMPT_FALLBACK = `<role>Especialista sênior de marketing digital com 10+ anos no mercado brasileiro.</role>
-<voice>Direto, estratégico, com autoridade mas sem arrogância. Usa exemplos concretos do mercado brasileiro.</voice>
-<forbidden>linguagem corporativa genérica ("sinergia", "paradigma"); tradução literal do inglês; clichês de marketing sem contexto; ausência de CTA</forbidden>
-<format>Texto puro. Parágrafos curtos (3-4 frases). Subtítulos em nova linha, sem markdown. CTA claro no final.</format>
-<language>${DEFAULT_LOCALE}</language>`
+const PROMPT_FALLBACK = `<role>Senior digital marketing specialist.</role>
+<voice>Direct, strategic and authoritative without sounding arrogant. Use concrete examples appropriate to the target market.</voice>
+<forbidden>generic corporate filler; literal translation; unsupported marketing clichés; invented facts; missing CTA when the format requires one</forbidden>
+<format>Plain text. Short readable paragraphs. Follow the requested channel and format rules.</format>
+<language>Use the target language and locale from the region context.</language>`
 
 export async function buildSystemPrompt(
   templateId?: string | null,
@@ -203,6 +202,7 @@ export interface RegionProfile {
 const LANGUAGE_NAMES: Record<string, string> = {
   BR: 'Portuguese (Brazil)',
   ES: 'Spanish (Spain)',
+  DE: 'German (Germany)',
   US: 'English (US)',
   GB: 'English (UK)',
 }
@@ -265,9 +265,10 @@ export async function buildRegionContextLayer(regionId?: string | null): Promise
 
   const culturalNotes: Record<string, string> = {
     'BR': 'Brazilian market: use "você" (not "tu"), mention PIX for payments, WhatsApp as primary channel, Brazilian holidays (Carnaval, Black Friday BR in November, Dia das Mães in May), local examples (São Paulo, Rio, Mercado Livre). Avoid literal translations from English.',
-    'US': 'US market: direct tone, credit card payments, email/SMS channels, US holidays (Thanksgiving, Black Friday, Memorial Day).',
+    'US': 'US market: write natural US English; use concise, direct wording and US spelling; prefer terminology familiar in US digital products; use locally relevant examples only when supported by context; avoid British spelling, translated European syntax, unnecessary jargon and generic SaaS hype.',
     'GB': 'UK market: polite but direct, GBP currency, British spelling (colour, organise), UK holidays (Boxing Day, Bank Holidays).',
     'ES': 'Spanish market: use "tú" for most brands, "usted" for formal/B2B; Bizum as a common payments mention alongside cards; WhatsApp and Instagram as primary channels; Spanish holidays (Navidad, Rebajas de enero, Black Friday, Reyes Magos on Jan 6); local examples (Madrid, Barcelona, El Corte Inglés). European Spanish, not Latin American (avoid "ustedes" as the only plural, avoid Mexican/Argentine slang).',
+    'DE': 'German market: write idiomatic Standard German for Germany; use "Sie" by default for formal B2B unless the brand explicitly requires "du"; prefer clear, precise and restrained wording; use German date and number conventions; avoid literal English syntax, unnecessary Anglicisms and exaggerated SaaS claims.',
   }
 
   const note = culturalNotes[region.code]
@@ -474,14 +475,30 @@ function resolveLanguageProfile(spec: ContentSpec): {
     }
   }
 
-  const code = ctx.locale === 'es-ES' ? 'ES' : null
-
-  if (code === 'ES') {
+  if (ctx.locale === 'es-ES') {
     return {
       languageName: ctx.languageName || 'Spanish (Spain)',
       marketAdjective: 'Spanish',
       marketLabel: 'SPANISH MARKET SIGNALS',
       seasonalityExample: 'Spanish dates (Navidad, Rebajas de enero, Reyes Magos on Jan 6)',
+    }
+  }
+
+  if (ctx.locale === 'de-DE') {
+    return {
+      languageName: ctx.languageName || 'German (Germany)',
+      marketAdjective: 'German',
+      marketLabel: 'GERMAN MARKET SIGNALS',
+      seasonalityExample: 'German dates and seasonal moments relevant to the topic',
+    }
+  }
+
+  if (ctx.locale === 'en-US') {
+    return {
+      languageName: ctx.languageName || 'English (US)',
+      marketAdjective: 'US',
+      marketLabel: 'US MARKET SIGNALS',
+      seasonalityExample: 'US dates and seasonal moments relevant to the topic',
     }
   }
 

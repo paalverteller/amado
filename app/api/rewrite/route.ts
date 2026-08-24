@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { generateArticleWithFallback } from '@/lib/ai'
 import { cleanPlainTextOutput } from '@/lib/text-cleanup'
 import { apiError } from '@/lib/api/errors'
+import { resolveRegionProfile } from '@/lib/prompts'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -9,25 +10,29 @@ export const dynamic = 'force-dynamic'
 type RewriteBody = {
   sourceText?: string
   intensity?: 'light' | 'medium' | 'deep'
+  regionId?: string
 }
 
-const INTENSITY_INSTRUCTIONS: Record<string, string> = {
-  light: `Grau leve de reformulação: altere a ordem das palavras em 30-40% das frases,
-substitua sinônimos óbvios, mantenha a estrutura dos parágrafos.`,
-  medium: `Grau médio de reformulação: reconstrua completamente 60-70% das frases,
-altere a estrutura dos parágrafos onde apropriado, substitua terminologia por sinônimos sem perder o sentido,
-altere exemplos e metáforas para equivalentes.`,
-  deep: `Grau profundo de reformulação: reescreva o texto COMPLETAMENTE com suas próprias palavras,
-preservando apenas os fatos-chave, ideias e lógica da exposição. Altere:
-- Estrutura das frases e parágrafos
-- Estilo de exposição (mantendo o tom profissional)
-- Exemplos para outros similares em sentido, mas diferentes em forma
-- Ordem da argumentação, se isso não prejudicar a lógica
-IMPORTANTE: o texto final deve passar em verificadores de plágio
-com originalidade de no mínimo 85%, mas preservando 100% de precisão factual
-e a ideia-chave do original.`,
+const INTENSITY_INSTRUCTIONS: Record<string, Record<string, string>> = {
+  light: {
+    'pt-BR': 'Reformulação leve: altere a ordem das palavras em cerca de 30–40% das frases, use sinônimos naturais e preserve a estrutura dos parágrafos.',
+    'es-ES': 'Reescritura ligera: cambia el orden de las palabras en aproximadamente el 30–40% de las frases, usa sinónimos naturales y conserva la estructura de los párrafos.',
+    'de-DE': 'Leichte Überarbeitung: Ändere die Wortstellung in etwa 30–40 % der Sätze, verwende natürliche Synonyme und behalte die Absatzstruktur bei.',
+    'en-US': 'Light rewrite: change wording and sentence order in roughly 30–40% of sentences, use natural synonyms, and preserve paragraph structure.',
+  },
+  medium: {
+    'pt-BR': 'Reformulação média: reconstrua cerca de 60–70% das frases, ajuste a estrutura dos parágrafos quando fizer sentido e preserve integralmente o significado.',
+    'es-ES': 'Reescritura media: reconstruye aproximadamente el 60–70% de las frases, ajusta la estructura de los párrafos cuando tenga sentido y conserva íntegramente el significado.',
+    'de-DE': 'Mittlere Überarbeitung: Formuliere etwa 60–70 % der Sätze neu, passe die Absatzstruktur bei Bedarf an und bewahre die Bedeutung vollständig.',
+    'en-US': 'Medium rewrite: reconstruct roughly 60–70% of sentences, adjust paragraph structure where useful, and fully preserve the meaning.',
+  },
+  deep: {
+    'pt-BR': 'Reformulação profunda: reescreva completamente com palavras próprias, preservando fatos, ideia central e lógica. Mude estrutura, formulações e exemplos quando possível sem inventar nada.',
+    'es-ES': 'Reescritura profunda: reescribe por completo con tus propias palabras, conservando hechos, idea central y lógica. Cambia estructura, formulaciones y ejemplos cuando sea posible sin inventar nada.',
+    'de-DE': 'Tiefe Überarbeitung: Schreibe den Text vollständig in eigenen Worten neu und erhalte Fakten, Kernaussage und Logik. Ändere Struktur, Formulierungen und Beispiele, ohne etwas zu erfinden.',
+    'en-US': 'Deep rewrite: rewrite the text completely in your own words while preserving facts, core idea, and logic. Change structure, phrasing, and examples where possible without inventing anything.',
+  },
 }
-
 function estimateUniqueness(original: string, rewritten: string): number {
   // Heurística simples baseada na interseção de shingles de 4 palavras.
   // Não substitui um serviço real de anti-plágio, mas dá uma orientação.
@@ -63,33 +68,36 @@ export async function POST(req: NextRequest): Promise<Response> {
     const body = (await req.json()) as RewriteBody
     const sourceText = (body.sourceText ?? '').trim()
     const intensity  = body.intensity ?? 'deep'
+    const regionProfile = await resolveRegionProfile(body.regionId)
 
     if (!sourceText) {
-      return NextResponse.json({ error: 'Texto para reformulação é obrigatório' }, { status: 400 })
+      return NextResponse.json({ error: 'Исходный текст обязателен' }, { status: 400 })
     }
     if (sourceText.length < 200) {
-      return NextResponse.json({ error: 'Texto muito curto (mínimo 200 caracteres)' }, { status: 400 })
+      return NextResponse.json({ error: 'Текст слишком короткий: минимум 200 знаков' }, { status: 400 })
     }
     if (sourceText.length > 20000) {
-      return NextResponse.json({ error: 'Texto muito longo (máximo 20000 caracteres)' }, { status: 400 })
+      return NextResponse.json({ error: 'Текст слишком длинный: максимум 20 000 знаков' }, { status: 400 })
     }
 
+    const intensityInstruction = INTENSITY_INSTRUCTIONS[intensity]?.[regionProfile.locale]
+      ?? INTENSITY_INSTRUCTIONS.deep[regionProfile.locale]
+      ?? INTENSITY_INSTRUCTIONS.deep['en-US']
+
     const systemPrompt = [
-      'Você é um editor profissional e redator.',
-      'Sua tarefa é reescrever o texto fornecido de forma que ele:',
-      '1. Preserve completamente a precisão factual e a ideia-chave do original.',
-      '2. Soe natural em português do Brasil, sem traços de tradução automática.',
-      '3. NÃO contenha clichês do tipo "Neste artigo" / "É importante notar" / "Vale ressaltar".',
-      '4. Passe em verificadores de plágio com originalidade de no mínimo 85%.',
-      '',
-      INTENSITY_INSTRUCTIONS[intensity] ?? INTENSITY_INSTRUCTIONS.deep,
-      '',
-      'FORMATO ESTRITO DE SAÍDA:',
-      'Retorne APENAS o texto reescrito. Sem preâmbulos, sem "Aqui está o texto reescrito:",',
-      'sem marcação markdown, sem comentários sobre o processo de reformulação.',
+      'You are a professional editor and copywriter.',
+      `Target market: ${regionProfile.name}.`,
+      `Target locale: ${regionProfile.locale}.`,
+      `Output language: ${regionProfile.languageName}.`,
+      'Rewrite the provided text so that it fully preserves factual accuracy, meaning and intent.',
+      'The result must sound native in the target locale and must not look like a literal translation.',
+      'Do not invent facts, claims, examples, numbers or product capabilities.',
+      'Avoid generic AI/corporate filler.',
+      intensityInstruction,
+      'Return ONLY the rewritten text. No preamble, no markdown, no process notes.',
     ].join('\n')
 
-    const userPrompt = `TEXTO ORIGINAL PARA REFORMULAÇÃO:\n\n${sourceText}`
+    const userPrompt = `SOURCE TEXT TO REWRITE:\n\n${sourceText}`
 
     const result = await generateArticleWithFallback({
       systemPrompt,

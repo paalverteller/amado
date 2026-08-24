@@ -215,7 +215,7 @@ function CompetitorCard({ competitor, onChanged }: { competitor: Competitor; onC
                   <option value="rss">RSS</option>
                   <option value="atom">Atom</option>
                   <option value="html_index">HTML</option>
-                  <option value="manual">Manual</option>
+                  <option value="manual">Вручную</option>
                 </select>
                 <button
                   type="button"

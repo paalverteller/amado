@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { getErrorMessage } from '@/lib/api/error-message'
+import { resolveRegionProfile } from '@/lib/prompts'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const {
       topic,
       contentFormat = 'article',
-      locale = 'pt-BR',
+      locale: requestedLocale,
       seoMode = false,
       context,
       evidenceItemIds,
@@ -56,6 +57,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       priority = 5,
       scheduledAt,
     } = body
+
+    const resolvedLocale = requestedLocale || (await resolveRegionProfile(regionId)).locale
 
     if (!topic?.trim()) {
       return NextResponse.json({ error: 'Topic is required' }, { status: 400 })
@@ -67,7 +70,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         status: 'pending',
         topic: topic.trim(),
         content_format: contentFormat,
-        locale,
+        locale: resolvedLocale,
         seo_mode: seoMode,
         context: context || null,
         evidence_item_ids: evidenceItemIds || null,

@@ -5,9 +5,12 @@ import { recordAiUsage } from '@/lib/ai-usage'
 import { createSupabaseKnowledgeRepository } from '@/lib/repositories/knowledge-repository'
 import { processKnowledgeAsset } from '@/lib/knowledge/process-asset'
 import { getErrorMessage } from '@/lib/api/error-message'
+import { resolveRegionProfile } from '@/lib/prompts'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
+
+type Body = { regionId?: string }
 
 type EvidenceRow = {
   id: string
@@ -17,7 +20,7 @@ type EvidenceRow = {
   canonical_url: string | null
   published_at: string | null
   discovered_at: string
-  source: { name?: string | null; source_category?: string | null; country?: string | null } | null
+  source: { name?: string | null; source_category?: string | null; country?: string | null; region_id?: string | null } | null
 }
 
 function evidenceBlock(rows: EvidenceRow[]): string {
@@ -36,9 +39,11 @@ function evidenceBlock(rows: EvidenceRow[]): string {
   }).join('\n\n')
 }
 
-export async function POST(_request: NextRequest): Promise<NextResponse> {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    const body = await request.json().catch(() => ({})) as Body
     const admin = getSupabaseAdmin()
+    const regionProfile = await resolveRegionProfile(body.regionId)
     const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
 
     const [{ data: template, error: templateError }, { data: evidence, error: evidenceError }, { data: defaultBrand }] = await Promise.all([
@@ -50,16 +55,16 @@ export async function POST(_request: NextRequest): Promise<NextResponse> {
         .limit(1)
         .maybeSingle(),
       admin.from('evidence_items')
-        .select('id, source_title, source_summary, full_text, canonical_url, published_at, discovered_at, source:rss_sources(name, source_category, country)')
+        .select('id, source_title, source_summary, full_text, canonical_url, published_at, discovered_at, source:rss_sources(name, source_category, country, region_id)')
         .gte('discovered_at', since)
         .order('discovered_at', { ascending: false })
-        .limit(80),
-      admin.from('brand_profiles')
-        .select('id')
-        .eq('is_default', true)
-        .eq('is_active', true)
-        .limit(1)
-        .maybeSingle(),
+        .limit(250),
+      (() => {
+        let query = admin.from('brand_profiles').select('id').eq('is_active', true)
+        if (body.regionId) query = query.eq('region_id', body.regionId)
+        else query = query.eq('is_default', true)
+        return query.order('is_default', { ascending: false }).limit(1).maybeSingle()
+      })(),
     ])
 
     if (templateError || !template?.system_prompt) {
@@ -67,10 +72,13 @@ export async function POST(_request: NextRequest): Promise<NextResponse> {
     }
     if (evidenceError) throw evidenceError
 
-    const rows = (evidence ?? []) as unknown as EvidenceRow[]
+    const allRows = (evidence ?? []) as unknown as EvidenceRow[]
+    const rows = body.regionId
+      ? allRows.filter((row) => !row.source?.region_id || row.source.region_id === body.regionId)
+      : allRows
     if (rows.length < 5) {
       return NextResponse.json({
-        error: `Недостаточно свежих evidence за 60 дней (${rows.length}). Сначала обновите источники в разделе Рынок.`,
+        error: `Недостаточно свежих источников за 60 дней (${rows.length}). Сначала обновите источники в разделе Рынок.`,
       }, { status: 409 })
     }
 
@@ -83,11 +91,12 @@ EXECUTION CONSTRAINTS FOR AMADO:
 - Every factual claim must cite one or more supplied source IDs like [S4].
 - When a requested data point is absent, explicitly say that recent reliable evidence is insufficient.
 - Keyword interest/volume may be qualitative only and must be labelled as an analytical classification, not measured Google Trends data, unless evidence explicitly contains such data.
-- Output in Brazilian Portuguese.`
+- Output in ${regionProfile.languageName} for ${regionProfile.name}.
+- Any Brazil-specific language in the stored template is overridden by the selected target market above.`
 
     const result = await generateArticleWithFallback({
       systemPrompt,
-      userPrompt: `EVIDENCE PACK — BRAZIL — LAST 60 DAYS ONLY\n\n${evidenceBlock(rows)}`,
+      userPrompt: `EVIDENCE PACK — ${regionProfile.name.toUpperCase()} — LAST 60 DAYS ONLY\n\n${evidenceBlock(rows)}`,
       maxTokens: 8000,
     })
     await recordAiUsage('market_deep_analysis', result.model, result.usage)
@@ -97,7 +106,7 @@ EXECUTION CONSTRAINTS FOR AMADO:
       const repo = createSupabaseKnowledgeRepository()
       const asset = await repo.create({
         brand_id: defaultBrand?.id ?? null,
-        title: `Deep Market Analysis — Brasil — ${new Date().toISOString().slice(0, 10)}`,
+        title: `Deep Market Analysis — ${regionProfile.name} — ${new Date().toISOString().slice(0, 10)}`,
         content_type: 'report',
         raw_text: result.text,
         collection: 'market-analysis',

@@ -24,7 +24,7 @@ export default function GuidelineImportTab({ brandId }: { brandId: string }) {
 
   async function startImport() {
     if (!sourceUrl && !sourceText) {
-      setError('Укажите URL или текст guideline')
+      setError('Укажите URL или текст правил')
       return
     }
     setLoading(true)
@@ -82,25 +82,25 @@ export default function GuidelineImportTab({ brandId }: { brandId: string }) {
     <div className="space-y-6">
       {/* Import Form */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold mb-4">Импорт guideline</h3>
+        <h3 className="text-lg font-semibold mb-4">Импорт правил</h3>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Тип источника</label>
             <select value={sourceType} onChange={e => setSourceType(e.target.value)} className="w-full px-3 py-2 border rounded-lg">
               <option value="brand_book">Брендбук</option>
-              <option value="style_guide">Style Guide</option>
+              <option value="style_guide">Гайд по стилю</option>
               <option value="legal_review">Юридическая проверка</option>
               <option value="competitor_analysis">Анализ конкурентов</option>
               <option value="manual">Ручной ввод</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">URL (опционально)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">URL (необязательно)</label>
             <input type="url" value={sourceUrl} onChange={e => setSourceUrl(e.target.value)} className="w-full px-3 py-2 border rounded-lg" placeholder="https://..." />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Текст guideline</label>
-            <textarea value={sourceText} onChange={e => setSourceText(e.target.value)} rows={6} className="w-full px-3 py-2 border rounded-lg" placeholder="Вставьте текст guideline сюда..." />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Текст правил</label>
+            <textarea value={sourceText} onChange={e => setSourceText(e.target.value)} rows={6} className="w-full px-3 py-2 border rounded-lg" placeholder="Вставьте текст правил…" />
           </div>
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <button onClick={startImport} disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">

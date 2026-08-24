@@ -97,7 +97,7 @@ function BrandMark({ compact = false }: { compact?: boolean }) {
       {!compact ? (
         <span className="aug-brand__copy">
           <strong>amado</strong>
-          <small>marketing intelligence</small>
+          <small>маркетинговая аналитика</small>
         </span>
       ) : null}
     </Link>
@@ -162,7 +162,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         <div className="aug-sidebar__footer">
           <div className="aug-growth-note">
             <span className="aug-growth-note__dot" />
-            <div><strong>Amado</strong><small>Brazil · AI workspace</small></div>
+            <div><strong>Amado</strong><small>Маркетинговое пространство</small></div>
           </div>
           <button type="button" className="aug-nav-item aug-nav-item--logout" onClick={handleLogout}>
             <span className="aug-nav-item__icon"><NavIcon name="logout" /></span>

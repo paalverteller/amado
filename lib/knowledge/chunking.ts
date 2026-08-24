@@ -34,7 +34,7 @@ export function normalizeText(raw: string): string {
  * English). Falls back to 'und' (undetermined) rather than guessing
  * wrong with false confidence.
  */
-export function detectLanguage(text: string): 'ru' | 'pt-BR' | 'en' | 'und' {
+export function detectLanguage(text: string): 'ru' | 'pt-BR' | 'es-ES' | 'de-DE' | 'en' | 'und' {
   const sample = text.slice(0, 2000)
   if (!sample.trim()) return 'und'
 
@@ -45,9 +45,17 @@ export function detectLanguage(text: string): 'ru' | 'pt-BR' | 'en' | 'und' {
 
   // pt-BR tells: accented vowels common in Portuguese + a few very common
   // function words that don't appear in English.
-  const ptSignals = (sample.match(/[ãõáéíóúâêôç]/gi) ?? []).length
-  const ptWords = (sample.match(/\b(não|você|para|com|uma|são|está|isso)\b/gi) ?? []).length
-  if (ptSignals > 3 || ptWords > 2) return 'pt-BR'
+  const ptSignals = (sample.match(/[ãõâêôç]/gi) ?? []).length
+  const ptWords = (sample.match(/\b(não|você|vocês|uma|são|isso|também|obrigado)\b/gi) ?? []).length
+  if (ptSignals > 1 || ptWords > 2) return 'pt-BR'
+
+  const esSignals = (sample.match(/[ñ¿¡]/gi) ?? []).length
+  const esWords = (sample.match(/\b(el|los|las|usted|ustedes|también|porque|pero|desde|hasta|negocio|empresa)\b/gi) ?? []).length
+  if (esSignals > 0 || esWords > 3) return 'es-ES'
+
+  const deSignals = (sample.match(/[äöüß]/gi) ?? []).length
+  const deWords = (sample.match(/\b(der|die|das|und|nicht|für|mit|eine|einer|einem|unternehmen|geschäft|kunden)\b/gi) ?? []).length
+  if (deSignals > 0 || deWords > 3) return 'de-DE'
 
   return 'en'
 }

@@ -8,7 +8,7 @@
 export type Locale = 'pt-BR' | 'en' | 'ru'
 
 export const DEFAULT_LOCALE: Locale = 'ru'
-export const SUPPORTED_LOCALES: Locale[] = ['ru', 'pt-BR', 'en']
+export const SUPPORTED_LOCALES: Locale[] = ['ru']
 
 export const LOCALE_NAMES: Record<Locale, string> = {
   'pt-BR': 'Português (Brasil)',
@@ -28,10 +28,8 @@ export type MessageDictionary = Record<string, string | Record<string, string>>
 // Current locale (can be made dynamic later with cookies/context)
 let _currentLocale: Locale = DEFAULT_LOCALE
 
-export function setLocale(locale: Locale): void {
-  if (SUPPORTED_LOCALES.includes(locale)) {
-    _currentLocale = locale
-  }
+export function setLocale(_locale: Locale): void {
+  _currentLocale = 'ru'
 }
 
 export function getLocale(): Locale {
@@ -51,9 +49,9 @@ export function t(key: string, locale: Locale = _currentLocale): string {
     if (current && typeof current === 'object' && part in current) {
       current = (current as Record<string, unknown>)[part]
     } else {
-      // Fallback to pt-BR
-      if (locale !== 'pt-BR') {
-        return t(key, 'pt-BR')
+      // UI is Russian-only: missing translations fall back to Russian.
+      if (locale !== 'ru') {
+        return t(key, 'ru')
       }
       return key // Return key as last resort
     }

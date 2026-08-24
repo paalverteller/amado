@@ -15,16 +15,16 @@ const PROFILE_FIELDS = [
   ['positioning', 'Позиционирование'],
   ['voice_description', 'Голос бренда'],
   ['target_audience', 'Целевая аудитория'],
-  ['value_propositions', 'Value propositions'],
+  ['value_propositions', 'Ценность'],
   ['strategic_themes', 'Стратегические темы'],
   ['product_facts', 'Факты о продукте'],
-  ['proof_points', 'Proof points'],
-  ['cta_library', 'CTA library'],
+  ['proof_points', 'Доказательства'],
+  ['cta_library', 'Призывы к действию'],
   ['forbidden_words', 'Запрещённые слова'],
   ['glossary', 'Глоссарий'],
-  ['legal_disclaimers', 'Legal / disclaimers'],
+  ['legal_disclaimers', 'Юридические ограничения'],
   ['sensitive_topics', 'Чувствительные темы'],
-  ['default_platform_rules', 'Общие platform rules'],
+  ['default_platform_rules', 'Общие правила площадок'],
   ['competitors', 'Конкуренты'],
   ['example_posts', 'Примеры'],
 ] as const
@@ -42,10 +42,10 @@ export default function BrandOsEditor({ brandId }: { brandId: string }) {
     try {
       const response = await fetch(`/api/brands/${brandId}/os`, { cache: 'no-store' })
       const body = await response.json()
-      if (!response.ok) throw new Error(body?.error ?? 'Не удалось загрузить Brand OS')
+      if (!response.ok) throw new Error(body?.error ?? 'Не удалось загрузить бренд')
       setData(body as Data)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Неизвестная ошибка', 'Brand OS')
+      toast.error(error instanceof Error ? error.message : 'Неизвестная ошибка', 'Бренд')
     } finally {
       setLoading(false)
     }
@@ -61,11 +61,11 @@ export default function BrandOsEditor({ brandId }: { brandId: string }) {
         body: JSON.stringify({ profile: data.profile }),
       })
       const body = await response.json()
-      if (!response.ok) throw new Error(body?.error ?? 'Не удалось сохранить Brand OS')
+      if (!response.ok) throw new Error(body?.error ?? 'Не удалось сохранить бренд')
       setData((current) => current ? { ...current, profile: body.profile } : current)
-      toast.success('Core Brand OS обновлён.')
+      toast.success('Основа бренда обновлена.')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Неизвестная ошибка', 'Brand OS')
+      toast.error(error instanceof Error ? error.message : 'Неизвестная ошибка', 'Бренд')
     } finally {
       setSaving(false)
     }
@@ -80,9 +80,9 @@ export default function BrandOsEditor({ brandId }: { brandId: string }) {
       })
       const body = await response.json()
       if (!response.ok) throw new Error(body?.error ?? 'Не удалось сохранить')
-      toast.success(entity === 'pillar' ? 'Content pillar обновлён.' : 'Термин обновлён.')
+      toast.success(entity === 'pillar' ? 'Тема контента обновлена.' : 'Термин обновлён.')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Неизвестная ошибка', 'Brand OS')
+      toast.error(error instanceof Error ? error.message : 'Неизвестная ошибка', 'Бренд')
     }
   }
 
@@ -90,29 +90,29 @@ export default function BrandOsEditor({ brandId }: { brandId: string }) {
     <>
       <div className="mb-5 flex justify-end">
         <button type="button" className="aug-button aug-button--primary" onClick={openEditor} disabled={!brandId}>
-          Редактировать Brand OS
+          Редактировать бренд
         </button>
       </div>
 
       <AugustDialog
         open={open}
         onClose={() => setOpen(false)}
-        title="Редактор Brand OS"
-        eyebrow="Governance"
+        title="Редактор бренда"
+        eyebrow="Правила"
         description="Это живые данные, которые читает генерация. Изменения применяются к следующим материалам."
         size="wide"
         footer={(
           <>
             <button type="button" className="aug-button aug-button--secondary" onClick={() => setOpen(false)}>Закрыть</button>
-            <button type="button" className="aug-button aug-button--primary" onClick={saveProfile} disabled={saving || !data}>{saving ? 'Сохраняю…' : 'Сохранить core'}</button>
+            <button type="button" className="aug-button aug-button--primary" onClick={saveProfile} disabled={saving || !data}>{saving ? 'Сохраняю…' : 'Сохранить основу'}</button>
           </>
         )}
       >
-        {loading ? <p className="text-sm text-on-surface-variant">Загрузка Brand OS…</p> : null}
+        {loading ? <p className="text-sm text-on-surface-variant">Загрузка бренда…</p> : null}
         {data ? (
           <div className="space-y-8">
             <section>
-              <h3 className="text-lg font-bold">Core</h3>
+              <h3 className="text-lg font-bold">Основа</h3>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 {PROFILE_FIELDS.map(([key, label]) => (
                   <label key={key} className={`aug-field ${['positioning','voice_description','target_audience','strategic_themes','product_facts','proof_points','legal_disclaimers','example_posts'].includes(key) ? 'md:col-span-2' : ''}`}>
@@ -126,7 +126,7 @@ export default function BrandOsEditor({ brandId }: { brandId: string }) {
             </section>
 
             <section>
-              <h3 className="text-lg font-bold">Content pillars</h3>
+              <h3 className="text-lg font-bold">Темы контента</h3>
               <div className="mt-4 space-y-3">
                 {data.pillars.map((pillar, index) => (
                   <div key={pillar.id} className="rounded-[18px] border border-surface-variant p-4">
@@ -141,18 +141,18 @@ export default function BrandOsEditor({ brandId }: { brandId: string }) {
             </section>
 
             <section>
-              <h3 className="text-lg font-bold">Vocabulary governance</h3>
+              <h3 className="text-lg font-bold">Терминология</h3>
               <div className="mt-4 space-y-3">
                 {data.terms.map((term, index) => (
                   <div key={term.id} className="grid gap-3 rounded-[18px] border border-surface-variant p-4 md:grid-cols-[180px_140px_minmax(0,1fr)_120px]">
                     <input className="rounded-xl border border-surface-variant px-3" value={term.term} onChange={(e) => setData((current) => current ? { ...current, terms: current.terms.map((row, i) => i === index ? { ...row, term: e.target.value } : row) } : current)} />
                     <select className="rounded-xl border border-surface-variant px-3" value={term.policy} onChange={(e) => setData((current) => current ? { ...current, terms: current.terms.map((row, i) => i === index ? { ...row, policy: e.target.value } : row) } : current)}>
-                      <option value="preferred">preferred</option>
-                      <option value="allowed">allowed</option>
-                      <option value="discouraged">discouraged</option>
-                      <option value="forbidden">forbidden</option>
+                      <option value="preferred">Предпочтительный</option>
+                      <option value="allowed">Разрешённый</option>
+                      <option value="discouraged">Нежелательный</option>
+                      <option value="forbidden">Запрещённый</option>
                     </select>
-                    <input className="rounded-xl border border-surface-variant px-3" value={term.replacement ?? ''} onChange={(e) => setData((current) => current ? { ...current, terms: current.terms.map((row, i) => i === index ? { ...row, replacement: e.target.value } : row) } : current)} placeholder="replacement" />
+                    <input className="rounded-xl border border-surface-variant px-3" value={term.replacement ?? ''} onChange={(e) => setData((current) => current ? { ...current, terms: current.terms.map((row, i) => i === index ? { ...row, replacement: e.target.value } : row) } : current)} placeholder="Замена" />
                     <button type="button" className="aug-button aug-button--secondary" onClick={() => saveEntity('term', term.id, { term: term.term, policy: term.policy, replacement: term.replacement, notes: term.notes })}>Сохранить</button>
                   </div>
                 ))}

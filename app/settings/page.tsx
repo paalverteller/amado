@@ -9,8 +9,28 @@ import { PromptTemplate } from '@/lib/domain/prompt-template'
 import { RssSource } from '@/lib/domain/rss'
 import { BrandProfile } from '@/lib/domain/brand-profile'
 import { t } from '@/lib/i18n/config'
+import { useMarket } from '@/lib/market-context'
+
+const MARKET_LANGUAGE_CODES: Record<string, string> = {
+  BR: 'pt-BR',
+  ES: 'es-ES',
+  DE: 'de-DE',
+  US: 'en-US',
+}
+
+const MARKET_NAMES_RU: Record<string, string> = {
+  BR: 'Бразилия',
+  ES: 'Испания',
+  DE: 'Германия',
+  US: 'США',
+  MX: 'Мексика',
+  IT: 'Италия',
+  GB: 'Великобритания',
+}
 
 export default function SettingsPage() {
+  const { regions: marketRegions, marketCode } = useMarket()
+  const currentMarket = marketRegions.find((region) => region.code === marketCode)
   const [templates, setTemplates] = useState<PromptTemplate[]>([])
   const [sources, setSources] = useState<RssSource[]>([])
   const [sourceHealth, setSourceHealth] = useState<Record<string, {
@@ -56,6 +76,12 @@ export default function SettingsPage() {
 
   useEffect(() => reloadData(), [])
 
+  useEffect(() => {
+    if (currentMarket?.id && currentMarket.id !== 'br-fallback') {
+      setNewBrandRegion(currentMarket.id)
+    }
+  }, [currentMarket?.id])
+
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newSourceName.trim() || !newSourceUrl.trim()) return
@@ -67,7 +93,9 @@ export default function SettingsPage() {
         name: newSourceName,
         url: newSourceUrl,
         source_type: newSourceType,
-        country: 'Brasil',
+        country: currentMarket?.name ?? 'Brasil',
+        region_id: currentMarket?.id && currentMarket.id !== 'br-fallback' ? currentMarket.id : undefined,
+        language_code: MARKET_LANGUAGE_CODES[marketCode] ?? 'pt-BR',
       }),
     })
 
@@ -95,7 +123,7 @@ export default function SettingsPage() {
         strategic_themes: newBrandThemes,
         product_facts: newBrandFacts,
         sensitive_topics: newBrandSensitive,
-        region_id: newBrandRegion || undefined,
+        region_id: newBrandRegion || (currentMarket?.id !== 'br-fallback' ? currentMarket?.id : undefined),
       }),
     })
 
@@ -222,7 +250,7 @@ export default function SettingsPage() {
               >
                 <option value="">{t('settings.regions')}...</option>
                 {regions.map(r => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
+                  <option key={r.id} value={r.id}>{MARKET_NAMES_RU[r.code] ?? r.name}</option>
                 ))}
               </select>
             </div>
@@ -251,21 +279,21 @@ export default function SettingsPage() {
             <textarea
               value={newBrandPositioning}
               onChange={(e) => setNewBrandPositioning(e.target.value)}
-              placeholder="Posicionamento da marca"
+              placeholder="Позиционирование бренда"
               rows={2}
               className="rounded-xl bg-surface-container px-4 py-2 text-sm outline-none w-full resize-none"
             />
             <textarea
               value={newBrandThemes}
               onChange={(e) => setNewBrandThemes(e.target.value)}
-              placeholder="Temas estratégicos (separados por vírgula)"
+              placeholder="Стратегические темы через запятую"
               rows={2}
               className="rounded-xl bg-surface-container px-4 py-2 text-sm outline-none w-full resize-none"
             />
             <textarea
               value={newBrandFacts}
               onChange={(e) => setNewBrandFacts(e.target.value)}
-              placeholder="Fatos do produto (claims aprovados)"
+              placeholder="Факты о продукте и подтверждённые утверждения"
               rows={2}
               className="rounded-xl bg-surface-container px-4 py-2 text-sm outline-none w-full resize-none"
             />
@@ -286,7 +314,7 @@ export default function SettingsPage() {
             <textarea
               value={newBrandSensitive}
               onChange={(e) => setNewBrandSensitive(e.target.value)}
-              placeholder="Tópicos sensíveis (requerem revisão humana)"
+              placeholder="Чувствительные темы, требующие проверки"
               rows={2}
               className="rounded-xl bg-surface-container px-4 py-2 text-sm outline-none w-full resize-none"
             />
@@ -320,7 +348,7 @@ export default function SettingsPage() {
                   <p className="text-xs text-on-surface-variant/70">{t('settings.brand_audience')}: {p.target_audience}</p>
                 )}
                 {p.strategic_themes && (
-                  <p className="text-xs text-primary/70">Temas: {p.strategic_themes}</p>
+                  <p className="text-xs text-primary/70">Темы: {p.strategic_themes}</p>
                 )}
                 {p.forbidden_words && (
                   <p className="text-xs text-error/70">{t('settings.brand_forbidden')}: {p.forbidden_words}</p>

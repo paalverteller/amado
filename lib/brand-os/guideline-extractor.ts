@@ -12,6 +12,8 @@
  */
 
 import { generateArticleWithFallback } from '@/lib/ai'
+import { resolveBrandRegionId } from '@/lib/brand-snapshot'
+import { resolveRegionProfile } from '@/lib/prompts'
 
 export interface ExtractionInput {
   sourceType: 'brand_book' | 'style_guide' | 'legal_review' | 'competitor_analysis' | 'manual'
@@ -46,6 +48,11 @@ export interface ExtractionResult {
 }
 
 const EXTRACTION_PROMPT_TEMPLATE = `You are a brand guideline extraction agent. Your task is to analyze the provided guideline document and extract structured, actionable brand rules.
+
+## Target Context
+Target market: {{targetMarket}}
+Target locale: {{targetLocale}}
+Target language: {{targetLanguage}}
 
 ## Input Document
 Source type: {{sourceType}}
@@ -107,13 +114,21 @@ Return a JSON object with this structure:
 - Flag any conflicting guidance as detectedConflicts
 - If confidence is low, still include but mark clearly
 - Do not invent rules not present in the document
-- Brazilian Portuguese context: ensure rules are culturally appropriate for Brazil`
+- Interpret language, terminology, cultural conventions and examples for {{targetMarket}} ({{targetLocale}}).
+- Write instruction, rationale, summary and conflict descriptions in {{targetLanguage}}.
+- Keep sourceQuote verbatim in the source document language.`
 
 export async function extractGuidelineRules(
   input: ExtractionInput
 ): Promise<ExtractionResult> {
+  const regionId = await resolveBrandRegionId(input.brandId)
+  const regionProfile = await resolveRegionProfile(regionId)
+
   // Build prompt
   const prompt = EXTRACTION_PROMPT_TEMPLATE
+    .replace(/{{targetMarket}}/g, regionProfile.name)
+    .replace(/{{targetLocale}}/g, regionProfile.locale)
+    .replace(/{{targetLanguage}}/g, regionProfile.languageName)
     .replace('{{sourceType}}', input.sourceType)
     .replace('{{#if sourceUrl}}', input.sourceUrl ? '' : '{{!}}')
     .replace('{{sourceUrl}}', input.sourceUrl || '')
@@ -124,7 +139,7 @@ export async function extractGuidelineRules(
 
   // Generate extraction
   const response = await generateArticleWithFallback({
-    systemPrompt: 'You are a brand guideline extraction agent. Extract structured, actionable brand rules from the provided document.',
+    systemPrompt: `You are a brand guideline extraction agent for ${regionProfile.name}. Return structured rules in ${regionProfile.languageName}; preserve source quotes verbatim.`,
     userPrompt: prompt,
     task: 'extraction',
   })

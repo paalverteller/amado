@@ -241,7 +241,7 @@ export default function OverviewPage() {
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-7">
         <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="m-0 text-xs font-bold uppercase tracking-[0.16em] text-primary">Amado · Control Center</p>
+            <p className="m-0 text-xs font-bold uppercase tracking-[0.16em] text-primary">Amado · Центр управления</p>
             <h1 className="m-0 mt-1 text-3xl font-bold tracking-tight text-on-surface">Рабочий стол маркетолога</h1>
             <p className="m-0 mt-1 text-sm text-on-surface-variant">Что происходит сегодня, что требует внимания и какие сигналы стоит превратить в контент.</p>
           </div>
@@ -255,7 +255,7 @@ export default function OverviewPage() {
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard label="Создано" value={data.today.generated} detail="материалов сегодня" />
             <StatCard label="Опубликовано" value={data.today.published} detail="по статусу публикации" />
-            <StatCard label="Сигналы рынка" value={data.today.marketSignals} detail="новых evidence items" />
+            <StatCard label="Сигналы рынка" value={data.today.marketSignals} detail="новых сигналов" />
             <StatCard label="В briefing" value={data.today.briefingItems} detail="приоритетных возможностей" />
           </div>
         </section>
@@ -276,7 +276,7 @@ export default function OverviewPage() {
 
         <section>
           <div className="mb-3 flex items-end justify-between gap-3">
-            <div><h2 className="m-0 text-lg font-semibold text-on-surface">Активные кампании</h2><p className="m-0 mt-1 text-xs text-on-surface-variant">Экземпляры кампаний, а не reusable campaign profiles.</p></div>
+            <div><h2 className="m-0 text-lg font-semibold text-on-surface">Активные кампании</h2><p className="m-0 mt-1 text-xs text-on-surface-variant">Рабочие кампании, а не шаблоны кампаний.</p></div>
             <button onClick={() => setCampaignOpen((value) => !value)} className="m3-button-tonal text-xs">{campaignOpen ? 'Скрыть' : '+ Кампания'}</button>
           </div>
           {campaignOpen && (
@@ -324,7 +324,7 @@ export default function OverviewPage() {
         </section>
 
         <section>
-          <SectionTitle title="Возможности рынка" note="Приоритетный briefing; если он ещё не готов — свежие market evidence без конкурентов." href="/market" linkLabel="Весь рынок →" />
+          <SectionTitle title="Возможности рынка" note="Приоритетный обзор; если он ещё не готов — свежие рыночные сигналы без конкурентов." href="/market" linkLabel="Весь рынок →" />
           <div className="grid gap-3 md:grid-cols-2">
             {data.opportunities.length === 0 ? <div className="m3-card p-5 text-sm text-on-surface-variant">Сегодня сигналов ещё нет.</div> : data.opportunities.slice(0, 6).map((item) => {
               const evidence = first(item.evidence_item)
@@ -351,9 +351,9 @@ export default function OverviewPage() {
           <div className="m3-card p-4">
             <p className="m-0 mb-4 rounded-xl bg-surface-container-low p-3 text-xs leading-5 text-on-surface-variant">{data.insights.metricDefinition}</p>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <DimensionCard title="Hooks" items={data.insights.dimensions.hooks} />
+              <DimensionCard title="Заходы" items={data.insights.dimensions.hooks} />
               <DimensionCard title="Темы" items={data.insights.dimensions.themes} />
-              <DimensionCard title="Content pillars" items={data.insights.dimensions.pillars} />
+              <DimensionCard title="Темы контента" items={data.insights.dimensions.pillars} />
               <DimensionCard title="CTA" items={data.insights.dimensions.ctas} />
               <DimensionCard title="Длина" items={data.insights.dimensions.lengths} />
               <DimensionCard title="Форматы" items={data.insights.dimensions.formats} />
@@ -361,7 +361,7 @@ export default function OverviewPage() {
             </div>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              <div><h3 className="m-0 text-sm font-semibold text-on-surface">Fatigue detection</h3>{data.insights.fatigue.length === 0 ? <p className="mt-2 text-xs text-on-surface-variant">Выраженного повторения в последних публикациях не обнаружено.</p> : <ul className="mt-2 space-y-2 pl-5 text-xs leading-5 text-on-surface-variant">{data.insights.fatigue.map((finding, i) => <li key={`${finding.dimension}-${i}`}>{finding.explanation}</li>)}</ul>}</div>
+              <div><h3 className="m-0 text-sm font-semibold text-on-surface">Повторы контента</h3>{data.insights.fatigue.length === 0 ? <p className="mt-2 text-xs text-on-surface-variant">Выраженного повторения в последних публикациях не обнаружено.</p> : <ul className="mt-2 space-y-2 pl-5 text-xs leading-5 text-on-surface-variant">{data.insights.fatigue.map((finding, i) => <li key={`${finding.dimension}-${i}`}>{finding.explanation}</li>)}</ul>}</div>
               <div><h3 className="m-0 text-sm font-semibold text-on-surface">Рекомендации</h3>{data.insights.recommendations.length === 0 ? <p className="mt-2 text-xs text-on-surface-variant">Пока недостаточно данных для рекомендаций.</p> : <ul className="mt-2 space-y-2 pl-5 text-xs leading-5 text-on-surface-variant">{data.insights.recommendations.map((recommendation, i) => <li key={i}>{recommendation}</li>)}</ul>}</div>
             </div>
           </div>

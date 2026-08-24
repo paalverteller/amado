@@ -41,6 +41,7 @@ const COOKIE_MAX_AGE_DAYS = 365
 export const MARKET_FLAGS: Record<string, string> = {
   BR: '🇧🇷',
   ES: '🇪🇸',
+  DE: '🇩🇪',
   MX: '🇲🇽',
   IT: '🇮🇹',
   US: '🇺🇸',

@@ -19,6 +19,8 @@ export const DEFAULT_TIMEZONE = 'America/Sao_Paulo'
 export const REGION_LOCALES: Record<string, { locale: string; currency: string; timezone: string }> = {
   BR: { locale: 'pt-BR', currency: 'BRL', timezone: 'America/Sao_Paulo' },
   ES: { locale: 'es-ES', currency: 'EUR', timezone: 'Europe/Madrid' },
+  DE: { locale: 'de-DE', currency: 'EUR', timezone: 'Europe/Berlin' },
+  US: { locale: 'en-US', currency: 'USD', timezone: 'America/New_York' },
 }
 
 /** Resolve a region code (e.g. 'ES') to its locale/currency/timezone triple.

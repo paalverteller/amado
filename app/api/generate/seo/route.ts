@@ -10,6 +10,7 @@ type Body = {
   topic?: string
   context?: string
   brandProfileId?: string
+  regionId?: string
 }
 
 function keywordScore(topic: string, row: { source_title?: string | null; source_summary?: string | null }): number {
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       contentType: 'article',
       templateId: template.id,
       brandProfileId: body.brandProfileId || defaultBrand?.id || undefined,
+      regionId: body.regionId,
       seoMode: true,
       evidenceItemIds: evidenceIds,
     })

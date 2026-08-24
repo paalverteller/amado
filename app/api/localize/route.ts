@@ -4,6 +4,7 @@ import { generateArticleWithFallback } from '@/lib/ai'
 import { cleanPlainTextOutput } from '@/lib/text-cleanup'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { getErrorMessage } from '@/lib/api/error-message'
+import { resolveRegionProfile } from '@/lib/prompts'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -14,14 +15,44 @@ type Body = {
   contextType?: 'ui' | 'promo' | 'help' | 'pricing' | 'legal'
   templateId?: string
   brandProfileId?: string
+  regionId?: string
 }
 
 const CONTEXT_RULES: Record<NonNullable<Body['contextType']>, string> = {
-  ui: 'UI copy: curto, inequívoco, funcional. Priorize ação e escaneabilidade.',
-  promo: 'Landing/promo: pode ser mais quente e energético, mas nunca hype genérico.',
-  help: 'Help Center: calmo, explícito, passo a passo quando necessário.',
-  pricing: 'Pricing: precisão acima de persuasão. Não esconda condições ou limites.',
-  legal: 'Legal/compliance: máxima ambiguidade zero. Preserve exatamente obrigações, condições e escopo.',
+  ui: 'UI copy: concise, unambiguous and functional. Prioritize action and scanability.',
+  promo: 'Landing/promo: energetic when appropriate, but never generic hype.',
+  help: 'Help content: calm, explicit and step-by-step when useful.',
+  pricing: 'Pricing: precision over persuasion. Never hide conditions or limits.',
+  legal: 'Legal/compliance: remove ambiguity. Preserve obligations, conditions and scope exactly.',
+}
+
+const LOCALE_RULES: Record<string, string> = {
+  'pt-BR': `Write native Brazilian Portuguese.
+Use modern, direct Brazilian wording and natural sentence structure.
+Use “você”, never “tu”, unless source material is a literal quotation.
+Avoid literal English syntax, generic SaaS clichés and unnecessary Anglicisms.
+Use terminology that is natural in Brazilian digital products.
+The final text must read as if written originally by an excellent Brazilian professional.`,
+
+  'es-ES': `Escribe en español natural de España.
+Usa vocabulario, sintaxis y convenciones propias de España, no español latinoamericano.
+Prioriza formulaciones claras, directas y profesionales.
+Usa “tú” por defecto en comunicación moderna, salvo que la marca exija “usted”.
+Evita calcos del inglés, anglicismos innecesarios y clichés de software.
+El resultado debe parecer escrito originalmente por un profesional español.`,
+
+  'de-DE': `Schreibe natürliches Standarddeutsch für Deutschland.
+Formuliere klar, präzise und professionell, ohne unnötige Werbeübertreibung.
+Verwende im B2B-Kontext standardmäßig “Sie”, sofern die Markenstimme nicht ausdrücklich “du” vorgibt.
+Vermeide wörtliche englische Satzstrukturen und unnötige Anglizismen.
+Nutze Begriffe, die in deutschen digitalen Produkten tatsächlich üblich sind.
+Der Text muss wirken, als wäre er ursprünglich von einem deutschen Profi geschrieben worden.`,
+
+  'en-US': `Write natural US English.
+Use concise, direct, professional American wording and US spelling.
+Avoid translated European syntax, unnecessary jargon and generic SaaS hype.
+Prefer terminology familiar in US digital products.
+The final text must read as if written originally by an excellent US professional.`,
 }
 
 async function resolveTemplate(templateId?: string): Promise<{ prompt: string; id: string | null }> {
@@ -76,25 +107,38 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json() as Body
     const sourceText = body.sourceText?.trim() ?? ''
-    if (sourceText.length < 2) return NextResponse.json({ error: 'Source text is required' }, { status: 400 })
-    if (sourceText.length > 40_000) return NextResponse.json({ error: 'MVP limit: 40,000 characters' }, { status: 400 })
+    if (sourceText.length < 2) return NextResponse.json({ error: 'Исходный текст обязателен' }, { status: 400 })
+    if (sourceText.length > 40_000) return NextResponse.json({ error: 'Лимит: 40 000 знаков' }, { status: 400 })
 
     const template = await resolveTemplate(body.templateId)
     const contextType = body.contextType ?? 'promo'
+    const regionProfile = await resolveRegionProfile(body.regionId)
+    const localeRules = LOCALE_RULES[regionProfile.locale] ?? `Write native ${regionProfile.languageName}.`
     const systemPrompt = `${template.prompt}
+
+IMPORTANT: Any target-market or target-language instruction in the stored template is subordinate to the execution contract below.
+
+TARGET MARKET: ${regionProfile.name}
+TARGET LOCALE: ${regionProfile.locale}
+TARGET LANGUAGE: ${regionProfile.languageName}
+
+${localeRules}
 
 ${CONTEXT_RULES[contextType]}
 
 STRICT EXECUTION CONTRACT:
-- Target locale is always Brazilian Portuguese (pt-BR).
+- The target locale is ${regionProfile.locale}.
 - Preserve factual meaning. Never invent facts, offers, dates, legal conditions, metrics or product capabilities.
-- Apply the native test before returning.
+- Adapt terminology, syntax, register, punctuation, dates and idiom to the target market.
+- Apply a native-speaker test before returning.
 - Return ONLY the localized final copy. No explanation, no alternatives, no markdown wrapper.`
 
     const userPrompt = `${await brandContext(body.brandProfileId)}
 
 SOURCE LANGUAGE: ${body.sourceLanguage || 'auto-detect'}
 CONTENT CONTEXT: ${contextType}
+TARGET MARKET: ${regionProfile.name}
+TARGET LOCALE: ${regionProfile.locale}
 
 SOURCE TEXT:
 ${sourceText}`
