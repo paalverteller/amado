@@ -175,3 +175,24 @@ Do not implement without a product decision:
 - Structural edits over brittle text anchors.
 - Verification is part of delivery.
 - Repository root stays clean of one-off patch scripts.
+
+<!-- DATA_SOURCES_DE_US_SEED_20260825 -->
+
+### Source coverage — Germany + US (2026-08-25)
+
+Prior state: DE and US regions were `active = true` with placeholder brand
+profiles but **zero** rss_sources — the single biggest gap in "Source
+quality and observability" (see priority above).
+
+Delivered: `supabase/seeds/008_de_us_sources.sql` — 6 DE + 5 US sources,
+all live-verified (fetched real RSS/Atom XML, confirmed recent publication
+dates) rather than guessed from directory listings. Categories: marketing,
+business, technology, business_technology — matching the existing
+BR/ES source taxonomy. New rows are seeded with `health_status = 'healthy'`
+and a `source_health_events` row, since verification happened at seed time.
+
+Still open: BR has ~15 sources, ES has ~5, DE now has 6, US now has 5.
+Consider a follow-up phase to bring ES and US closer to BR's depth once
+more live-verified candidates are found. Retail Dive, RetailWire, and
+Ad Age were evaluated and explicitly excluded (see HANDOFF.md tag
+`DATA_SOURCES_DE_US_SEED_20260825` for why).

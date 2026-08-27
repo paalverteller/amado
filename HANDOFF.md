@@ -191,3 +191,66 @@ Do not build these autonomously:
 - automatic external social-metrics ingestion;
 - complex agent swarms;
 - document/OCR pipelines unrelated to the current product priorities.
+
+<!-- DATA_SOURCES_DE_US_SEED_20260825 -->
+
+## Data Sources — Germany + US Seed (2026-08-25)
+
+**What was done:**
+- Added the `supabase/seeds/008_de_us_sources.sql` seed, delivered via
+  `apply_datasources_de_us_seed_20260825.py`.
+- DE and US regions existed since `007_germany_us_locales.sql` but had
+  **zero** `rss_sources` rows. This seed adds the first sources for both.
+- 6 Germany sources: t3n (technology), HORIZONT Marketing (marketing),
+  OnlineMarketing.de (marketing), Gründerszene / Business Insider DE
+  (business_technology), Handelsblatt Unternehmen (business), Handelsblatt
+  Technologie (technology).
+- 5 US sources: TechCrunch (technology), VentureBeat (technology),
+  MarTech (marketing), SaaStr (business_technology), Adweek (marketing).
+- Every URL was verified live by fetching the actual RSS/Atom XML on
+  2026-08-25 and confirming recent publication dates (within days of
+  verification), not just guessed from a directory listing.
+- `source_type = 'rss'` for all 11 — none is a guessed `html_index` path.
+- New rows set `health_status = 'healthy'` and `last_success_at = now()`
+  directly on insert (confirmed real columns on `rss_sources`, with
+  `health_status` under a CHECK constraint), plus a matching
+  `source_health_events` row per source, since these were live-verified
+  at seed time rather than left at the default `'unknown'`.
+
+**Consciously not done:**
+- Did not add Retail Dive: no confirmed direct feed URL found (site only
+  offers a third-party "Generate RSS" service, not an official feed).
+- Did not add RetailWire: feed resolves and parses, but `lastBuildDate` was
+  ~5 months stale at verification time — fails the "always fresh" bar for
+  this project, so it was excluded rather than seeded with a known-stale
+  source.
+- Did not add Ad Age: no confirmed native feed URL; only third-party feed
+  generators found in search results.
+- US set (5) is intentionally smaller than DE (6) — stopped once the
+  remaining reachable candidates failed live-verification, per the standing
+  instruction to verify before seeding rather than pad the count.
+
+**Bugs found and fixed along the way:**
+- First draft of this seed guessed `rss_sources.items_count` and a
+  `source_health_events` schema without checking migrations against this
+  snapshot. Re-verified against actual CREATE/ALTER TABLE statements in
+  `supabase/migrations/` before finalizing: `items_count`,
+  `health_status`, `last_success_at`, `authority_weight`,
+  `source_category`, `region_id` all confirmed real; `source_health_events`
+  columns (`source_id, event_type, items_yielded, created_at`) also
+  confirmed real and correct on first guess.
+- First draft also had a dead `UPDATE ... WHERE items_count IS NULL`
+  block — the column defaults to `0`, not `NULL`, so that condition could
+  never match on freshly inserted rows. Removed it; `health_status` and
+  `last_success_at` are now set directly in the INSERT instead.
+- First draft's `source_health_events` INSERT was scoped to
+  `WHERE region_id IN (...)`, which would re-insert an event row for
+  *every* DE/US source (including ones from earlier seed runs) on each
+  re-run, not just the 11 new ones. Scoped it to the 11 specific URLs
+  instead.
+
+**Next steps queued:**
+- Consider a second pass once more DE/US candidates can be verified live
+  (e.g. Modern Retail, Search Engine Land, more DE regional business press).
+- No product decision needed before this seed goes live — it's additive to
+  an already-approved region/source data model.
