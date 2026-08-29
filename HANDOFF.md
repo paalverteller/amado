@@ -254,3 +254,104 @@ Do not build these autonomously:
   (e.g. Modern Retail, Search Engine Land, more DE regional business press).
 - No product decision needed before this seed goes live — it's additive to
   an already-approved region/source data model.
+
+<!-- GUIDELINE_IMPORT_SCHEMA_FIX_20260829 -->
+
+## Guideline Import Pipeline — Schema Mismatch Fix (2026-08-29)
+
+**Context:**
+- Investigating Priority #2 ("Brand OS depth by market", DE/US/ES all
+  still placeholders) found that the intended unblock path -- uploading a
+  real brand book through `GuidelineImportTab`, which POSTs to
+  `app/api/brands/[brandId]/guidelines/import` and later PATCHes
+  `.../import/[runId]` to publish approved rules -- was silently broken
+  end to end.
+- Two earlier delivery attempts (scripts dated 2026-08-28 and 2026-08-29,
+  before this one) both correctly refused to apply: their anchor for the
+  pre-patch file content was built from a `repomix` XML export using a
+  regex that stripped the file's real trailing newline, so the computed
+  anchor was 5335 bytes instead of the real file's 5336 bytes. Neither
+  script ever touched the route file or the database because of this --
+  the drift-guard in both scripts did exactly what it was supposed to do
+  and refused to overwrite a file that didn't match the expected anchor,
+  rather than silently corrupting it. This script rebuilds the anchor
+  correctly from a fresh repomix export and has been verified to match
+  the real on-disk file byte for byte before proceeding.
+
+**What was found (in `app/api/brands/[brandId]/guidelines/import/route.ts`):**
+1. The `guideline_rule_candidates` INSERT never supplied `raw_text` or
+   `enforcement`, both `NOT NULL` columns with no default in
+   `030_brand_os_core.sql`. Every insert would fail its NOT NULL
+   constraint.
+2. The same INSERT sent `is_hard_rule`, which is not a column on
+   `guideline_rule_candidates` at all.
+3. The same INSERT sent `confidence: rule.confidence`, a string
+   (`'high'|'medium'|'low'`) into a `NUMERIC` column -- invalid type.
+4. The `policy_conflicts` INSERT sent `description` and
+   `conflicting_rules`, neither of which exist on that table. The real
+   columns are `explanation` plus `candidate_a_id`/`candidate_b_id`
+   foreign keys into `guideline_rule_candidates`.
+5. Downstream, the publish step (`PATCH .../guidelines/import/[runId]`)
+   passes `candidate.rule_class` and `candidate.enforcement` straight
+   through into `brand_rules`, which has its own, stricter CHECK
+   constraints: `brand_rules.enforcement` only allows `hard_block,
+   required, forbidden, warning, preference, scoring, human_review`, and
+   `brand_rules.rule_class` only allows `safety, legal, factual,
+   brand_positioning, language, platform, format, campaign, style,
+   optimization_hypothesis, measurement`. The extraction agent's own
+   `ruleType` vocabulary (`tone, vocabulary, claim, structure, visual,
+   legal, safety`) has five values not in that list, so even a correctly
+   inserted candidate would fail to publish.
+
+**What was done:**
+- Rewrote the candidate-insert loop to populate `raw_text`, `enforcement`
+  (mapped to `'hard_block'`/`'preference'`, matching `brand_rules`), and
+  `confidence` as NUMERIC (`1`/`0.6`/`0.3`). Added a `RULE_CLASS_MAP`
+  translating each `ruleType` to a `brand_rules`-valid `rule_class`
+  (`tone->style, vocabulary->language, claim->factual, structure->format,
+  visual->style, legal->legal, safety->safety`), with an unrecognized-type
+  fallback to `brand_positioning` since the column is NOT NULL.
+- Captured each inserted candidate's real row id and resolved
+  `conflict.ruleA`/`ruleB` back to those ids for the `policy_conflicts`
+  insert, writing `explanation` instead of the non-existent
+  `description`/`conflicting_rules` columns.
+- Confirmed via search that `.enforcement` and `.rule_class` are read
+  nowhere else in the codebase, so mapping them correctly at
+  candidate-insert time means the publish route (`[runId]/route.ts`)
+  needs no changes itself -- it already passes both fields through
+  correctly, it was just receiving invalid values.
+- Added per-row error logging so partial extraction failures are visible
+  instead of silent.
+
+**Consciously not done:**
+- Did not touch `workspace_id: '00000000-0000-0000-0000-000000000000'`.
+  No `workspaces` table exists anywhere in the codebase, so this looks
+  like a leftover from an abandoned multi-tenant design rather than an
+  active bug. Flagging it here in case it matters later.
+- Did not write any DE/US/ES brand voice, claims, or positioning content.
+  That's business input Paal or each market owner needs to provide
+  (upload a real brand book) -- this fix only unblocks the pipe.
+
+**Bugs found and fixed along the way:**
+- See "What was found" above.
+- Separately: the anchor-mismatch bug described in "Context" above, which
+  caused two earlier delivery attempts to correctly self-abort rather
+  than apply. Root cause was in the delivery tooling (a `repomix`
+  extraction regex on Claude's side), not in anything Paal did.
+
+**Verification performed:**
+- Confirmed the true on-disk file (5336 bytes, ends with a newline) is
+  byte-identical to this script's anchor before finalizing it.
+- Diffed old vs new file to confirm only the two broken insert blocks
+  changed.
+- Ran `tsc --noEmit` against the file in an isolated project with stub
+  modules matching the real `@/lib/*` export signatures. The fixed file
+  produces the same set of type errors as the unmodified original (all
+  `strict`-mode nullability complaints from simplified stub types, not
+  from this patch) -- zero new type errors introduced.
+- Confirmed brace/paren/backtick/quote balance on the new file.
+
+**Next steps queued:**
+- Once this lands, Paal or each market owner can use `GuidelineImportTab`
+  to import a real brand book for each market, end to end (import,
+  review, publish).

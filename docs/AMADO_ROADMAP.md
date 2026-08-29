@@ -196,3 +196,22 @@ Consider a follow-up phase to bring ES and US closer to BR's depth once
 more live-verified candidates are found. Retail Dive, RetailWire, and
 Ad Age were evaluated and explicitly excluded (see HANDOFF.md tag
 `DATA_SOURCES_DE_US_SEED_20260825` for why).
+
+<!-- GUIDELINE_IMPORT_SCHEMA_FIX_20260829 -->
+
+### Brand OS depth -- guideline import pipeline fixed end to end (2026-08-29)
+
+Investigated Priority #2 (DE/US/ES Brand OS all still placeholders).
+Found the intended unblock path -- guideline import via `POST
+/api/brands/[brandId]/guidelines/import` plus publish via `PATCH
+.../import/[runId]` -- was silently broken at both the insert step and
+the publish step, due to several schema mismatches against
+`guideline_rule_candidates`, `policy_conflicts`, and `brand_rules`. Fixed
+in one pass; see HANDOFF.md tag `GUIDELINE_IMPORT_SCHEMA_FIX_20260829`
+for full detail, including why two earlier delivery attempts safely
+no-opped instead of applying (a stale anchor from an outdated repomix
+export, not a database issue).
+
+This does not fill in DE/US/ES Brand OS content -- that still needs Paal
+or each market owner to supply a real brand book through the now-working
+import flow.
