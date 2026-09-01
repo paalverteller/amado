@@ -215,3 +215,31 @@ export, not a database issue).
 This does not fill in DE/US/ES Brand OS content -- that still needs Paal
 or each market owner to supply a real brand book through the now-working
 import flow.
+
+<!-- GUI_AUDIT_PHASE1_20260831 -->
+
+## Priority 6 — GUI audit and modernization (added 2026-08-31)
+
+Added as a new roadmap priority at Paal's request: audit the product UI
+for defects and legacy/dead styling layers, and bring every page onto
+the August design token system.
+
+**Audit findings (full detail in HANDOFF.md under this same tag):**
+
+| Area | Issue | Status |
+|---|---|---|
+| `+` button defect | Literal `+` character hardcoded into translated/hardcoded button text in two places (`lib/i18n/config.ts` RU_DICT.competitors.add_source, `components/settings/SourceCard.tsx`) instead of an SVG icon | Fixed — Phase 1 |
+| `app/analytics/page.tsx` | Not wrapped in `<Layout>` (navigation dead-end), Cyrillic function identifier, mixed pt-BR strings in Russian UI, 100% raw Tailwind, no August tokens | Fixed — Phase 1 |
+| `components/settings/SourceCard.tsx` | `HEALTH_COLOR` map used raw Tailwind color pairs instead of August status tokens (worked only via an implicit legacy CSS override) | Fixed — Phase 1 |
+| `app/competitors/page.tsx` | 100% inline `v2-color-*` styles, no `m3-card`/`aug-button`/`aug-field` | Open — Phase 2 |
+| `app/knowledge/page.tsx` | 100% inline `v2-color-*` styles, one fully hardcoded off-token color pair (`#DBEAFE`/`#1E40AF`) | Open — Phase 3 |
+| 8 brand-tab components (Audience, Compliance, Voice, Versions, Pillars, Examples, Overview, ProductsClaims, GuidelineImport) | Raw Tailwind (`bg-blue-600`, `bg-gray-100`, etc.) instead of August tokens | Open — Phase 4 |
+| `app/globals.css` — August token definitions | Confirmed in good shape: tokens complete, `prefers-reduced-motion` and `forced-colors` support present, no legacy Playfair font reference | No action needed |
+| `app/globals.css` — `.aug-app-shell` legacy-Tailwind override block | Load-bearing compatibility shim mapping a narrow set of raw Tailwind color classes to August tokens for older pages. Fragile (silently breaks on any class-name edit) but still required until Phases 2-4 land | Remove after Phase 4 |
+
+**Plan:**
+1. ~~Phase 1: critical `app/analytics/page.tsx` navigation fix + `+` button defect in both locations~~ — done 2026-08-31.
+2. Phase 2: `app/competitors/page.tsx` → August tokens.
+3. Phase 3: `app/knowledge/page.tsx` → August tokens.
+4. Phase 4: 8 brand-tab components → August tokens (`GuidelineImportTab` first, since it's the pipeline unblocked for Priority 2).
+5. Follow-up: remove the now-unused `.aug-app-shell` legacy-Tailwind override block from `app/globals.css` once nothing depends on it.

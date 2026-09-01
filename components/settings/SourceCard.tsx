@@ -36,11 +36,11 @@ const HEALTH_LABEL: Record<string, string> = {
   unknown: 'Нет данных',
 }
 
-const HEALTH_COLOR: Record<string, string> = {
-  healthy: 'bg-green-100 text-green-800',
-  degraded: 'bg-yellow-100 text-yellow-800',
-  unhealthy: 'bg-red-100 text-red-800',
-  unknown: 'bg-gray-100 text-gray-600',
+const HEALTH_BADGE_STYLE: Record<string, { background: string; color: string }> = {
+  healthy: { background: 'var(--aug-success-bg)', color: 'var(--aug-success-fg)' },
+  degraded: { background: 'var(--aug-warning-bg)', color: 'var(--aug-warning-fg)' },
+  unhealthy: { background: 'var(--aug-danger-bg)', color: 'var(--aug-danger-fg)' },
+  unknown: { background: 'var(--aug-neutral-bg)', color: 'var(--aug-neutral-fg)' },
 }
 
 export default function SourceCard({ source, health, onToggleActive, onDelete }: SourceCardProps) {
@@ -150,7 +150,10 @@ export default function SourceCard({ source, health, onToggleActive, onDelete }:
                 {source.country}
               </span>
             ) : null}
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${HEALTH_COLOR[healthStatus] ?? HEALTH_COLOR.unknown}`}>
+            <span
+              className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+              style={HEALTH_BADGE_STYLE[healthStatus] ?? HEALTH_BADGE_STYLE.unknown}
+            >
               {HEALTH_LABEL[healthStatus] ?? HEALTH_LABEL.unknown}
             </span>
           </div>
@@ -198,7 +201,16 @@ export default function SourceCard({ source, health, onToggleActive, onDelete }:
               onClick={() => setShowManualForm(v => !v)}
               className="rounded-full px-3 py-1 font-semibold text-primary hover:bg-primary/10"
             >
-              {showManualForm ? 'Скрыть' : '+ Добавить материал'}
+              {showManualForm ? (
+                'Скрыть'
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  Добавить материал
+                </span>
+              )}
             </button>
           ) : (
             <button

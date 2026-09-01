@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Layout from '@/components/Layout'
 import { t } from '@/lib/i18n/config'
 import { getErrorMessage } from '@/lib/api/error-message'
 
@@ -39,7 +40,26 @@ interface PipelineMetrics {
   pendingRequests: number
 }
 
-export default function АналитикаPage() {
+const STATUS_DOT: Record<string, string> = {
+  healthy: 'var(--aug-success-fg)',
+  degraded: 'var(--aug-warning-fg)',
+  unhealthy: 'var(--aug-danger-fg)',
+}
+
+function getStatusDotColor(status: string): string {
+  return STATUS_DOT[status] ?? 'var(--aug-neutral-fg)'
+}
+
+function getStatusLabel(status: string): string {
+  switch (status) {
+    case 'healthy': return 'Работает'
+    case 'degraded': return 'Нестабильно'
+    case 'unhealthy': return 'Критично'
+    default: return 'Неизвестно'
+  }
+}
+
+export default function AnalyticsPage() {
   const [sources, setSources] = useState<SourceHealth[]>([])
   const [summary, setSummary] = useState<HealthSummary | null>(null)
   const [pipeline, setPipeline] = useState<PipelineMetrics | null>(null)
@@ -47,13 +67,16 @@ export default function АналитикаPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    // fetchData synchronizes the page with the sources-health and pipeline APIs.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData()
   }, [])
 
   async function fetchData() {
     try {
       setLoading(true)
-      
+      setError('')
+
       const healthRes = await fetch('/api/sources/health')
       if (!healthRes.ok) throw new Error('Не удалось загрузить состояние источников')
       const healthData = await healthRes.json()
@@ -72,154 +95,140 @@ export default function АналитикаPage() {
     }
   }
 
-  function getStatusColor(status: string): string {
-    switch (status) {
-      case 'healthy': return 'bg-green-500'
-      case 'degraded': return 'bg-yellow-500'
-      case 'unhealthy': return 'bg-red-500'
-      default: return 'bg-gray-400'
-    }
-  }
-
-  function getStatusLabel(status: string): string {
-    switch (status) {
-      case 'healthy': return 'Saudável'
-      case 'degraded': return 'Degradado'
-      case 'unhealthy': return 'Crítico'
-      default: return 'Desconhecido'
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-lg text-gray-600">Загрузка аналитики…</div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-lg text-red-600">Ошибка: {error}</div>
-      </div>
-    )
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Аналитика</h1>
-        <p className="text-gray-600 mb-8">Метрики источников и контентного потока</p>
-
-        {summary && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="text-sm text-gray-500 mb-1">Всего источников</div>
-              <div className="text-3xl font-bold text-gray-900">{summary.total}</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="text-sm text-gray-500 mb-1">Рабочие источники</div>
-              <div className="text-3xl font-bold text-green-600">{summary.healthy}</div>
-              <div className="text-sm text-gray-400">{summary.healthRate}% do total</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="text-sm text-gray-500 mb-1">Проблемные источники</div>
-              <div className="text-3xl font-bold text-red-600">{summary.unhealthy}</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="text-sm text-gray-500 mb-1">Доля активных</div>
-              <div className="text-3xl font-bold text-blue-600">{summary.activeRate}%</div>
-            </div>
-          </div>
-        )}
-
-        {pipeline && (
-          <div className="bg-white rounded-lg shadow mb-8">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Контент за 24 часа</h2>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6">
-              <div>
-                <div className="text-sm text-gray-500 mb-1">Создано</div>
-                <div className="text-2xl font-bold text-blue-600">{pipeline.generatedToday}</div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-500 mb-1">Опубликовано</div>
-                <div className="text-2xl font-bold text-green-600">{pipeline.publishedToday}</div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-500 mb-1">Ошибки</div>
-                <div className="text-2xl font-bold text-red-600">{pipeline.failedToday}</div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-500 mb-1">В очереди</div>
-                <div className="text-2xl font-bold text-yellow-600">{pipeline.pendingRequests}</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-gray-900">Состояние источников</h2>
-            <button
-              onClick={fetchData}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              {t('action.refresh')}
-            </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Источник</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Статус</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Успешность за 24 часа</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ошибки подряд</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Материалы</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Последний успех</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {sources.map((source) => (
-                  <tr key={source.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">{source.name}</div>
-                      <div className="text-sm text-gray-500">{source.connectorType}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <div className={`w-2 h-2 rounded-full mr-2 ${getStatusColor(source.health.status)}`} />
-                        <span className="text-sm text-gray-700">{getStatusLabel(source.health.status)}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">
-                        {source.health.successRate24h !== null ? `${source.health.successRate24h}%` : 'N/A'}
-                      </div>
-                      <div className="text-sm text-gray-500">{source.health.events24h} eventos</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`text-sm font-medium ${source.health.consecutiveFailures > 2 ? 'text-red-600' : 'text-gray-900'}`}>
-                        {source.health.consecutiveFailures}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{source.itemsCount}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
-                      {source.health.lastSuccess 
-                        ? new Date(source.health.lastSuccess).toLocaleDateString('ru-RU')
-                        : 'Nunca'
-                      }
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+    <Layout>
+      <div className="flex flex-col gap-6">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--aug-ink)' }}>Аналитика</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--aug-muted)' }}>Метрики источников и контентного потока</p>
         </div>
+
+        {loading && (
+          <div className="m3-card p-8 text-center text-sm" style={{ color: 'var(--aug-muted)' }}>
+            Загрузка аналитики…
+          </div>
+        )}
+
+        {!loading && error && (
+          <div className="m3-card p-8 text-center text-sm" style={{ color: 'var(--aug-danger-fg)' }}>
+            Ошибка: {error}
+          </div>
+        )}
+
+        {!loading && !error && (
+          <>
+            {summary && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="m3-card p-6">
+                  <div className="text-sm mb-1" style={{ color: 'var(--aug-muted)' }}>Всего источников</div>
+                  <div className="text-3xl font-bold" style={{ color: 'var(--aug-ink)' }}>{summary.total}</div>
+                </div>
+                <div className="m3-card p-6">
+                  <div className="text-sm mb-1" style={{ color: 'var(--aug-muted)' }}>Рабочие источники</div>
+                  <div className="text-3xl font-bold" style={{ color: 'var(--aug-success-fg)' }}>{summary.healthy}</div>
+                  <div className="text-sm" style={{ color: 'var(--aug-dark-muted)' }}>{summary.healthRate}% от общего числа</div>
+                </div>
+                <div className="m3-card p-6">
+                  <div className="text-sm mb-1" style={{ color: 'var(--aug-muted)' }}>Проблемные источники</div>
+                  <div className="text-3xl font-bold" style={{ color: 'var(--aug-danger-fg)' }}>{summary.unhealthy}</div>
+                </div>
+                <div className="m3-card p-6">
+                  <div className="text-sm mb-1" style={{ color: 'var(--aug-muted)' }}>Доля активных</div>
+                  <div className="text-3xl font-bold" style={{ color: 'var(--aug-accent)' }}>{summary.activeRate}%</div>
+                </div>
+              </div>
+            )}
+
+            {pipeline && (
+              <div className="m3-card">
+                <div className="px-6 py-4" style={{ borderBottom: '1px solid var(--aug-border)' }}>
+                  <h2 className="text-lg font-semibold" style={{ color: 'var(--aug-ink)' }}>Контент за 24 часа</h2>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6">
+                  <div>
+                    <div className="text-sm mb-1" style={{ color: 'var(--aug-muted)' }}>Создано</div>
+                    <div className="text-2xl font-bold" style={{ color: 'var(--aug-accent)' }}>{pipeline.generatedToday}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm mb-1" style={{ color: 'var(--aug-muted)' }}>Опубликовано</div>
+                    <div className="text-2xl font-bold" style={{ color: 'var(--aug-success-fg)' }}>{pipeline.publishedToday}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm mb-1" style={{ color: 'var(--aug-muted)' }}>Ошибки</div>
+                    <div className="text-2xl font-bold" style={{ color: 'var(--aug-danger-fg)' }}>{pipeline.failedToday}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm mb-1" style={{ color: 'var(--aug-muted)' }}>В очереди</div>
+                    <div className="text-2xl font-bold" style={{ color: 'var(--aug-warning-fg)' }}>{pipeline.pendingRequests}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="m3-card">
+              <div className="px-6 py-4 flex justify-between items-center" style={{ borderBottom: '1px solid var(--aug-border)' }}>
+                <h2 className="text-lg font-semibold" style={{ color: 'var(--aug-ink)' }}>Состояние источников</h2>
+                <button type="button" onClick={fetchData} className="aug-button aug-button--secondary">
+                  {t('action.refresh')}
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr style={{ background: 'var(--aug-soft)' }}>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--aug-muted)' }}>Источник</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--aug-muted)' }}>Статус</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--aug-muted)' }}>Успешность за 24 часа</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--aug-muted)' }}>Ошибки подряд</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--aug-muted)' }}>Материалы</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--aug-muted)' }}>Последний успех</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sources.map((source) => (
+                      <tr key={source.id} style={{ borderTop: '1px solid var(--aug-border)' }}>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-medium" style={{ color: 'var(--aug-ink)' }}>{source.name}</div>
+                          <div className="text-sm" style={{ color: 'var(--aug-muted)' }}>{source.connectorType}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="inline-block rounded-full"
+                              style={{ width: 8, height: 8, background: getStatusDotColor(source.health.status) }}
+                            />
+                            <span className="text-sm" style={{ color: 'var(--aug-ink)' }}>{getStatusLabel(source.health.status)}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm" style={{ color: 'var(--aug-ink)' }}>
+                            {source.health.successRate24h !== null ? `${source.health.successRate24h}%` : 'Н/Д'}
+                          </div>
+                          <div className="text-sm" style={{ color: 'var(--aug-muted)' }}>{source.health.events24h} событий</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className="text-sm font-medium"
+                            style={{ color: source.health.consecutiveFailures > 2 ? 'var(--aug-danger-fg)' : 'var(--aug-ink)' }}
+                          >
+                            {source.health.consecutiveFailures}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm" style={{ color: 'var(--aug-ink)' }}>{source.itemsCount}</td>
+                        <td className="px-6 py-4 text-sm" style={{ color: 'var(--aug-muted)' }}>
+                          {source.health.lastSuccess
+                            ? new Date(source.health.lastSuccess).toLocaleDateString('ru-RU')
+                            : 'Никогда'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
       </div>
-    </div>
+    </Layout>
   )
 }

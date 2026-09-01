@@ -448,7 +448,7 @@ const RU_DICT: MessageDictionary = {
     'no_competitors_title': 'Пока нет ни одного конкурента',
     'no_competitors_body': 'Добавьте конкурента, чтобы начать отслеживать его источники и получать AI-обзоры.',
     'sources_title': 'Источники',
-    'add_source': '+ Добавить источник',
+    'add_source': 'Добавить источник',
     'source_name': 'Название источника',
     'source_url': 'URL',
     'no_sources': 'Источники не добавлены',

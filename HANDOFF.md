@@ -355,3 +355,111 @@ Do not build these autonomously:
 - Once this lands, Paal or each market owner can use `GuidelineImportTab`
   to import a real brand book for each market, end to end (import,
   review, publish).
+
+<!-- GUI_AUDIT_PHASE1_20260831 -->
+
+## GUI Audit and Modernization — Phase 1 (2026-08-31)
+
+**Context:**
+- Paal requested a GUI audit as a new roadmap priority (#6): find and fix
+  visual/UX defects, remove dead layers, migrate to the August design
+  token system. Flagged specifically: a broken-looking "+" (add) button
+  showing what looked like a stray dot/mark instead of a clean icon.
+- Full audit performed against the repomix snapshot. Findings and
+  severity are recorded in docs/AMADO_ROADMAP.md under this same tag.
+
+**What was found and fixed in this phase:**
+1. Root cause of the "+" defect: `RU_DICT.competitors.add_source` in
+   `lib/i18n/config.ts` was the literal string `'+ Добавить источник'` —
+   a plain `+` character concatenated into translated text, not an SVG
+   icon. Same pattern found independently in
+   `components/settings/SourceCard.tsx` (`'+ Добавить материал'`).
+   Both fixed: the `+` character removed from translated/hardcoded text;
+   SourceCard's manual-add toggle now renders a proper inline SVG plus
+   icon (matching the existing `NavIcon` SVG-icon convention) instead of
+   a text character.
+2. `app/analytics/page.tsx` was not wrapped in `<Layout>` — a real
+   navigation dead-end: visiting `/analytics` gave the user no sidebar,
+   no mobile nav, no way back into the app without using the browser
+   back button. Fixed by wrapping the page in `<Layout>`.
+3. Same file had a Cyrillic function identifier
+   (`АналитикаPage`), which conflicts with the project's standing rule
+   that all code — including identifiers — must be in English. Renamed
+   to `AnalyticsPage`.
+4. Same file mixed pt-BR text fragments ("do total", "eventos", "Nunca")
+   into what is otherwise a Russian-only UI page. Replaced with Russian
+   equivalents ("от общего числа", "событий", "Никогда").
+5. Same file was 100% raw Tailwind utility colors (bg-blue-600,
+   text-gray-500, bg-green-500, etc.) with no design-system classes at
+   all. Migrated to `m3-card` for card surfaces and August CSS custom
+   properties (`--aug-ink`, `--aug-muted`, `--aug-success-fg`,
+   `--aug-danger-fg`, `--aug-warning-fg`, `--aug-accent`) for text/status
+   colors, and `aug-button aug-button--secondary` for the refresh
+   action.
+6. `components/settings/SourceCard.tsx`'s `HEALTH_COLOR` map used raw
+   Tailwind `bg-*-100 text-*-800` pairs. These happened to render
+   correctly today only because `app/globals.css` has a legacy
+   compatibility block (`.aug-app-shell .bg-green-100 Ellipsis` etc.)
+   that intercepts exactly those class names — but that's an implicit,
+   fragile dependency (a future rename of either side breaks status
+   colors with no compiler error). Replaced with an explicit
+   `HEALTH_BADGE_STYLE` map of inline styles reading `--aug-success-bg`/
+   `-fg`, `--aug-warning-bg`/`-fg`, `--aug-danger-bg`/`-fg`,
+   `--aug-neutral-bg`/`-fg` directly.
+
+**Consciously not done in this phase (queued for later phases):**
+- `app/competitors/page.tsx` and `app/knowledge/page.tsx` are still 100%
+  inline `v2-color-*` legacy styles with no `m3-card`/`aug-button`/
+  `aug-field` classes. Deferred to Phase 2 (competitors) and Phase 3
+  (knowledge) — both are larger, self-contained page rewrites and don't
+  belong in the same patch as the critical analytics-navigation fix.
+- The 8 brand-tab components (`AudiencePainsTab`, `ComplianceTab`,
+  `VoiceVocabularyTab`, `VersionsTab`, `ContentPillarsTab`,
+  `ExamplesTab`, `OverviewTab`, `ProductsClaimsTab`,
+  `GuidelineImportTab`) still use raw Tailwind (`bg-blue-600`,
+  `bg-gray-100`, etc.) instead of August tokens. Deferred to Phase 4.
+  `GuidelineImportTab` should be prioritized within that phase since
+  it's the pipeline just unblocked for Priority #2.
+- Did not touch the broader `.aug-app-shell` legacy-Tailwind override
+  block in `app/globals.css` itself (the block that maps bg-green-100
+  etc. to August tokens for older pages). It's still load-bearing for
+  `app/competitors/page.tsx`, `app/knowledge/page.tsx`, and the 8 brand
+  tabs until Phases 2-4 land. Removing it now would visually break those
+  pages. It should be deleted once Phases 2-4 are complete and nothing
+  depends on it anymore — tracked in the roadmap.
+- Did not add a full `analytics.*` i18n namespace for this page's
+  strings (labels are still hardcoded Russian, just corrected from the
+  pt-BR contamination). The rest of the app is inconsistent about this
+  too (some pages use `t()` throughout, some hardcode Russian). Doing
+  this properly means auditing which pages should move to `t()` — a
+  separate, larger cleanup, not bundled into a UI-token fix.
+
+**Bugs found and fixed along the way:**
+- See "What was found and fixed" above — all four items in
+  `app/analytics/page.tsx` and both `+`-in-text occurrences were found
+  during this audit, not previously tracked anywhere.
+
+**Verification performed:**
+- `python3 -m py_compile` on this script.
+- Anchor drift guard: confirmed `app/analytics/page.tsx` on disk
+  contains the exact pre-patch marker (`АналитикаPage` identifier)
+  before allowing the full-file replacement; `lib/i18n/config.ts` and
+  `components/settings/SourceCard.tsx` edits use uniqueness-checked
+  `str_replace`-style anchors (each anchor confirmed to occur exactly
+  once in the source snapshot before this script was written).
+- Brace/paren balance check (`check_braces_balanced`) run against all
+  three modified/replaced TS/TSX files.
+- `--verify` re-reads all three files from disk after `--apply` and
+  re-confirms: no leftover `+` inside `add_source` or the SourceCard
+  manual-add label; `<Layout>` import and usage present in
+  `app/analytics/page.tsx`; no Cyrillic identifiers in that file;
+  no `bg-blue-`, `text-gray-`, or other raw Tailwind color utility
+  remains in `app/analytics/page.tsx`.
+
+**Next steps queued:**
+- Phase 2: `app/competitors/page.tsx` → August tokens.
+- Phase 3: `app/knowledge/page.tsx` → August tokens.
+- Phase 4: 8 brand-tab components → August tokens, `GuidelineImportTab`
+  first.
+- After Phase 4: remove the now-dead `.aug-app-shell` legacy-Tailwind
+  override block from `app/globals.css`.
