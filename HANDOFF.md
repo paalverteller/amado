@@ -463,3 +463,84 @@ Do not build these autonomously:
   first.
 - After Phase 4: remove the now-dead `.aug-app-shell` legacy-Tailwind
   override block from `app/globals.css`.
+
+<!-- GUI_AUDIT_PHASE2_20260901 -->
+
+## GUI Audit and Modernization — Phase 2 (2026-09-01)
+
+**Context:**
+- Continuation of Priority #6 (see Phase 1, 2026-08-31). This phase
+  covers `app/competitors/page.tsx`, flagged in the original audit as
+  100% inline `v2-color-*` legacy styles with zero design-system
+  classes.
+
+**What was changed:**
+- Every card surface (`CompetitorCard` root, the add-competitor form
+  panel, the empty state) migrated from a raw `rounded-lg border` div
+  with inline `borderColor`/`background` reading `--v2-color-*` to the
+  `m3-card` class.
+- Every button (archive/restore toggle, add source, add competitor,
+  generate/refresh review, form submit buttons) migrated from raw
+  `rounded`/`rounded-full` divs with inline `background`/`color` to
+  `aug-button` with the appropriate `--primary`/`--secondary` modifier.
+- Every form input/textarea/select migrated from `rounded-md px-3 py-1.5`
+  with inline `background: var(--v2-color-surface-alt)` to the
+  `aug-field` wrapper pattern (`<label className="aug-field"><input
+  .../></label>`), matching the convention already used elsewhere in
+  the codebase (e.g. the content-generation form).
+- The "archived" status chip migrated from a raw span with inline
+  background/color to `m3-chip`.
+- Remaining text/status colors (`--v2-color-text-primary`,
+  `--v2-color-text-secondary`, `--v2-color-brand-primary`,
+  `--v2-color-surface-alt`, `--v2-color-success`, `--v2-color-warning`)
+  replaced with their direct August equivalents (`--aug-ink`,
+  `--aug-muted`, `--aug-accent`, `--aug-soft`, `--aug-success-fg`,
+  `--aug-warning-fg`) rather than going through the `--v2-color-*`
+  alias layer.
+- Added a real inline SVG plus icon to the "add source" and "add
+  competitor" buttons. Neither previously had an icon (the `+` lived
+  only in the translation string, already fixed in Phase 1) — this adds
+  a proper icon rather than just removing the stray character.
+
+**Consciously not done in this phase:**
+- Did not change any state, effect, or handler logic. This is a pure
+  visual/structural migration; the only new symbol is
+  `getSourceDotColor()`, a named-function refactor of what was
+  previously an inline ternary picking the source-health dot color —
+  same behavior, easier to read.
+- Did not touch `lib/i18n/config.ts` translation strings beyond what
+  Phase 1 already fixed — this page's remaining hardcoded Russian
+  strings ("архив", "Вручную") are unchanged, consistent with the
+  decision in Phase 1 to defer the broader `t()` coverage audit.
+- Did not remove the `.aug-app-shell` legacy-Tailwind override block
+  from `app/globals.css` yet — `app/knowledge/page.tsx` and the 8
+  brand-tab components (Phases 3-4) still depend on it.
+
+**Bugs found and fixed along the way:**
+- None beyond what was already tracked in the Phase 1 audit for this
+  file (inline `v2-color-*` throughout, no icon on either add button).
+
+**Verification performed:**
+- `python3 -m py_compile` on this script.
+- Composite drift guard: 4 independent structural markers, each checked
+  against its exact expected occurrence count in the pre-patch file,
+  before allowing the full-file replacement (see DRIFT_MARKERS in this
+  script).
+- Logic fingerprint check: confirmed all 19 `useState` declarations, both
+  `useCallback`/`useEffect` calls, and all 4 async handlers
+  (`addSource`, `generateReview`, `toggleArchive`, `addCompetitor`) are
+  present unchanged in the new file.
+- Brace/paren/bracket balance check on the new file.
+- `tsc --noEmit --strict` against the new file in an isolated sandbox
+  with stub `@/components/Layout`, `@/lib/i18n/config`, and
+  `@/lib/market-context` modules matching real export signatures — zero
+  type errors. Confirmed the stub setup actually catches errors by
+  deliberately breaking a type and re-running before restoring.
+- Confirmed zero remaining `v2-color` references in the new file.
+
+**Next steps queued:**
+- Phase 3: `app/knowledge/page.tsx` → August tokens.
+- Phase 4: 8 brand-tab components → August tokens, `GuidelineImportTab`
+  first.
+- After Phase 4: remove the now-dead `.aug-app-shell` legacy-Tailwind
+  override block from `app/globals.css`.

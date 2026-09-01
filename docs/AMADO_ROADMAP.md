@@ -243,3 +243,25 @@ the August design token system.
 3. Phase 3: `app/knowledge/page.tsx` → August tokens.
 4. Phase 4: 8 brand-tab components → August tokens (`GuidelineImportTab` first, since it's the pipeline unblocked for Priority 2).
 5. Follow-up: remove the now-unused `.aug-app-shell` legacy-Tailwind override block from `app/globals.css` once nothing depends on it.
+
+<!-- GUI_AUDIT_PHASE2_20260901 -->
+
+## Priority 6 — GUI audit and modernization: Phase 2 complete (2026-09-01)
+
+`app/competitors/page.tsx` migrated from 100% inline `v2-color-*` legacy
+styles to August design tokens (`m3-card`, `aug-button` + modifiers,
+`aug-field`, `m3-chip`). Pure visual/structural change — verified no
+state/effect/handler logic changed. Full detail in HANDOFF.md under this
+tag.
+
+**Updated status table:**
+
+| Area | Status |
+|---|---|
+| `+` button defect (both locations) | Fixed — Phase 1 |
+| `app/analytics/page.tsx` | Fixed — Phase 1 |
+| `components/settings/SourceCard.tsx` | Fixed — Phase 1 |
+| `app/competitors/page.tsx` | Fixed — Phase 2 |
+| `app/knowledge/page.tsx` | Open — Phase 3 |
+| 8 brand-tab components | Open — Phase 4 |
+| `.aug-app-shell` legacy-Tailwind override block in `app/globals.css` | Still load-bearing for Phases 3-4; remove after Phase 4 |
