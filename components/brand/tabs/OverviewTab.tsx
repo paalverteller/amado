@@ -42,19 +42,19 @@ export default function OverviewTab({ brandId }: { brandId: string }) {
   if (!brandId) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Выберите бренд, чтобы увидеть данные</p>
+        <p style={{ color: 'var(--aug-muted)' }}>Выберите бренд, чтобы увидеть данные</p>
       </div>
     )
   }
 
   if (loading) {
-    return <div className="text-center py-12">Загрузка...</div>
+    return <div className="text-center py-12" style={{ color: 'var(--aug-muted)' }}>Загрузка...</div>
   }
 
   if (!overview) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Для этого бренда пока нет данных</p>
+        <p style={{ color: 'var(--aug-muted)' }}>Для этого бренда пока нет данных</p>
       </div>
     )
   }
@@ -62,20 +62,29 @@ export default function OverviewTab({ brandId }: { brandId: string }) {
   return (
     <div className="space-y-6">
       {/* Positioning Card */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Позиционирование бренда</h2>
+      <div className="m3-card p-6">
+        <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--aug-ink)' }}>Позиционирование бренда</h2>
         <div className="prose max-w-none">
-          <p className="text-gray-700 text-lg leading-relaxed">{overview.positioning || '—'}</p>
+          <p className="text-lg leading-relaxed" style={{ color: 'var(--aug-ink)' }}>{overview.positioning || '—'}</p>
         </div>
         <div className="mt-4 flex items-center space-x-4">
-          <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+          <span
+            className="px-3 py-1 rounded-full text-sm"
+            style={{ background: 'var(--aug-accent-bg)', color: 'var(--aug-accent-fg)' }}
+          >
             {overview.regionName}
           </span>
-          <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
+          <span
+            className="px-3 py-1 rounded-full text-sm"
+            style={{ background: 'var(--aug-success-bg)', color: 'var(--aug-success-fg)' }}
+          >
             {overview.locale}
           </span>
           {overview.isDefault && (
-            <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
+            <span
+              className="px-3 py-1 rounded-full text-sm"
+              style={{ background: 'var(--aug-accent-bg)', color: 'var(--aug-accent-fg)' }}
+            >
               По умолчанию
             </span>
           )}
@@ -84,50 +93,54 @@ export default function OverviewTab({ brandId }: { brandId: string }) {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm text-gray-500 mb-1">Версия политики</div>
-          <div className="text-2xl font-bold text-gray-900">{overview.ruleSetVersion}</div>
-          <div className={`text-sm mt-1 ${overview.ruleSetStatus === 'active' ? 'text-green-600' : 'text-yellow-600'}`}>
+        <div className="m3-card p-6">
+          <div className="text-sm mb-1" style={{ color: 'var(--aug-muted)' }}>Версия политики</div>
+          <div className="text-2xl font-bold" style={{ color: 'var(--aug-ink)' }}>{overview.ruleSetVersion}</div>
+          <div className="text-sm mt-1" style={{ color: overview.ruleSetStatus === 'active' ? 'var(--aug-success-fg)' : 'var(--aug-warning-fg)' }}>
             {overview.ruleSetStatus === 'active' ? 'Активна' : overview.ruleSetStatus === 'none' ? 'Нет активной версии' : 'Черновик'}
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm text-gray-500 mb-1">Всего правил</div>
-          <div className="text-2xl font-bold text-gray-900">{overview.totalRules}</div>
+        <div className="m3-card p-6">
+          <div className="text-sm mb-1" style={{ color: 'var(--aug-muted)' }}>Всего правил</div>
+          <div className="text-2xl font-bold" style={{ color: 'var(--aug-ink)' }}>{overview.totalRules}</div>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm text-gray-500 mb-1">Утверждено</div>
-          <div className="text-2xl font-bold text-green-600">{overview.approvedRules}</div>
+        <div className="m3-card p-6">
+          <div className="text-sm mb-1" style={{ color: 'var(--aug-muted)' }}>Утверждено</div>
+          <div className="text-2xl font-bold" style={{ color: 'var(--aug-success-fg)' }}>{overview.approvedRules}</div>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm text-gray-500 mb-1">Ожидает проверки</div>
-          <div className="text-2xl font-bold text-yellow-600">{overview.pendingRules}</div>
+        <div className="m3-card p-6">
+          <div className="text-sm mb-1" style={{ color: 'var(--aug-muted)' }}>Ожидает проверки</div>
+          <div className="text-2xl font-bold" style={{ color: 'var(--aug-warning-fg)' }}>{overview.pendingRules}</div>
         </div>
       </div>
 
       {/* Voice & Audience */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Голос бренда</h3>
-          <p className="text-gray-700">{overview.voiceDescription || '—'}</p>
+        <div className="m3-card p-6">
+          <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--aug-ink)' }}>Голос бренда</h3>
+          <p style={{ color: 'var(--aug-ink)' }}>{overview.voiceDescription || '—'}</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Целевая аудитория</h3>
-          <p className="text-gray-700">{overview.targetAudience || '—'}</p>
+        <div className="m3-card p-6">
+          <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--aug-ink)' }}>Целевая аудитория</h3>
+          <p style={{ color: 'var(--aug-ink)' }}>{overview.targetAudience || '—'}</p>
         </div>
       </div>
 
       {/* Competitors */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">Конкуренты</h3>
+      <div className="m3-card p-6">
+        <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--aug-ink)' }}>Конкуренты</h3>
         <div className="flex flex-wrap gap-2">
           {overview.competitors
             ? overview.competitors.split(',').map((comp, i) => (
-                <span key={i} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
+                <span
+                  key={i}
+                  className="px-3 py-1 rounded-full text-sm"
+                  style={{ background: 'var(--aug-neutral-bg)', color: 'var(--aug-neutral-fg)' }}
+                >
                   {comp.trim()}
                 </span>
               ))
-            : <span className="text-sm text-gray-500">—</span>}
+            : <span className="text-sm" style={{ color: 'var(--aug-muted)' }}>—</span>}
         </div>
       </div>
     </div>

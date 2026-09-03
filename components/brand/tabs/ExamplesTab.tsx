@@ -41,37 +41,56 @@ export default function ExamplesTab({ brandId }: { brandId: string }) {
     return true
   })
 
-  if (!brandId) return <div className="text-center py-12 text-gray-500">Выберите бренд</div>
-  if (loading) return <div className="text-center py-12">Загрузка...</div>
+  if (!brandId) return <div className="text-center py-12" style={{ color: 'var(--aug-muted)' }}>Выберите бренд</div>
+  if (loading) return <div className="text-center py-12" style={{ color: 'var(--aug-muted)' }}>Загрузка...</div>
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2">
-        <select onChange={e => setFilter(f => ({ ...f, platform: e.target.value || undefined }))} className="px-3 py-2 border rounded-lg text-sm">
-          <option value="">Все платформы</option>
-          {platforms.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
-        <select onChange={e => setFilter(f => ({ ...f, format: e.target.value || undefined }))} className="px-3 py-2 border rounded-lg text-sm">
-          <option value="">Все форматы</option>
-          {formats.map(f => <option key={f} value={f}>{f}</option>)}
-        </select>
+        <label className="aug-field">
+          <select onChange={e => setFilter(f => ({ ...f, platform: e.target.value || undefined }))}>
+            <option value="">Все платформы</option>
+            {platforms.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </label>
+        <label className="aug-field">
+          <select onChange={e => setFilter(f => ({ ...f, format: e.target.value || undefined }))}>
+            <option value="">Все форматы</option>
+            {formats.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
+        </label>
       </div>
 
       <div className="space-y-4">
         {filtered.map(ex => (
-          <div key={ex.id} className="bg-white rounded-lg shadow p-6">
+          <div key={ex.id} className="m3-card p-6">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center space-x-2">
-                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">{ex.platform}</span>
-                <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">{ex.format}</span>
-                <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs">{ex.pillarName}</span>
+                <span
+                  className="px-2 py-1 rounded text-xs"
+                  style={{ background: 'var(--aug-accent-bg)', color: 'var(--aug-accent-fg)' }}
+                >
+                  {ex.platform}
+                </span>
+                <span
+                  className="px-2 py-1 rounded text-xs"
+                  style={{ background: 'var(--aug-neutral-bg)', color: 'var(--aug-neutral-fg)' }}
+                >
+                  {ex.format}
+                </span>
+                <span
+                  className="px-2 py-1 rounded text-xs"
+                  style={{ background: 'var(--aug-accent-bg)', color: 'var(--aug-accent-fg)' }}
+                >
+                  {ex.pillarName}
+                </span>
               </div>
-              <span className="text-xs text-gray-400">{new Date(ex.approvedAt).toLocaleDateString('ru-RU')}</span>
+              <span className="text-xs" style={{ color: 'var(--aug-muted)' }}>{new Date(ex.approvedAt).toLocaleDateString('ru-RU')}</span>
             </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-gray-800 whitespace-pre-wrap">{ex.content}</p>
+            <div className="p-4 rounded-2xl" style={{ background: 'var(--aug-soft)' }}>
+              <p className="whitespace-pre-wrap" style={{ color: 'var(--aug-ink)' }}>{ex.content}</p>
             </div>
-            <div className="mt-2 text-xs text-gray-500">
+            <div className="mt-2 text-xs" style={{ color: 'var(--aug-muted)' }}>
               Продукт: {ex.productExplicitness}
             </div>
           </div>

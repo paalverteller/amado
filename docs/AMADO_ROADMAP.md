@@ -288,3 +288,39 @@ HANDOFF.md under this tag.
 | `app/knowledge/page.tsx` (incl. hardcoded `#DBEAFE`/`#1E40AF` badge) | Fixed — Phase 3 |
 | 8 brand-tab components | Open — Phase 4 |
 | `.aug-app-shell` legacy-Tailwind override block in `app/globals.css` | Still load-bearing for Phase 4; remove after |
+
+<!-- GUI_AUDIT_PHASE4_20260902 -->
+
+## Priority 6 — GUI audit and modernization: Phase 4 complete (2026-09-02)
+
+All 8 remaining brand-tab components (`GuidelineImportTab`,
+`AudiencePainsTab`, `ComplianceTab`, `VoiceVocabularyTab`, `VersionsTab`,
+`ContentPillarsTab`, `ExamplesTab`, `OverviewTab`, `ProductsClaimsTab` —
+9 files total counting GuidelineImportTab) migrated from 100% raw
+Tailwind utility colors to August design tokens. Two components
+(`ExamplesTab`, `ContentPillarsTab`) were using `bg-purple-100`/
+`bg-indigo-100`, colors with no entry at all in the legacy
+`.aug-app-shell` override block — their badges were never actually
+on-brand before this fix. `VersionsTab` also had a fully hardcoded
+`#2563EB` publish-button color, fixed the same way as Phase 3's
+`#DBEAFE`/`#1E40AF`. Full detail in HANDOFF.md under this tag.
+
+**Priority 6 — final status table:**
+
+| Area | Status |
+|---|---|
+| `+` button defect (both locations) | Fixed — Phase 1 |
+| `app/analytics/page.tsx` | Fixed — Phase 1 |
+| `components/settings/SourceCard.tsx` | Fixed — Phase 1 |
+| `app/competitors/page.tsx` | Fixed — Phase 2 |
+| `app/knowledge/page.tsx` (incl. hardcoded `#DBEAFE`/`#1E40AF` badge) | Fixed — Phase 3 |
+| 8 brand-tab components (incl. hardcoded `#2563EB`, uncovered purple/indigo badges) | Fixed — Phase 4 |
+| `.aug-app-shell` legacy-Tailwind override block in `app/globals.css` | Ready for removal — pending a final codebase-wide grep confirming nothing else depends on it |
+
+**Plan:**
+1. ~~Phase 1: critical `app/analytics/page.tsx` navigation fix + `+` button defect~~ — done 2026-08-31.
+2. ~~Phase 2: `app/competitors/page.tsx` → August tokens~~ — done 2026-09-01.
+3. ~~Phase 3: `app/knowledge/page.tsx` → August tokens~~ — done 2026-09-01.
+4. ~~Phase 4: 8 brand-tab components → August tokens~~ — done 2026-09-02.
+5. Follow-up: codebase-wide grep for remaining raw Tailwind color usage, then remove the `.aug-app-shell` legacy-Tailwind override block from `app/globals.css`. This closes Priority 6.
+6. Possible future priority (not yet scheduled): full `t()` i18n coverage audit — several pages still hardcode Russian strings inline rather than routing through the dictionary. Flagged but out of scope for the token migration.

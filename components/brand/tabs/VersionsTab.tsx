@@ -19,11 +19,11 @@ const STATUS_LABEL: Record<string, string> = {
   archived: 'В архиве',
 }
 
-const STATUS_CLASS: Record<string, string> = {
-  draft: 'bg-yellow-100 text-yellow-800',
-  review: 'bg-blue-100 text-blue-800',
-  active: 'bg-green-100 text-green-800',
-  archived: 'bg-gray-100 text-gray-600',
+const STATUS_BADGE_STYLE: Record<string, { background: string; color: string }> = {
+  draft: { background: 'var(--aug-warning-bg)', color: 'var(--aug-warning-fg)' },
+  review: { background: 'var(--aug-accent-bg)', color: 'var(--aug-accent-fg)' },
+  active: { background: 'var(--aug-success-bg)', color: 'var(--aug-success-fg)' },
+  archived: { background: 'var(--aug-neutral-bg)', color: 'var(--aug-neutral-fg)' },
 }
 
 export default function VersionsTab({ brandId }: { brandId: string }) {
@@ -63,37 +63,39 @@ export default function VersionsTab({ brandId }: { brandId: string }) {
     }
   }
 
-  if (!brandId) return <div className="text-center py-12 text-gray-500">Выберите бренд</div>
-  if (loading) return <div className="text-center py-12">Загрузка...</div>
+  if (!brandId) return <div className="text-center py-12" style={{ color: 'var(--aug-muted)' }}>Выберите бренд</div>
+  if (loading) return <div className="text-center py-12" style={{ color: 'var(--aug-muted)' }}>Загрузка...</div>
 
   return (
     <div className="space-y-4">
       {actionError && (
-        <div className="rounded bg-red-50 text-red-700 text-sm px-4 py-2">{actionError}</div>
+        <div className="rounded-2xl text-sm px-4 py-2" style={{ background: 'var(--aug-danger-bg)', color: 'var(--aug-danger-fg)' }}>{actionError}</div>
       )}
 
       {ruleSets.length === 0 && (
-        <div className="text-center py-12 text-gray-500">Версий пока нет</div>
+        <div className="text-center py-12" style={{ color: 'var(--aug-muted)' }}>Версий пока нет</div>
       )}
 
       {ruleSets.map(rs => (
-        <div key={rs.id} className="bg-white rounded-lg shadow p-6">
+        <div key={rs.id} className="m3-card p-6">
           <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
             <div className="flex items-center space-x-3">
-              <h3 className="text-lg font-semibold">Версия {rs.version}</h3>
-              <span className={`px-2 py-1 rounded text-xs ${STATUS_CLASS[rs.status] ?? STATUS_CLASS.draft}`}>
+              <h3 className="text-lg font-semibold" style={{ color: 'var(--aug-ink)' }}>Версия {rs.version}</h3>
+              <span
+                className="px-2 py-1 rounded text-xs"
+                style={STATUS_BADGE_STYLE[rs.status] ?? STATUS_BADGE_STYLE.draft}
+              >
                 {STATUS_LABEL[rs.status] ?? rs.status}
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-500">{rs.totalRules} правил</span>
+              <span className="text-sm" style={{ color: 'var(--aug-muted)' }}>{rs.totalRules} правил</span>
               {rs.status !== 'active' && (
                 <button
                   type="button"
                   disabled={publishingId === rs.id}
                   onClick={() => handlePublish(rs.id)}
-                  className="rounded px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                  style={{ background: '#2563EB' }}
+                  className="aug-button aug-button--primary text-xs"
                 >
                   {publishingId === rs.id
                     ? 'Публикуем...'
@@ -104,7 +106,7 @@ export default function VersionsTab({ brandId }: { brandId: string }) {
               )}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+          <div className="grid grid-cols-2 gap-4 text-sm" style={{ color: 'var(--aug-muted)' }}>
             <div>Создано: {new Date(rs.createdAt).toLocaleDateString('ru-RU')}</div>
             <div>Активировано: {rs.activatedAt ? new Date(rs.activatedAt).toLocaleDateString('ru-RU') : '—'}</div>
             <div>Автор: {rs.createdBy || '—'}</div>

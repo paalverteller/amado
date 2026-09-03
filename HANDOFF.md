@@ -626,3 +626,102 @@ Do not build these autonomously:
   first (Priority #2 pipeline).
 - After Phase 4: remove the now-dead `.aug-app-shell` legacy-Tailwind
   override block from `app/globals.css`.
+
+<!-- GUI_AUDIT_PHASE4_20260902 -->
+
+## GUI Audit and Modernization — Phase 4 (2026-09-02, final phase)
+
+**Context:**
+- Final phase of Priority #6 (Phase 1: 2026-08-31; Phase 2 and 3:
+  2026-09-01). Covers all 8 remaining brand-tab components under
+  `components/brand/tabs/`, all flagged in the original audit as 100%
+  raw Tailwind utility colors with zero design-system classes.
+  `GuidelineImportTab.tsx` was prioritized within this set since it's
+  the pipeline just unblocked for Priority #2 (guideline import schema
+  fix, 2026-08-29).
+
+**What was changed (all 9 files, same pattern):**
+- Every card surface moved from `bg-white rounded-lg shadow p-N` to
+  `m3-card`.
+- Every status/severity/policy/risk/role badge moved from
+  `bg-{color}-100 text-{color}-800` Tailwind pairs to explicit
+  inline styles reading August status tokens (`--aug-success-bg/-fg`,
+  `--aug-warning-bg/-fg`, `--aug-danger-bg/-fg`, `--aug-accent-bg/-fg`,
+  `--aug-neutral-bg/-fg`). Unlike the pages fixed in Phases 1-3, these
+  components had **no** `.aug-app-shell` legacy-override safety net
+  working in their favor — the override block in `app/globals.css`
+  only maps a narrow set of blue/gray/green/yellow/red class-name
+  variants, and several of these components used `bg-purple-100` /
+  `bg-indigo-100` (ExamplesTab, ContentPillarsTab), which the override
+  never covered at all. Those badges were rendering as literal
+  Tailwind default purple/indigo, not any August color, before this
+  fix. Purple/indigo both mapped to `--aug-accent-bg/-fg`, the only
+  purple-family token August defines.
+- Filter-toggle buttons (ComplianceTab, VoiceVocabularyTab) moved from
+  a manual inline `background: var(--aug-accent), color: '#fff'` /
+  neutral-background pattern to the `aug-button` class with
+  `--primary`/`--secondary` modifiers — removing the last hardcoded
+  `#fff` color reference in this batch.
+- `VersionsTab.tsx`'s publish button had a fully hardcoded off-token
+  hex color, `style={{ background: '#2563EB' }}`, bypassing the
+  token system entirely (similar in kind to the `#DBEAFE`/`#1E40AF`
+  badge fixed in Phase 3, though found independently during this
+  phase's audit). Replaced with `aug-button aug-button--primary`.
+
+**Consciously not done in this phase:**
+- Did not change any state, effect, or handler logic in any of the 9
+  files — pure visual/structural migration in every case. Each file
+  was checked with the same logic-fingerprint approach as Phases 2-3
+  (all `useState`, `useEffect`, `useCallback`, and handler function
+  signatures confirmed present and unchanged).
+- Did not add any new i18n coverage — these components already mix
+  hardcoded Russian labels with some inline English fallbacks; that's
+  consistent with the broader `t()` coverage gap noted (and
+  deliberately deferred) since Phase 1.
+- Did NOT yet remove the `.aug-app-shell` legacy-Tailwind override
+  block from `app/globals.css`, even though this was the last phase
+  that depended on it. Removal is a separate, verifiable step (need to
+  grep the whole codebase for any remaining raw Tailwind color-class
+  usage before deleting the safety net) — see "Next steps" below.
+
+**Bugs found and fixed along the way:**
+- `VersionsTab.tsx`'s hardcoded `#2563EB` publish-button color,
+  bypassing the token system (same class of bug as Phase 3's
+  `#DBEAFE`/`#1E40AF`, found independently here).
+- `ExamplesTab.tsx` and `ContentPillarsTab.tsx` used `bg-purple-100`
+  and `bg-indigo-100` respectively — colors with **no** entry in the
+  `.aug-app-shell` legacy-override block at all, meaning these badges
+  were never actually themed correctly even before this fix; they were
+  rendering plain Tailwind purple/indigo regardless of brand theme.
+
+**Verification performed:**
+- `python3 -m py_compile` on this script.
+- Composite drift guard: 2 independent structural markers per file (18
+  total across all 9 files), each checked against its exact expected
+  occurrence count in the pre-patch file before allowing that file's
+  replacement.
+- Brace/paren/bracket balance check on all 9 new files.
+- `tsc --noEmit --strict` against all 9 new files together with the
+  already-migrated Phase 1-3 pages, in an isolated sandbox with stub
+  `@/lib/api-client` (`fetchJson`) and `@/lib/api/error-message`
+  (`getErrorMessage`) modules matching real export signatures — zero
+  type errors project-wide.
+- Confirmed zero remaining raw Tailwind color-utility classes
+  (`bg|text|border`-`{blue,gray,green,red,yellow,purple,indigo,orange}`-
+  `{shade}`) and zero remaining hardcoded off-token hex colors (except
+  `#FFFFFF`, which is the literal white already used inside
+  `aug-button--primary`'s own CSS definition) across all 9 files.
+- Confirmed all import statements are byte-for-byte unchanged from the
+  pre-patch files (no new or removed dependencies).
+
+**Next steps queued:**
+- Grep the full codebase for any remaining raw Tailwind color-utility
+  usage outside the 12 files covered by Phases 1-4, to confirm nothing
+  else depends on the `.aug-app-shell` legacy-Tailwind override block.
+- If clean, remove that block from `app/globals.css` as a small,
+  separate follow-up patch — this closes out Priority #6.
+- Priority #6 audit itself: consider a follow-up pass specifically for
+  `t()` coverage (several pages/components still hardcode Russian
+  strings inline rather than routing through the i18n dictionary) —
+  flagged as out of scope for the token migration in every phase so
+  far, tracked here as a distinct future priority if wanted.

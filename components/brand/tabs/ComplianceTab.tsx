@@ -12,6 +12,27 @@ interface QaFinding {
   createdAt: string
 }
 
+const SEVERITY_BADGE_STYLE: Record<QaFinding['severity'], { background: string; color: string }> = {
+  critical: { background: 'var(--aug-danger-bg)', color: 'var(--aug-danger-fg)' },
+  high: { background: 'var(--aug-warning-bg)', color: 'var(--aug-warning-fg)' },
+  medium: { background: 'var(--aug-warning-bg)', color: 'var(--aug-warning-fg)' },
+  low: { background: 'var(--aug-accent-bg)', color: 'var(--aug-accent-fg)' },
+}
+
+const SEVERITY_BORDER_COLOR: Record<QaFinding['severity'], string> = {
+  critical: 'var(--aug-danger-fg)',
+  high: 'var(--aug-warning-fg)',
+  medium: 'var(--aug-warning-fg)',
+  low: 'var(--aug-accent)',
+}
+
+const FINDING_STATUS_BADGE_STYLE: Record<QaFinding['status'], { background: string; color: string }> = {
+  open: { background: 'var(--aug-danger-bg)', color: 'var(--aug-danger-fg)' },
+  resolved: { background: 'var(--aug-success-bg)', color: 'var(--aug-success-fg)' },
+  in_review: { background: 'var(--aug-warning-bg)', color: 'var(--aug-warning-fg)' },
+  waived: { background: 'var(--aug-warning-bg)', color: 'var(--aug-warning-fg)' },
+}
+
 export default function ComplianceTab({ brandId }: { brandId: string }) {
   const [findings, setFindings] = useState<QaFinding[]>([])
   const [loading, setLoading] = useState(true)
@@ -41,8 +62,8 @@ export default function ComplianceTab({ brandId }: { brandId: string }) {
     critical: findings.filter(f => f.severity === 'critical').length,
   }
 
-  if (!brandId) return <div className="text-center py-12 text-gray-500">Выберите бренд</div>
-  if (loading) return <div className="text-center py-12">Загрузка...</div>
+  if (!brandId) return <div className="text-center py-12" style={{ color: 'var(--aug-muted)' }}>Выберите бренд</div>
+  if (loading) return <div className="text-center py-12" style={{ color: 'var(--aug-muted)' }}>Загрузка...</div>
 
   const severityLabel = (s: QaFinding['severity']) =>
     s === 'critical' ? 'Критично' : s === 'high' ? 'Высокая' : s === 'medium' ? 'Средняя' : 'Низкая'
@@ -53,23 +74,27 @@ export default function ComplianceTab({ brandId }: { brandId: string }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm text-gray-500">Всего замечаний</div>
-          <div className="text-2xl font-bold">{stats.total}</div>
+        <div className="m3-card p-4">
+          <div className="text-sm" style={{ color: 'var(--aug-muted)' }}>Всего замечаний</div>
+          <div className="text-2xl font-bold" style={{ color: 'var(--aug-ink)' }}>{stats.total}</div>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm text-gray-500">Открыто</div>
-          <div className="text-2xl font-bold text-yellow-600">{stats.open}</div>
+        <div className="m3-card p-4">
+          <div className="text-sm" style={{ color: 'var(--aug-muted)' }}>Открыто</div>
+          <div className="text-2xl font-bold" style={{ color: 'var(--aug-warning-fg)' }}>{stats.open}</div>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-sm text-gray-500">Критичных</div>
-          <div className="text-2xl font-bold text-red-600">{stats.critical}</div>
+        <div className="m3-card p-4">
+          <div className="text-sm" style={{ color: 'var(--aug-muted)' }}>Критичных</div>
+          <div className="text-2xl font-bold" style={{ color: 'var(--aug-danger-fg)' }}>{stats.critical}</div>
         </div>
       </div>
 
       <div className="flex space-x-2">
         {(['all', 'open', 'critical'] as const).map(f => (
-          <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-lg text-sm font-medium ${filter === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`aug-button ${filter === f ? 'aug-button--primary' : 'aug-button--secondary'}`}
+          >
             {f === 'all' ? 'Все' : f === 'open' ? 'Открытые' : 'Критичные'}
           </button>
         ))}
@@ -77,29 +102,30 @@ export default function ComplianceTab({ brandId }: { brandId: string }) {
 
       <div className="space-y-3">
         {filtered.map(finding => (
-          <div key={finding.id} className={`bg-white rounded-lg shadow p-4 border-l-4 ${
-            finding.severity === 'critical' ? 'border-red-500' :
-            finding.severity === 'high' ? 'border-orange-500' :
-            finding.severity === 'medium' ? 'border-yellow-500' : 'border-blue-500'
-          }`}>
+          <div
+            key={finding.id}
+            className="m3-card p-4"
+            style={{ borderLeft: `4px solid ${SEVERITY_BORDER_COLOR[finding.severity]}` }}
+          >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center space-x-2">
-                <span className={`px-2 py-1 rounded text-xs ${
-                  finding.severity === 'critical' ? 'bg-red-100 text-red-800' :
-                  finding.severity === 'high' ? 'bg-orange-100 text-orange-800' :
-                  finding.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-blue-100 text-blue-800'
-                }`}>{severityLabel(finding.severity)}</span>
-                <span className="text-sm text-gray-500">{finding.category}</span>
+                <span
+                  className="px-2 py-1 rounded text-xs"
+                  style={SEVERITY_BADGE_STYLE[finding.severity]}
+                >
+                  {severityLabel(finding.severity)}
+                </span>
+                <span className="text-sm" style={{ color: 'var(--aug-muted)' }}>{finding.category}</span>
               </div>
-              <span className={`px-2 py-1 rounded text-xs ${
-                finding.status === 'open' ? 'bg-red-100 text-red-800' :
-                finding.status === 'resolved' ? 'bg-green-100 text-green-800' :
-                'bg-yellow-100 text-yellow-800'
-              }`}>{statusLabel(finding.status)}</span>
+              <span
+                className="px-2 py-1 rounded text-xs"
+                style={FINDING_STATUS_BADGE_STYLE[finding.status]}
+              >
+                {statusLabel(finding.status)}
+              </span>
             </div>
-            <p className="text-gray-700">{finding.description}</p>
-            <p className="text-xs text-gray-400 mt-2">{new Date(finding.createdAt).toLocaleDateString('ru-RU')}</p>
+            <p style={{ color: 'var(--aug-ink)' }}>{finding.description}</p>
+            <p className="text-xs mt-2" style={{ color: 'var(--aug-muted)' }}>{new Date(finding.createdAt).toLocaleDateString('ru-RU')}</p>
           </div>
         ))}
       </div>

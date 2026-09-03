@@ -19,6 +19,20 @@ interface Claim {
   status: string
 }
 
+const CLAIM_BORDER_COLOR: Record<Claim['claimType'], string> = {
+  approved: 'var(--aug-success-fg)',
+  forbidden: 'var(--aug-danger-fg)',
+  requires_proof: 'var(--aug-warning-fg)',
+  qualified: 'var(--aug-accent)',
+}
+
+const CLAIM_BADGE_STYLE: Record<Claim['claimType'], { background: string; color: string }> = {
+  approved: { background: 'var(--aug-success-bg)', color: 'var(--aug-success-fg)' },
+  forbidden: { background: 'var(--aug-danger-bg)', color: 'var(--aug-danger-fg)' },
+  requires_proof: { background: 'var(--aug-warning-bg)', color: 'var(--aug-warning-fg)' },
+  qualified: { background: 'var(--aug-accent-bg)', color: 'var(--aug-accent-fg)' },
+}
+
 export default function ProductsClaimsTab({ brandId }: { brandId: string }) {
   const [products, setProducts] = useState<Product[]>([])
   const [claims, setClaims] = useState<Claim[]>([])
@@ -45,8 +59,8 @@ export default function ProductsClaimsTab({ brandId }: { brandId: string }) {
     fetchData()
   }, [brandId, fetchData])
 
-  if (!brandId) return <div className="text-center py-12 text-gray-500">Выберите бренд</div>
-  if (loading) return <div className="text-center py-12">Загрузка...</div>
+  if (!brandId) return <div className="text-center py-12" style={{ color: 'var(--aug-muted)' }}>Выберите бренд</div>
+  if (loading) return <div className="text-center py-12" style={{ color: 'var(--aug-muted)' }}>Загрузка...</div>
 
   const claimTypeLabel = (type: Claim['claimType']) =>
     type === 'approved' ? 'Разрешено' :
@@ -55,11 +69,27 @@ export default function ProductsClaimsTab({ brandId }: { brandId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex space-x-4 border-b border-gray-200">
-        <button onClick={() => setActiveSection('products')} className={`pb-3 text-sm font-medium border-b-2 ${activeSection === 'products' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>
+      <div className="flex space-x-4 border-b" style={{ borderColor: 'var(--aug-border)' }}>
+        <button
+          onClick={() => setActiveSection('products')}
+          className="pb-3 text-sm font-medium border-b-2"
+          style={
+            activeSection === 'products'
+              ? { borderColor: 'var(--aug-accent)', color: 'var(--aug-accent)' }
+              : { borderColor: 'transparent', color: 'var(--aug-muted)' }
+          }
+        >
           Продукты ({products.length})
         </button>
-        <button onClick={() => setActiveSection('claims')} className={`pb-3 text-sm font-medium border-b-2 ${activeSection === 'claims' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>
+        <button
+          onClick={() => setActiveSection('claims')}
+          className="pb-3 text-sm font-medium border-b-2"
+          style={
+            activeSection === 'claims'
+              ? { borderColor: 'var(--aug-accent)', color: 'var(--aug-accent)' }
+              : { borderColor: 'transparent', color: 'var(--aug-muted)' }
+          }
+        >
           Утверждения ({claims.length})
         </button>
       </div>
@@ -67,12 +97,21 @@ export default function ProductsClaimsTab({ brandId }: { brandId: string }) {
       {activeSection === 'products' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {products.map(p => (
-            <div key={p.id} className="bg-white rounded-lg shadow p-6">
+            <div key={p.id} className="m3-card p-6">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold">{p.name}</h3>
-                <span className={`px-2 py-1 rounded text-xs ${p.productRole === 'infrastructure' ? 'bg-gray-100 text-gray-700' : 'bg-blue-100 text-blue-700'}`}>{p.productRole}</span>
+                <h3 className="text-lg font-semibold" style={{ color: 'var(--aug-ink)' }}>{p.name}</h3>
+                <span
+                  className="px-2 py-1 rounded text-xs"
+                  style={
+                    p.productRole === 'infrastructure'
+                      ? { background: 'var(--aug-neutral-bg)', color: 'var(--aug-neutral-fg)' }
+                      : { background: 'var(--aug-accent-bg)', color: 'var(--aug-accent-fg)' }
+                  }
+                >
+                  {p.productRole}
+                </span>
               </div>
-              <p className="text-gray-600 text-sm">{p.description}</p>
+              <p className="text-sm" style={{ color: 'var(--aug-muted)' }}>{p.description}</p>
             </div>
           ))}
         </div>
@@ -81,21 +120,21 @@ export default function ProductsClaimsTab({ brandId }: { brandId: string }) {
       {activeSection === 'claims' && (
         <div className="space-y-3">
           {claims.map(c => (
-            <div key={c.id} className={`bg-white rounded-lg shadow p-4 border-l-4 ${
-              c.claimType === 'approved' ? 'border-green-500' : 
-              c.claimType === 'forbidden' ? 'border-red-500' : 
-              c.claimType === 'requires_proof' ? 'border-yellow-500' : 'border-blue-500'
-            }`}>
+            <div
+              key={c.id}
+              className="m3-card p-4"
+              style={{ borderLeft: `4px solid ${CLAIM_BORDER_COLOR[c.claimType]}` }}
+            >
               <div className="flex items-center justify-between">
-                <p className="text-gray-800">{c.claimText}</p>
-                <span className={`px-2 py-1 rounded text-xs ${
-                  c.claimType === 'approved' ? 'bg-green-100 text-green-800' :
-                  c.claimType === 'forbidden' ? 'bg-red-100 text-red-800' :
-                  c.claimType === 'requires_proof' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-blue-100 text-blue-800'
-                }`}>{claimTypeLabel(c.claimType)}</span>
+                <p style={{ color: 'var(--aug-ink)' }}>{c.claimText}</p>
+                <span
+                  className="px-2 py-1 rounded text-xs"
+                  style={CLAIM_BADGE_STYLE[c.claimType]}
+                >
+                  {claimTypeLabel(c.claimType)}
+                </span>
               </div>
-              {c.qualifier && <p className="text-sm text-gray-500 mt-1">Оговорка: {c.qualifier}</p>}
+              {c.qualifier && <p className="text-sm mt-1" style={{ color: 'var(--aug-muted)' }}>Оговорка: {c.qualifier}</p>}
             </div>
           ))}
         </div>

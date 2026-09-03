@@ -11,6 +11,20 @@ interface Term {
   notes: string
 }
 
+const POLICY_BORDER_COLOR: Record<Term['policy'], string> = {
+  forbidden: 'var(--aug-danger-fg)',
+  preferred: 'var(--aug-success-fg)',
+  discouraged: 'var(--aug-warning-fg)',
+  allowed: 'var(--aug-neutral-fg)',
+}
+
+const POLICY_BADGE_STYLE: Record<Term['policy'], { background: string; color: string }> = {
+  forbidden: { background: 'var(--aug-danger-bg)', color: 'var(--aug-danger-fg)' },
+  preferred: { background: 'var(--aug-success-bg)', color: 'var(--aug-success-fg)' },
+  discouraged: { background: 'var(--aug-warning-bg)', color: 'var(--aug-warning-fg)' },
+  allowed: { background: 'var(--aug-neutral-bg)', color: 'var(--aug-neutral-fg)' },
+}
+
 export default function VoiceVocabularyTab({ brandId }: { brandId: string }) {
   const [terms, setTerms] = useState<Term[]>([])
   const [loading, setLoading] = useState(true)
@@ -32,8 +46,8 @@ export default function VoiceVocabularyTab({ brandId }: { brandId: string }) {
 
   const filtered = filter === 'all' ? terms : terms.filter(t => t.policy === filter)
 
-  if (!brandId) return <div className="text-center py-12 text-gray-500">Выберите бренд</div>
-  if (loading) return <div className="text-center py-12">Загрузка...</div>
+  if (!brandId) return <div className="text-center py-12" style={{ color: 'var(--aug-muted)' }}>Выберите бренд</div>
+  if (loading) return <div className="text-center py-12" style={{ color: 'var(--aug-muted)' }}>Загрузка...</div>
 
   const policyLabel = (policy: Term['policy']) =>
     policy === 'forbidden' ? 'Запрещено' :
@@ -44,7 +58,11 @@ export default function VoiceVocabularyTab({ brandId }: { brandId: string }) {
     <div className="space-y-6">
       <div className="flex space-x-2">
         {(['all', 'forbidden', 'preferred', 'discouraged'] as const).map(f => (
-          <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-lg text-sm font-medium ${filter === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`aug-button ${filter === f ? 'aug-button--primary' : 'aug-button--secondary'}`}
+          >
             {f === 'all' ? 'Все' : f === 'forbidden' ? 'Запрещённые' : f === 'preferred' ? 'Рекомендованные' : 'Нежелательные'}
           </button>
         ))}
@@ -52,22 +70,22 @@ export default function VoiceVocabularyTab({ brandId }: { brandId: string }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map(term => (
-          <div key={term.id} className={`bg-white rounded-lg shadow p-4 border-l-4 ${
-            term.policy === 'forbidden' ? 'border-red-500' :
-            term.policy === 'preferred' ? 'border-green-500' :
-            term.policy === 'discouraged' ? 'border-yellow-500' : 'border-gray-300'
-          }`}>
+          <div
+            key={term.id}
+            className="m3-card p-4"
+            style={{ borderLeft: `4px solid ${POLICY_BORDER_COLOR[term.policy]}` }}
+          >
             <div className="flex items-center justify-between mb-2">
-              <span className="font-semibold text-gray-900">{term.term}</span>
-              <span className={`px-2 py-1 rounded text-xs ${
-                term.policy === 'forbidden' ? 'bg-red-100 text-red-800' :
-                term.policy === 'preferred' ? 'bg-green-100 text-green-800' :
-                term.policy === 'discouraged' ? 'bg-yellow-100 text-yellow-800' :
-                'bg-gray-100 text-gray-800'
-              }`}>{policyLabel(term.policy)}</span>
+              <span className="font-semibold" style={{ color: 'var(--aug-ink)' }}>{term.term}</span>
+              <span
+                className="px-2 py-1 rounded text-xs"
+                style={POLICY_BADGE_STYLE[term.policy]}
+              >
+                {policyLabel(term.policy)}
+              </span>
             </div>
-            {term.replacement && <p className="text-sm text-blue-600">→ {term.replacement}</p>}
-            {term.notes && <p className="text-sm text-gray-500 mt-1">{term.notes}</p>}
+            {term.replacement && <p className="text-sm" style={{ color: 'var(--aug-accent)' }}>→ {term.replacement}</p>}
+            {term.notes && <p className="text-sm mt-1" style={{ color: 'var(--aug-muted)' }}>{term.notes}</p>}
           </div>
         ))}
       </div>

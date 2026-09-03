@@ -61,36 +61,38 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
   if (!brandId) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Выберите бренд, чтобы увидеть данные</p>
+        <p style={{ color: 'var(--aug-muted)' }}>Выберите бренд, чтобы увидеть данные</p>
       </div>
     )
   }
 
   if (loading) {
-    return <div className="text-center py-12">Загрузка...</div>
+    return <div className="text-center py-12" style={{ color: 'var(--aug-muted)' }}>Загрузка...</div>
   }
 
   return (
     <div className="space-y-6">
       {/* Section Toggle */}
-      <div className="flex space-x-4 border-b border-gray-200">
+      <div className="flex space-x-4 border-b" style={{ borderColor: 'var(--aug-border)' }}>
         <button
           onClick={() => setActiveSection('audiences')}
-          className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+          className="pb-3 text-sm font-medium border-b-2 transition-colors"
+          style={
             activeSection === 'audiences'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
+              ? { borderColor: 'var(--aug-accent)', color: 'var(--aug-accent)' }
+              : { borderColor: 'transparent', color: 'var(--aug-muted)' }
+          }
         >
           Аудитории ({audiences.length})
         </button>
         <button
           onClick={() => setActiveSection('pains')}
-          className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+          className="pb-3 text-sm font-medium border-b-2 transition-colors"
+          style={
             activeSection === 'pains'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
+              ? { borderColor: 'var(--aug-accent)', color: 'var(--aug-accent)' }
+              : { borderColor: 'transparent', color: 'var(--aug-muted)' }
+          }
         >
           Болевые точки ({painPoints.length})
         </button>
@@ -99,20 +101,27 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
       {activeSection === 'audiences' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {audiences.map((audience) => (
-            <div key={audience.id} className="bg-white rounded-lg shadow p-6">
+            <div key={audience.id} className="m3-card p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">{audience.name}</h3>
-                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                <h3 className="text-lg font-semibold" style={{ color: 'var(--aug-ink)' }}>{audience.name}</h3>
+                <span
+                  className="px-2 py-1 rounded text-xs"
+                  style={{ background: 'var(--aug-accent-bg)', color: 'var(--aug-accent-fg)' }}
+                >
                   {audience.technicalDetailLevel}
                 </span>
               </div>
               
               <div className="space-y-4">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Роли</h4>
+                  <h4 className="text-sm font-medium mb-2" style={{ color: 'var(--aug-ink)' }}>Роли</h4>
                   <div className="flex flex-wrap gap-2">
                     {audience.roles?.map((role, i) => (
-                      <span key={i} className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-sm">
+                      <span
+                        key={i}
+                        className="px-2 py-1 rounded text-sm"
+                        style={{ background: 'var(--aug-neutral-bg)', color: 'var(--aug-neutral-fg)' }}
+                      >
                         {role}
                       </span>
                     ))}
@@ -120,11 +129,11 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Боли</h4>
+                  <h4 className="text-sm font-medium mb-2" style={{ color: 'var(--aug-ink)' }}>Боли</h4>
                   <ul className="space-y-1">
                     {audience.pains?.map((pain, i) => (
-                      <li key={i} className="text-sm text-gray-600 flex items-start">
-                        <span className="text-red-500 mr-2">•</span>
+                      <li key={i} className="text-sm flex items-start" style={{ color: 'var(--aug-muted)' }}>
+                        <span className="mr-2" style={{ color: 'var(--aug-danger-fg)' }}>•</span>
                         {pain}
                       </li>
                     ))}
@@ -132,11 +141,11 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Желаемые результаты</h4>
+                  <h4 className="text-sm font-medium mb-2" style={{ color: 'var(--aug-ink)' }}>Желаемые результаты</h4>
                   <ul className="space-y-1">
                     {audience.desiredOutcomes?.map((outcome, i) => (
-                      <li key={i} className="text-sm text-gray-600 flex items-start">
-                        <span className="text-green-500 mr-2">→</span>
+                      <li key={i} className="text-sm flex items-start" style={{ color: 'var(--aug-muted)' }}>
+                        <span className="mr-2" style={{ color: 'var(--aug-success-fg)' }}>→</span>
                         {outcome}
                       </li>
                     ))}
@@ -145,11 +154,11 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
 
                 {audience.objections && audience.objections.length > 0 && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Возражения</h4>
+                    <h4 className="text-sm font-medium mb-2" style={{ color: 'var(--aug-ink)' }}>Возражения</h4>
                     <ul className="space-y-1">
                       {audience.objections.map((obj, i) => (
-                        <li key={i} className="text-sm text-gray-600 flex items-start">
-                          <span className="text-yellow-500 mr-2">⚠</span>
+                        <li key={i} className="text-sm flex items-start" style={{ color: 'var(--aug-muted)' }}>
+                          <span className="mr-2" style={{ color: 'var(--aug-warning-fg)' }}>⚠</span>
                           {obj}
                         </li>
                       ))}
@@ -165,17 +174,17 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
       {activeSection === 'pains' && (
         <div className="space-y-4">
           {painPoints.map((pain) => (
-            <div key={pain.id} className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">{pain.canonicalName}</h3>
-              <p className="text-gray-600 mb-4">{pain.description}</p>
+            <div key={pain.id} className="m3-card p-6">
+              <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--aug-ink)' }}>{pain.canonicalName}</h3>
+              <p className="mb-4" style={{ color: 'var(--aug-muted)' }}>{pain.description}</p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Наблюдаемые симптомы</h4>
+                  <h4 className="text-sm font-medium mb-2" style={{ color: 'var(--aug-ink)' }}>Наблюдаемые симптомы</h4>
                   <ul className="space-y-1">
                     {pain.observableSymptoms?.map((symptom, i) => (
-                      <li key={i} className="text-sm text-gray-600 flex items-start">
-                        <span className="text-orange-500 mr-2">🔍</span>
+                      <li key={i} className="text-sm flex items-start" style={{ color: 'var(--aug-muted)' }}>
+                        <span className="mr-2" style={{ color: 'var(--aug-warning-fg)' }}>🔍</span>
                         {symptom}
                       </li>
                     ))}
@@ -183,11 +192,11 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Бизнес-последствия</h4>
+                  <h4 className="text-sm font-medium mb-2" style={{ color: 'var(--aug-ink)' }}>Бизнес-последствия</h4>
                   <ul className="space-y-1">
                     {pain.businessConsequences?.map((consequence, i) => (
-                      <li key={i} className="text-sm text-gray-600 flex items-start">
-                        <span className="text-red-500 mr-2">💸</span>
+                      <li key={i} className="text-sm flex items-start" style={{ color: 'var(--aug-muted)' }}>
+                        <span className="mr-2" style={{ color: 'var(--aug-danger-fg)' }}>💸</span>
                         {consequence}
                       </li>
                     ))}
@@ -196,11 +205,15 @@ export default function AudiencePainsTab({ brandId }: { brandId: string }) {
               </div>
 
               {pain.approvedBrazilianExamples && pain.approvedBrazilianExamples.length > 0 && (
-                <div className="mt-4 p-4 bg-yellow-50 rounded-lg">
-                  <h4 className="text-sm font-medium text-yellow-800 mb-2">Одобренные примеры</h4>
+                <div className="mt-4 p-4 rounded-2xl" style={{ background: 'var(--aug-warning-bg)' }}>
+                  <h4 className="text-sm font-medium mb-2" style={{ color: 'var(--aug-warning-fg)' }}>Одобренные примеры</h4>
                   <div className="flex flex-wrap gap-2">
                     {pain.approvedBrazilianExamples.map((example, i) => (
-                      <span key={i} className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm">
+                      <span
+                        key={i}
+                        className="px-3 py-1 rounded-full text-sm"
+                        style={{ background: 'var(--aug-warning-bg)', color: 'var(--aug-warning-fg)' }}
+                      >
                         {example}
                       </span>
                     ))}
