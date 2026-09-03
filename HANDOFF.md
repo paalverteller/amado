@@ -544,3 +544,85 @@ Do not build these autonomously:
   first.
 - After Phase 4: remove the now-dead `.aug-app-shell` legacy-Tailwind
   override block from `app/globals.css`.
+
+<!-- GUI_AUDIT_PHASE3_20260901 -->
+
+## GUI Audit and Modernization — Phase 3 (2026-09-01)
+
+**Context:**
+- Continuation of Priority #6 (see Phase 1, 2026-08-31; Phase 2,
+  2026-09-01). This phase covers `app/knowledge/page.tsx`, flagged in
+  the original audit as 100% inline `v2-color-*` legacy styles, plus
+  one fully hardcoded off-token color pair.
+
+**What was changed:**
+- Same migration pattern as Phase 2: all three card sections (upload
+  form, search panel, asset list) moved from `rounded-lg border` +
+  inline `borderColor`/`background: v2-color-*` to `m3-card`; all
+  buttons moved to `aug-button` with `--primary`/`--secondary`/
+  `--danger` modifiers; all form fields moved to the `aug-field`
+  wrapper pattern.
+- The search-mode badge (`{searchMode === 'semantic' ? ... : ...}`)
+  previously used `style={{ background: '#DBEAFE', color: '#1E40AF' }}`
+  — a fully hardcoded hex pair bypassing the token system entirely, not
+  even going through a `--v2-color-*` alias. This was the one item
+  flagged in the original audit as a genuine off-token color, distinct
+  from the rest of the file's (at least token-aliased) `v2-color-*`
+  usage. Replaced with `m3-chip`, the existing accent-badge class
+  already used for the equivalent "archived" chip fixed in Phase 2.
+- `STATUS_COLORS` (the knowledge-asset processing-status badge colors)
+  already read `var(--aug-*)` tokens directly — this was the one part of
+  the file that was already August-native, unlike Phase 1's SourceCard
+  `HEALTH_COLOR` which read raw Tailwind classes. Left unchanged.
+- Result colors (search result cards, delete button, submit error text)
+  moved from `--v2-color-border-default` / `--v2-color-surface-base` /
+  `--v2-color-surface-muted` / `--v2-color-surface-alt` /
+  `--v2-color-text-primary` / `--v2-color-text-secondary` /
+  `--v2-color-danger` to their direct August equivalents (`--aug-border`,
+  `--aug-canvas`, `--aug-soft`, `--aug-ink`, `--aug-muted`,
+  `--aug-danger-fg`).
+
+**Consciously not done in this phase:**
+- Did not change any state, effect, or handler logic — pure
+  visual/structural migration, verified via logic-fingerprint check
+  (all 19 `useState`, the one `useRef`, the one `useEffect`, and all 8
+  async/sync handlers present unchanged).
+- Did not touch `lib/i18n/config.ts` beyond what Phase 1 already fixed.
+  This page reads all its strings through `t()` already (unlike
+  `app/analytics/page.tsx`, which had hardcoded pt-BR contamination) —
+  no translation-layer changes were needed here.
+- Did not remove the `.aug-app-shell` legacy-Tailwind override block
+  from `app/globals.css` yet — the 8 brand-tab components (Phase 4)
+  still depend on it.
+
+**Bugs found and fixed along the way:**
+- The hardcoded `#DBEAFE`/`#1E40AF` search-mode badge, flagged in the
+  original Phase-1 audit pass, is now fixed in this phase (it belongs
+  to `app/knowledge/page.tsx`, not to Phase 1's scope).
+
+**Verification performed:**
+- `python3 -m py_compile` on this script.
+- Composite drift guard: 5 independent structural markers (including
+  the hardcoded hex pair and the exact `STATUS_COLORS` lookup line),
+  each checked against its exact expected occurrence count in the
+  pre-patch file.
+- Logic fingerprint check: confirmed all 19 `useState` declarations, the
+  `useRef`, the `useEffect`, and all 8 handlers (`loadAssets`,
+  `handleFileChange`, `handleSubmit`, `handleReindex`,
+  `handleToggleActive`, `handleDelete`, `handleSearch`, `toggleExcluded`,
+  `handleCopy`) are present unchanged in the new file.
+- Brace/paren/bracket balance check on the new file.
+- `tsc --noEmit --strict` against the new file in an isolated sandbox
+  with stub `@/components/Layout`, `@/components/ui/AugustFeedback`,
+  `@/lib/i18n/config`, and `@/lib/domain/knowledge` modules matching
+  real export signatures — zero type errors. Ran together with the
+  already-migrated Phase 1/2 pages in the same sandbox project to check
+  for cross-file regressions — zero errors project-wide.
+- Confirmed zero remaining `v2-color` references and zero remaining
+  hardcoded off-token hex colors in the new file.
+
+**Next steps queued:**
+- Phase 4: 8 brand-tab components → August tokens, `GuidelineImportTab`
+  first (Priority #2 pipeline).
+- After Phase 4: remove the now-dead `.aug-app-shell` legacy-Tailwind
+  override block from `app/globals.css`.

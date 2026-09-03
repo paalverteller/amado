@@ -265,3 +265,26 @@ tag.
 | `app/knowledge/page.tsx` | Open — Phase 3 |
 | 8 brand-tab components | Open — Phase 4 |
 | `.aug-app-shell` legacy-Tailwind override block in `app/globals.css` | Still load-bearing for Phases 3-4; remove after Phase 4 |
+
+<!-- GUI_AUDIT_PHASE3_20260901 -->
+
+## Priority 6 — GUI audit and modernization: Phase 3 complete (2026-09-01)
+
+`app/knowledge/page.tsx` migrated from 100% inline `v2-color-*` legacy
+styles (plus one fully hardcoded off-token hex color pair on the
+search-mode badge) to August design tokens (`m3-card`, `aug-button` +
+modifiers, `aug-field`, `m3-chip`). Pure visual/structural change —
+verified no state/effect/handler logic changed. Full detail in
+HANDOFF.md under this tag.
+
+**Updated status table:**
+
+| Area | Status |
+|---|---|
+| `+` button defect (both locations) | Fixed — Phase 1 |
+| `app/analytics/page.tsx` | Fixed — Phase 1 |
+| `components/settings/SourceCard.tsx` | Fixed — Phase 1 |
+| `app/competitors/page.tsx` | Fixed — Phase 2 |
+| `app/knowledge/page.tsx` (incl. hardcoded `#DBEAFE`/`#1E40AF` badge) | Fixed — Phase 3 |
+| 8 brand-tab components | Open — Phase 4 |
+| `.aug-app-shell` legacy-Tailwind override block in `app/globals.css` | Still load-bearing for Phase 4; remove after |

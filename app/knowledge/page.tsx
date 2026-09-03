@@ -194,47 +194,37 @@ export default function KnowledgePage() {
     <Layout>
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--v2-color-text-primary)' }}>{t('knowledge.title')}</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--v2-color-text-secondary)' }}>{t('knowledge.subtitle')}</p>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--aug-ink)' }}>{t('knowledge.title')}</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--aug-muted)' }}>{t('knowledge.subtitle')}</p>
         </div>
 
         {/* ── Upload form ── */}
-        <form
-          onSubmit={handleSubmit}
-          className="rounded-lg border p-4 flex flex-col gap-3"
-          style={{ borderColor: 'var(--v2-color-border-default)', background: 'var(--v2-color-surface-base)' }}
-        >
-          <h2 className="text-base font-semibold" style={{ color: 'var(--v2-color-text-primary)' }}>{t('knowledge.upload_title')}</h2>
+        <form onSubmit={handleSubmit} className="m3-card p-4 flex flex-col gap-3">
+          <h2 className="text-base font-semibold" style={{ color: 'var(--aug-ink)' }}>{t('knowledge.upload_title')}</h2>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm">
-              <span style={{ color: 'var(--v2-color-text-secondary)' }}>{t('knowledge.field_title')}</span>
+            <label className="aug-field">
+              <span>{t('knowledge.field_title')}</span>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder={t('knowledge.placeholder_title')}
-                className="rounded border px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--v2-color-border-strong)' }}
               />
             </label>
 
-            <label className="flex flex-col gap-1 text-sm">
-              <span style={{ color: 'var(--v2-color-text-secondary)' }}>{t('knowledge.field_collection')}</span>
+            <label className="aug-field">
+              <span>{t('knowledge.field_collection')}</span>
               <input
                 value={collection}
                 onChange={(e) => setCollection(e.target.value)}
-                className="rounded border px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--v2-color-border-strong)' }}
               />
             </label>
 
-            <label className="flex flex-col gap-1 text-sm">
-              <span style={{ color: 'var(--v2-color-text-secondary)' }}>{t('knowledge.field_content_type')}</span>
+            <label className="aug-field">
+              <span>{t('knowledge.field_content_type')}</span>
               <select
                 value={contentType}
                 onChange={(e) => setContentType(e.target.value as (typeof CONTENT_TYPES)[number])}
-                className="rounded border px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--v2-color-border-strong)' }}
               >
                 {CONTENT_TYPES.map((value) => (
                   <option key={value} value={value}>{contentTypeLabel(value)}</option>
@@ -242,13 +232,11 @@ export default function KnowledgePage() {
               </select>
             </label>
 
-            <label className="flex flex-col gap-1 text-sm">
-              <span style={{ color: 'var(--v2-color-text-secondary)' }}>{t('knowledge.field_retrieval_mode')}</span>
+            <label className="aug-field">
+              <span>{t('knowledge.field_retrieval_mode')}</span>
               <select
                 value={retrievalMode}
                 onChange={(e) => setRetrievalMode(e.target.value as (typeof RETRIEVAL_MODES)[number])}
-                className="rounded border px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--v2-color-border-strong)' }}
               >
                 {RETRIEVAL_MODES.map((value) => (
                   <option key={value} value={value}>{modeLabel(value)}</option>
@@ -257,73 +245,64 @@ export default function KnowledgePage() {
             </label>
           </div>
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span style={{ color: 'var(--v2-color-text-secondary)' }}>{t('knowledge.field_text')}</span>
+          <label className="aug-field">
+            <span>{t('knowledge.field_text')}</span>
             <textarea
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
               placeholder={t('knowledge.placeholder_text')}
               rows={8}
-              className="rounded border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--v2-color-border-strong)', resize: 'vertical', fontFamily: 'inherit' }}
+              style={{ resize: 'vertical', fontFamily: 'inherit' }}
             />
           </label>
 
           <label className="flex flex-col gap-1 text-sm">
-            <span style={{ color: 'var(--v2-color-text-secondary)' }}>{t('knowledge.upload_file')}</span>
+            <span style={{ color: 'var(--aug-muted)' }}>{t('knowledge.upload_file')}</span>
             <input ref={fileInputRef} type="file" accept=".txt,.md,.markdown,text/plain,text/markdown" onChange={handleFileChange} className="text-sm" />
           </label>
 
           {submitError && (
-            <p className="text-sm" style={{ color: 'var(--v2-color-danger)' }}>{submitError}</p>
+            <p className="text-sm" style={{ color: 'var(--aug-danger-fg)' }}>{submitError}</p>
           )}
 
           <button
             type="submit"
             disabled={submitting || !title.trim() || !rawText.trim()}
-            className="self-start rounded px-4 py-2 text-sm font-semibold disabled:opacity-50"
-            style={{ background: 'var(--v2-color-brand-primary)', color: '#fff' }}
+            className="aug-button aug-button--primary self-start"
           >
             {submitting ? t('knowledge.submitting') : t('knowledge.submit')}
           </button>
         </form>
 
         {/* ── Search ── */}
-        <div
-          className="rounded-lg border p-4 flex flex-col gap-3"
-          style={{ borderColor: 'var(--v2-color-border-default)', background: 'var(--v2-color-surface-base)' }}
-        >
-          <h2 className="text-base font-semibold" style={{ color: 'var(--v2-color-text-primary)' }}>{t('knowledge.search_title')}</h2>
+        <div className="m3-card p-4 flex flex-col gap-3">
+          <h2 className="text-base font-semibold" style={{ color: 'var(--aug-ink)' }}>{t('knowledge.search_title')}</h2>
 
           <form onSubmit={handleSearch} className="flex gap-2">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t('knowledge.search_placeholder')}
-              className="flex-1 rounded border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--v2-color-border-strong)' }}
-            />
+            <label className="aug-field flex-1">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t('knowledge.search_placeholder')}
+              />
+            </label>
             <button
               type="submit"
               disabled={searching || !query.trim()}
-              className="rounded px-4 py-2 text-sm font-semibold disabled:opacity-50"
-              style={{ background: 'var(--v2-color-brand-primary)', color: '#fff' }}
+              className="aug-button aug-button--primary"
             >
               {t('knowledge.search_button')}
             </button>
           </form>
 
           {searchMode && (
-            <span
-              className="self-start inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
-              style={{ background: '#DBEAFE', color: '#1E40AF' }}
-            >
+            <span className="m3-chip self-start inline-flex items-center px-2.5 py-1 text-xs font-semibold">
               {searchMode === 'semantic' ? t('knowledge.search_mode_semantic') : t('knowledge.search_mode_keyword')}
             </span>
           )}
 
           {!searching && searchMode && results.length === 0 && (
-            <p className="text-sm" style={{ color: 'var(--v2-color-text-secondary)' }}>{t('knowledge.no_results')}</p>
+            <p className="text-sm" style={{ color: 'var(--aug-muted)' }}>{t('knowledge.no_results')}</p>
           )}
 
           <div className="flex flex-col gap-2">
@@ -332,44 +311,34 @@ export default function KnowledgePage() {
               return (
                 <div
                   key={r.chunk_id}
-                  className="rounded border p-3 text-sm flex flex-col gap-2"
+                  className="rounded-2xl border p-3 text-sm flex flex-col gap-2"
                   style={{
-                    borderColor: 'var(--v2-color-border-default)',
-                    background: isExcluded ? 'var(--v2-color-surface-muted)' : 'var(--v2-color-surface-alt)',
+                    borderColor: 'var(--aug-border)',
+                    background: isExcluded ? 'var(--aug-soft)' : 'var(--aug-canvas)',
                     opacity: isExcluded ? 0.55 : 1,
                   }}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <strong style={{ color: 'var(--v2-color-text-primary)' }}>{r.asset_title}</strong>
+                    <strong style={{ color: 'var(--aug-ink)' }}>{r.asset_title}</strong>
                     {r.similarity !== null && (
-                      <span style={{ color: 'var(--v2-color-text-secondary)', fontSize: 12 }}>
+                      <span style={{ color: 'var(--aug-muted)', fontSize: 12 }}>
                         {Math.round(r.similarity * 100)}%
                       </span>
                     )}
                   </div>
-                  <p style={{ color: 'var(--v2-color-text-secondary)', whiteSpace: 'pre-wrap' }}>{r.content}</p>
+                  <p style={{ color: 'var(--aug-muted)', whiteSpace: 'pre-wrap' }}>{r.content}</p>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => toggleExcluded(r.chunk_id)}
-                      className="rounded px-3 py-1 text-xs font-semibold"
-                      style={{
-                        border: '1px solid var(--v2-color-border-strong)',
-                        background: 'transparent',
-                        color: 'var(--v2-color-text-primary)',
-                      }}
+                      className="aug-button aug-button--secondary text-xs"
                     >
                       {isExcluded ? t('knowledge.use_chunk') : t('knowledge.exclude_chunk')}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleCopy(r.chunk_id, r.content)}
-                      className="rounded px-3 py-1 text-xs font-semibold"
-                      style={{
-                        border: '1px solid var(--v2-color-border-strong)',
-                        background: 'transparent',
-                        color: 'var(--v2-color-text-primary)',
-                      }}
+                      className="aug-button aug-button--secondary text-xs"
                     >
                       {copiedId === r.chunk_id ? t('knowledge.copied') : t('knowledge.copy_chunk')}
                     </button>
@@ -381,15 +350,12 @@ export default function KnowledgePage() {
         </div>
 
         {/* ── Asset list ── */}
-        <div
-          className="rounded-lg border p-4 flex flex-col gap-3"
-          style={{ borderColor: 'var(--v2-color-border-default)', background: 'var(--v2-color-surface-base)' }}
-        >
-          <h2 className="text-base font-semibold" style={{ color: 'var(--v2-color-text-primary)' }}>{t('knowledge.assets_title')}</h2>
+        <div className="m3-card p-4 flex flex-col gap-3">
+          <h2 className="text-base font-semibold" style={{ color: 'var(--aug-ink)' }}>{t('knowledge.assets_title')}</h2>
 
-          {assetsLoading && <p className="text-sm" style={{ color: 'var(--v2-color-text-secondary)' }}>…</p>}
+          {assetsLoading && <p className="text-sm" style={{ color: 'var(--aug-muted)' }}>…</p>}
           {!assetsLoading && assets.length === 0 && (
-            <p className="text-sm" style={{ color: 'var(--v2-color-text-secondary)' }}>{t('knowledge.no_assets')}</p>
+            <p className="text-sm" style={{ color: 'var(--aug-muted)' }}>{t('knowledge.no_assets')}</p>
           )}
 
           <div className="flex flex-col gap-2">
@@ -399,12 +365,12 @@ export default function KnowledgePage() {
               return (
                 <div
                   key={asset.id}
-                  className="rounded border p-3 flex flex-wrap items-center gap-3 text-sm"
-                  style={{ borderColor: 'var(--v2-color-border-default)', opacity: asset.active ? 1 : 0.5 }}
+                  className="rounded-2xl border p-3 flex flex-wrap items-center gap-3 text-sm"
+                  style={{ borderColor: 'var(--aug-border)', opacity: asset.active ? 1 : 0.5 }}
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold truncate" style={{ color: 'var(--v2-color-text-primary)' }}>{asset.title}</div>
-                    <div style={{ color: 'var(--v2-color-text-secondary)', fontSize: 12 }}>
+                    <div className="font-semibold truncate" style={{ color: 'var(--aug-ink)' }}>{asset.title}</div>
+                    <div style={{ color: 'var(--aug-muted)', fontSize: 12 }}>
                       {contentTypeLabel(asset.content_type)} · {modeLabel(asset.retrieval_mode)}
                       {asset.collection ? ` · ${asset.collection}` : ''}
                       {' · '}{asset.chunk_count} {t('knowledge.chunks_count')}
@@ -422,8 +388,7 @@ export default function KnowledgePage() {
                     type="button"
                     disabled={isBusy}
                     onClick={() => handleReindex(asset.id)}
-                    className="rounded px-3 py-1 text-xs font-semibold disabled:opacity-50"
-                    style={{ border: '1px solid var(--v2-color-border-strong)', background: 'transparent', color: 'var(--v2-color-text-primary)' }}
+                    className="aug-button aug-button--secondary text-xs"
                   >
                     {t('knowledge.reindex')}
                   </button>
@@ -432,8 +397,7 @@ export default function KnowledgePage() {
                     type="button"
                     disabled={isBusy}
                     onClick={() => handleToggleActive(asset)}
-                    className="rounded px-3 py-1 text-xs font-semibold disabled:opacity-50"
-                    style={{ border: '1px solid var(--v2-color-border-strong)', background: 'transparent', color: 'var(--v2-color-text-primary)' }}
+                    className="aug-button aug-button--secondary text-xs"
                   >
                     {asset.active ? t('status.active') : t('status.inactive')}
                   </button>
@@ -442,8 +406,7 @@ export default function KnowledgePage() {
                     type="button"
                     disabled={isBusy}
                     onClick={() => handleDelete(asset.id)}
-                    className="rounded px-3 py-1 text-xs font-semibold disabled:opacity-50"
-                    style={{ border: '1px solid rgba(220,38,38,0.4)', background: 'transparent', color: 'var(--v2-color-danger)' }}
+                    className="aug-button aug-button--danger text-xs"
                   >
                     {t('action.delete')}
                   </button>
