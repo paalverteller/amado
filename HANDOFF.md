@@ -725,3 +725,103 @@ Do not build these autonomously:
   strings inline rather than routing through the i18n dictionary) —
   flagged as out of scope for the token migration in every phase so
   far, tracked here as a distinct future priority if wanted.
+
+<!-- FABLE_REVIEW_PHASE0_20260904 -->
+
+## Fable code review — intake and remediation plan (2026-09-04, Phase 0)
+
+**Context:**
+- The user commissioned an independent code review from a separate
+  Claude Fable 5.1 session, covering 9 core files:
+  `lib/content-generation/generate-article.ts`, `lib/prompts.ts`,
+  `lib/brand-os/precedence.ts`, `lib/brand-os/guideline-extractor.ts`,
+  `app/api/brands/[brandId]/guidelines/import/route.ts`, `lib/ai.ts`,
+  `lib/brand-snapshot.ts`, `lib/market-context.tsx`,
+  `app/competitors/page.tsx`. The review was pasted into chat as a
+  document and is preserved verbatim, plus this project's triage and
+  a 6-phase remediation plan, in the new `docs/fable-review.md`.
+- Per explicit user instruction, this remediation plan now takes
+  priority over the "Current priorities" list in
+  `docs/AMADO_ROADMAP.md` until fully closed out — a pointer block was
+  added near the top of that file.
+
+**What was done in this phase (docs only, no application code
+touched):**
+- Created `docs/fable-review.md` containing the full original review
+  text, a "Triage notes" section, and the phased plan.
+- Closed four of the review's own "can't confirm without file X"
+  notes by reading files that were in this project's context but not
+  in the reviewer's 9-file bundle:
+  - `guideline_rule_candidates.source_anchor` is nullable (migration
+    `033_guideline_compiler.sql`) — the reviewer's NOT-NULL concern
+    doesn't apply as stated.
+  - `brand_rules` has no unique constraint on `(rule_set_id,
+    rule_key)` (migration `030_brand_os_core.sql`) — confirms
+    duplicate-key imports are silently arbitrated by `compileRules()`
+    at read time, not rejected at write time.
+  - `brand_rule_sets` has only a non-unique partial index on
+    `(brand_id, status) WHERE status='active'` — confirms two active
+    rule sets per brand can coexist today, which would silently drop
+    all compliance rules via `brand-snapshot.ts`'s
+    `.maybeSingle()` call.
+  - Read the actual candidate → `brand_rules` publish path
+    (`app/api/brands/[brandId]/guidelines/import/[runId]/route.ts`,
+    `PATCH` handler's `publish` branch — distinct from
+    `.../rule-sets/[ruleSetId]/publish/route.ts`, which only flips
+    `brand_rule_sets.status` and never writes `brand_rules` at all).
+    This closes the review's single largest "pending confirmation"
+    item with certainty: `scope_json` is copied byte-for-byte from
+    the import route's `{ scope, target }` shape into `brand_rules`,
+    which has **zero fields in common** with the `RuleScope` type
+    (`lib/brand-os/types.ts`) that `precedence.ts`'s `scopeMatches()`
+    reads. Every rule published through this pipeline today
+    scope-matches as fully global. This is now a confirmed live bug,
+    escalated into Phase 1 of the plan, not a hypothetical.
+  - Also found, independently of the reviewer's bundle: the publish
+    route's `brand_rules` insert loop is `console.warn`-only on
+    failure (same silent-partial-failure shape the reviewer flagged
+    in the *import* route), and its response's `published: N` count
+    is read from the request body's `candidateDecisions`, never from
+    actual `brand_rules` insert successes — folded into Phase 1.
+
+**Consciously not done in this phase:**
+- No application code was touched. This phase is intake and planning
+  only, per the user's explicit instruction to deliver the plan first
+  and then work through it phase by phase, one patch script per
+  phase/file group.
+- Did not yet re-verify the review's findings on files this project
+  didn't have in the current session context beyond the four listed
+  above (`ai-utils.ts`, `evidence.ts`, `text-cleanup.ts`,
+  `content-formats.ts`, `content-request-repository.ts` were
+  available and spot-checked for the Phase 1/3 items that reference
+  them, but a line-by-line re-audit of every review claim against
+  every file was not performed — Phase-by-phase work will re-verify
+  the specific claim relevant to that phase's diff before writing
+  each patch).
+
+**Bugs found and fixed along the way:**
+- None yet — this phase is documentation only. See `docs/fable-review.md`
+  Phase 1 for the first application-code fixes queued.
+
+**Verification performed:**
+- `python3 -m py_compile` on this delivery's patch script.
+- Idempotency: script checks for the exact pre-patch state of
+  `HANDOFF.md` and `docs/AMADO_ROADMAP.md` via composite drift-guard
+  markers before creating `docs/fable-review.md` or modifying either
+  file; a second `--apply` run is a no-op with a clear message rather
+  than a duplicate insertion.
+- Full dry-run in an isolated sandbox git repo seeded with the exact
+  pre-patch `HANDOFF.md` / `docs/AMADO_ROADMAP.md` / `.gitignore`
+  content from this session's repomix snapshot: `--check`, `--apply`,
+  `--verify` all passed; byte-for-byte diff confirmed against the
+  drafted content.
+- Confirmed `docs/fable-review.md`'s backtick count is even (no
+  unclosed code fence) and the file is well-formed Markdown.
+
+**Next steps queued:**
+- Phase 1 (Brand OS integrity): `brand-snapshot.ts` error handling +
+  unordered-limit fixes, `brand_rules`/`brand_rule_sets` unique
+  constraints, the `scope_json` shape fix in the import route, the
+  publish-route silent-failure and lying-count fixes, and the
+  `generate-article.ts` persist-ordering / `record()`-failure fixes.
+  See `docs/fable-review.md` for the full itemized list.
