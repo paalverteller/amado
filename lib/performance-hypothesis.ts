@@ -75,7 +75,7 @@ export async function generatePerformanceHypothesis(snapshotId: string): Promise
   ].filter(Boolean).join('\n\n')
 
   try {
-    const result = await generateArticleWithFallback({ systemPrompt, userPrompt, maxTokens: 400 })
+    const result = await generateArticleWithFallback({ systemPrompt, userPrompt, maxOutputTokens: 400 })
     await recordAiUsage('performance_hypothesis', result.model, result.usage)
 
     await admin.from('performance_snapshots').update({

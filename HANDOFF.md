@@ -1,6 +1,6 @@
 # Amado — handoff
 
-Last consolidated: 2026-08-24.
+Last consolidated: 2026-09-09.
 
 Read `README.md` first. This file contains only the state and constraints that matter when continuing work.
 
@@ -116,7 +116,10 @@ The `/brand` workspace must never show another region's profile when the market 
 
 ### AI providers
 
-Current runtime supports Google, Groq, OpenAI and DeepSeek fallback behavior.
+The default production generation pipeline is currently Google AI Studio only.
+Groq, OpenAI and DeepSeek adapters still exist in `lib/ai-utils.ts`, but they are
+not part of the active fallback chain. This is intentional MVP behavior; do not
+assume multi-provider failover exists unless the pipeline is explicitly changed.
 
 Google key aliases:
 
@@ -1350,3 +1353,65 @@ pre-patch file content before being delivered.
 surface, `market-context.tsx` first-render correctness, `competitors`
 page correctness/accessibility) are still open. See
 `docs/AMADO_ROADMAP.md` for the current pointer.
+
+
+<!-- FABLE_REVIEW_PHASE3A_20260909 -->
+
+## Fable review remediation — Phase 3A: generation reliability core (2026-09-09)
+
+This patch starts the next roadmap block after Phases 0–2. It closes the
+high-impact runtime issues in the canonical generation path without changing the
+current provider strategy.
+
+**What changed:**
+- `lib/ai.ts`: migrated AI SDK output limits from the obsolete `maxTokens`
+  option to AI SDK 6's `maxOutputTokens`, including every active call site and
+  the raw DeepSeek adapter boundary.
+- `lib/ai.ts`: removed fallback rotation from the active Google chain. The
+  order is now deterministic and quality-ordered: configured primary -> newest
+  stable Flash -> older stable Flash -> Flash-Lite recovery.
+- `lib/ai.ts` / `lib/ai-utils.ts`: timeout, network and 5xx failures now put the
+  affected model on a short 90-second in-process cooldown, in addition to the
+  existing quota cooldown. This prevents every request in a warm instance from
+  repeatedly spending its full budget on a hanging primary.
+- `lib/ai.ts`: AI SDK 6 native `timeout` is used for `generateText` and
+  `streamText`, so timeout expiry aborts the provider request instead of merely
+  abandoning a still-running promise. The DeepSeek raw-fetch path now uses an
+  `AbortController` for the same reason.
+- `lib/ai.ts`: an empty response whose `finishReason` is `content-filter` is a
+  non-retryable failure. The pipeline no longer burns the remaining Google
+  models on a prompt that the provider has already blocked.
+- `lib/ai.ts`: `generateArticleWithFallback` now honors `task`; guideline
+  extraction therefore uses the extraction budget instead of silently using
+  the generation pipeline.
+- Canonical `/api/generate`, `/api/generate/seo`, and `/api/generate/batch`
+  routes now create an absolute request deadline (with an 8-second Vercel
+  reserve) and pass it through `generateAndPersistArticle` to both AI calls.
+  `lib/ai.ts` additionally keeps a 52-second per-operation cap, so the 300-second
+  batch route cannot let one item monopolize the whole request.
+- `lib/content-generation/generate-article.ts`: independent pre-generation
+  context builders now execute in parallel after region resolution. Refinement
+  lookup and brand-region resolution are parallelized as well. The dependency
+  on explicit-vs-recent evidence is preserved, so recent evidence is not fetched
+  unnecessarily when explicit evidence already exists.
+- Documentation now reflects reality: the active production fallback chain is
+  Google-only. Groq/OpenAI/DeepSeek remain available adapters, not active
+  fallbacks.
+
+**Tests added/extended:**
+- `lib/ai.test.ts`: SDK 6 token option + timeout, deterministic fallback order,
+  transient-failure cooldown, content-filter fail-fast, extraction budget.
+- `lib/ai-utils.test.ts`: timeout/5xx transient-error classification.
+- `lib/content-generation/generate-article.test.ts`: one request-scoped deadline
+  reaches both canonical AI calls.
+
+**Still open in Phase 3:**
+- Add explicit stale-row visibility/reaping for `content_requests` and
+  `guideline_import_runs` left in `processing` past the accepted threshold.
+  This is intentionally separated because it changes operational/database
+  behavior rather than the AI call path itself.
+
+**Verification contract for the patch:**
+`npm test`, `npm run build`, `node scripts/verify-amado-chain.mjs`,
+`node scripts/verify-august-ui.mjs`, and `git diff --check` must all pass before
+commit/push.

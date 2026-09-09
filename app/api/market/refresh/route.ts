@@ -102,7 +102,7 @@ async function translateOne(item: CandidateRow): Promise<(TResult & { id: string
         'Резюме: [краткое описание главного вывода]',
       ].join('\n'),
       userPrompt: `Title: ${srcTitle}\nPreview: ${srcDesc}`,
-      maxTokens: 400,
+      maxOutputTokens: 400,
     })
 
     let raw = ''

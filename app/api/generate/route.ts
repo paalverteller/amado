@@ -7,6 +7,7 @@ import { resolveDefaultBrandProfileId } from '@/lib/brand-snapshot'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
+const REQUEST_DEADLINE_RESERVE_MS = 8_000
 
 type GenerateBody = {
   topic?: string
@@ -39,6 +40,7 @@ function textToAiSdkLikeStream(text: string, metadata: unknown): ReadableStream<
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
+  const deadlineAt = Date.now() + maxDuration * 1000 - REQUEST_DEADLINE_RESERVE_MS
   try {
     const body = (await req.json()) as GenerateBody
     const { topic, context, templateId, brandProfileId, seoMode = false, regionId, evidenceItemIds, parentRequestId, refinementNote, marketingCampaignId } = body
@@ -69,7 +71,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       parentRequestId,
       refinementNote,
       marketingCampaignId,
-    })
+    }, undefined, { deadlineAt })
 
     const metadata = { contentRequestId: result.contentRequestId, articleId: result.articleId, usedContext: result.usedContext }
 

@@ -8,6 +8,7 @@ import type { ContentFormat } from '@/lib/content-formats'
 
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
+const REQUEST_DEADLINE_RESERVE_MS = 8_000
 
 type BatchTopic = { title: string; context: string; contentType?: string; evidenceItemId?: string }
 type BatchBody = {
@@ -28,6 +29,7 @@ const MAX_BATCH_SIZE = GENERATION_CONFIG.maxBatchSize
  * Knowledge/RAG + persistence/usage logging are identical for single and batch.
  */
 export async function POST(req: NextRequest): Promise<Response> {
+  const deadlineAt = Date.now() + maxDuration * 1000 - REQUEST_DEADLINE_RESERVE_MS
   try {
     const body = (await req.json()) as BatchBody
     const topics = body.topics ?? []
@@ -61,7 +63,7 @@ export async function POST(req: NextRequest): Promise<Response> {
           regionId: body.regionId,
           evidenceItemIds: item.evidenceItemId ? [item.evidenceItemId] : body.evidenceItemIds,
           marketingCampaignId: body.marketingCampaignId,
-        })
+        }, undefined, { deadlineAt })
         results.push({
           topic: title,
           status: 'ok',

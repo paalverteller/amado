@@ -140,7 +140,7 @@ async function rankAndExplain(candidates: CandidateRow[]): Promise<{ items: Rank
 
   const userPrompt = buildCandidateBlock(candidates)
 
-  const result = await generateArticleWithFallback({ systemPrompt, userPrompt, maxTokens: 2000 })
+  const result = await generateArticleWithFallback({ systemPrompt, userPrompt, maxOutputTokens: 2000 })
   await recordAiUsage('briefing', result.model, result.usage)
   const items = parseRankedItems(result.text, candidates)
   return { items, model: result.model }

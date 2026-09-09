@@ -143,7 +143,7 @@ TARGET LOCALE: ${regionProfile.locale}
 SOURCE TEXT:
 ${sourceText}`
 
-    const result = await generateArticleWithFallback({ systemPrompt, userPrompt, maxTokens: 5000 })
+    const result = await generateArticleWithFallback({ systemPrompt, userPrompt, maxOutputTokens: 5000 })
     await recordAiUsage('localization', result.model, result.usage)
 
     return NextResponse.json({

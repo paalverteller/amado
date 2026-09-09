@@ -22,7 +22,7 @@ Amado is an AI-first marketing workspace for teams that research markets, manage
 - Tailwind CSS 4
 - Supabase
 - Vercel AI SDK 6
-- Google Gemini with provider fallbacks
+- Google Gemini with ordered model fallbacks
 - Vitest
 - Playwright
 
@@ -163,7 +163,7 @@ Current important verifiers include:
 
 ## Environment
 
-Required production configuration includes Supabase credentials, `ACCESS_PASSWORD`, `CRON_SECRET`, and at least one configured AI provider.
+Required production configuration includes Supabase credentials, `ACCESS_PASSWORD`, `CRON_SECRET`, and a Google AI Studio key for the active generation pipeline. Groq, OpenAI and DeepSeek adapters exist but are not part of the default fallback chain.
 
 Google AI Studio accepts both:
 

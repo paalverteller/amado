@@ -108,7 +108,7 @@ EXECUTION CONSTRAINTS FOR AMADO:
     const result = await generateArticleWithFallback({
       systemPrompt,
       userPrompt: `EVIDENCE PACK — ${regionProfile.name.toUpperCase()} — LAST 60 DAYS ONLY\n\n${evidenceBlock(rows)}`,
-      maxTokens: 8000,
+      maxOutputTokens: 8000,
     })
     await recordAiUsage('market_deep_analysis', result.model, result.usage)
 

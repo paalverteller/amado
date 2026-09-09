@@ -197,30 +197,30 @@ is an undocumented, silent failure mode hitting five files.
 
 ### Phase 3 — Generation reliability (budgets, fallback, status machines)
 
-- [ ] `lib/ai.ts`: fix (or confirm-and-document) the `maxTokens` vs
+- [x] `lib/ai.ts`: fix (or confirm-and-document) the `maxTokens` vs
       SDK v5+ `maxOutputTokens` rename — verify against the installed
       `ai` package version, then grep every `generateText`/
       `streamText` call site in the codebase for the same mistake.
-- [ ] `lib/ai.ts`: use a fixed (non-shuffled) model order for the
+- [x] `lib/ai.ts`: use a fixed (non-shuffled) model order for the
       Google pipeline chain — `rotateGroup` currently defeats the
       documented newest-stable → older → Flash-Lite quality ordering
       during a primary outage.
-- [ ] `lib/ai.ts` / `lib/ai-utils.ts`: add a short cooldown on
+- [x] `lib/ai.ts` / `lib/ai-utils.ts`: add a short cooldown on
       timeout/5xx, not just quota errors — currently a hanging primary
       is retried on every request.
-- [ ] `lib/ai.ts`: inspect `finishReason` and fail fast on an
+- [x] `lib/ai.ts`: inspect `finishReason` and fail fast on an
       empty-text response (e.g. Gemini safety block) instead of
       burning the retry budget on models that will block the same
       prompt identically.
-- [ ] Confirm whether the documented Gemini → Groq → OpenAI → DeepSeek
+- [x] Confirm whether the documented Gemini → Groq → OpenAI → DeepSeek
       multi-provider fallback chain exists in the active code path, or
       only the Google-only chain the review found in `buildPipelines`
       — reconcile documentation with reality either way.
-- [ ] `generate-article.ts` + `lib/ai.ts`: pass a shared request-scoped
+- [x] `generate-article.ts` + `lib/ai.ts`: pass a shared request-scoped
       deadline from the route down through both LLM calls so the
       55s-per-call budget can't compose into an overrun of the route's
       actual `maxDuration`.
-- [ ] `generate-article.ts`: parallelize the independent
+- [x] `generate-article.ts`: parallelize the independent
       context-building calls (evidence, system prompt, brand snapshot,
       region layer/profile, knowledge, competitor, playbook) with
       `Promise.all` instead of ~8 serial awaits.

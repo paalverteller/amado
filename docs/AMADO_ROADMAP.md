@@ -1,6 +1,6 @@
 # Amado — roadmap
 
-Last consolidated: 2026-08-24.
+Last consolidated: 2026-09-09.
 
 This document tracks current product direction. It intentionally does not preserve the old patch-by-patch delivery diary; Git history is the source for historical implementation detail.
 
@@ -24,13 +24,17 @@ DB errors or uncurated regions into a silent Brazil default). See
 `FABLE_REVIEW_PHASE2_20260908`, and the `FABLE_REVIEW_CLOSEOUT_20260909`
 entry for full detail and verification methodology.
 
-**Remaining (Phases 3-6, not yet started):** generation reliability
-(`maxTokens`/`maxOutputTokens` SDK rename, fixed model fallback order,
-cooldown on timeout/5xx, shared request deadline), prompt-injection
-surface hardening, `market-context.tsx` first-render correctness,
-`app/competitors/page.tsx` correctness and accessibility. Work through
-these next per `docs/fable-review.md` before returning to the
-priorities below.
+**Phase 3 in progress (2026-09-09):** Phase 3A closes the core generation
+reliability items: AI SDK 6 `maxOutputTokens`, deterministic Google fallback
+order, timeout/5xx cooldown, aborting provider timeouts, content-filter
+fail-fast, task-aware extraction budgets, a shared request deadline across the
+canonical generation flow, and parallel pre-generation context assembly. See
+`HANDOFF.md` tag `FABLE_REVIEW_PHASE3A_20260909`.
+
+**Remaining before returning to the priorities below:** finish Phase 3 with
+stale `processing` row visibility/reaping, then Phase 4 prompt-injection
+hardening, Phase 5 `market-context.tsx` first-render correctness, and Phase 6
+`app/competitors/page.tsx` correctness/accessibility.
 
 ## Product objective
 

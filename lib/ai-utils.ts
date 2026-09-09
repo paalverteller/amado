@@ -12,6 +12,7 @@ export type PipelineEntry = {
 }
 
 const DEFAULT_QUOTA_COOLDOWN_MS = 2 * 60 * 1000
+export const TRANSIENT_PROVIDER_COOLDOWN_MS = 90 * 1000
 /**
  * In-memory, per-process cooldown tracker for rate-limited AI providers.
  *
@@ -71,6 +72,14 @@ export function isQuotaError(error: unknown): boolean {
   const value = error as { statusCode?: number; status?: number; data?: { error?: { status?: string } } }
   const message = `${getErrorMessage(error)} ${getResponseBody(error)}`
   return getStatusCode(value) === 429 || getStatusCode(value) === 403 || value.data?.error?.status === 'RESOURCE_EXHAUSTED' || /quota|insufficient_quota|resource_exhausted|rate.?limit|429/i.test(message)
+}
+
+export function isTransientProviderError(error: unknown): boolean {
+  const status = getStatusCode(error)
+  if (status === 408 || (status !== undefined && status >= 500 && status <= 599)) return true
+
+  const message = `${getErrorMessage(error)} ${getResponseBody(error)}`
+  return /timeout|timed out|etimedout|econnreset|eai_again|fetch failed|network error|socket hang up/i.test(message)
 }
 
 export function retryDelayMs(error: unknown): number {
@@ -169,20 +178,33 @@ export function createModel(entry: PipelineEntry) {
   return null
 }
 
-export async function generateDeepSeekText(entry: PipelineEntry, params: { systemPrompt: string; userPrompt: string; maxTokens?: number }, timeoutMs: number): Promise<string> {
+export async function generateDeepSeekText(entry: PipelineEntry, params: { systemPrompt: string; userPrompt: string; maxOutputTokens?: number }, timeoutMs: number): Promise<string> {
   const apiKey = process.env.DEEPSEEK_API_KEY
   const baseUrl = process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com/v1/chat/completions'
   if (!apiKey) throw new Error('Missing DEEPSEEK_API_KEY')
 
-  const response = await withTimeout(fetch(baseUrl, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: entry.model,
-      messages: [{ role: 'system', content: params.systemPrompt }, { role: 'user', content: params.userPrompt }],
-      ...(params.maxTokens ? { max_tokens: params.maxTokens } : {}),
-    }),
-  }), timeoutMs, entry.model)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  let response: Response
+  try {
+    response = await fetch(baseUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: entry.model,
+        messages: [{ role: 'system', content: params.systemPrompt }, { role: 'user', content: params.userPrompt }],
+        ...(params.maxOutputTokens ? { max_tokens: params.maxOutputTokens } : {}),
+      }),
+    })
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`${entry.model} timeout after ${timeoutMs}ms`)
+    }
+    throw error
+  } finally {
+    clearTimeout(timer)
+  }
 
   const raw = await response.text()
   if (!response.ok) {

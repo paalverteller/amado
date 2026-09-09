@@ -37,6 +37,11 @@ export interface GenerateArticleDeps {
   articles: ArticleRepository
 }
 
+export interface GenerateArticleRuntime {
+  /** Absolute epoch-ms deadline shared by every AI call in this request. */
+  deadlineAt?: number
+}
+
 export interface GenerateArticleResult {
   text: string
   model: string
@@ -99,19 +104,17 @@ function defaultDeps(): GenerateArticleDeps {
 export async function generateAndPersistArticle(
   input: GenerateArticleInput,
   deps: GenerateArticleDeps = defaultDeps(),
+  runtime: GenerateArticleRuntime = {},
 ): Promise<GenerateArticleResult> {
   const trimmedTopic = input.topic.trim()
   const promptTopic = (input.context && input.context.trim()) ? input.context.trim() : trimmedTopic
   const seoMode = input.seoMode ?? false
 
-  // Refinement: pull the parent version's content + thread so this
-  // generation is recorded as part of the same version chain, not a
-  // fresh unrelated topic.
-  let parent: Awaited<ReturnType<ContentRequestRepository['getById']>> = null
-  if (input.parentRequestId) {
-    parent = await deps.contentRequests.getById(input.parentRequestId)
-  }
-  const threadId = parent?.thread_id ?? crypto.randomUUID()
+  // Refinement lookup and region resolution are independent. Start them
+  // together so pre-generation DB latency does not eat the AI deadline.
+  const parentPromise: Promise<Awaited<ReturnType<ContentRequestRepository['getById']>>> = input.parentRequestId
+    ? deps.contentRequests.getById(input.parentRequestId)
+    : Promise.resolve(null)
 
   // Resolve the market before automatic evidence selection so recent
   // context from one region cannot leak into another region's generation.
@@ -128,7 +131,11 @@ export async function generateAndPersistArticle(
   // Treat the API boundary as untrusted: normalize '' (and any
   // whitespace-only string) to nullish before applying the brand fallback.
   const normalizedRegionId = input.regionId?.trim() || null
-  const effectiveRegionId = normalizedRegionId ?? await resolveBrandRegionId(input.brandProfileId)
+  const regionIdPromise = normalizedRegionId
+    ? Promise.resolve(normalizedRegionId)
+    : resolveBrandRegionId(input.brandProfileId)
+  const [parent, effectiveRegionId] = await Promise.all([parentPromise, regionIdPromise])
+  const threadId = parent?.thread_id ?? crypto.randomUUID()
 
   // Sprint 12 Phase 4: derive the region from the chosen brand when the
   // caller didn't pass one explicitly. A brand is scoped to one market --
@@ -145,18 +152,32 @@ export async function generateAndPersistArticle(
   // reordering has no other effect.
   const regionProfile = await resolveRegionProfile(effectiveRegionId)
 
-  // Stage 3: Use evidence_items instead of rss_items
-  const selectedEvidenceContext = await buildEvidenceContext(input.evidenceItemIds, regionProfile.locale)
-  const recentEvidence = selectedEvidenceContext ? { text: '', ids: [], items: [] } : await getRecentEvidenceContext(trimmedTopic, 5, effectiveRegionId)
+  // The independent context builders used to run serially (~7-8 DB/
+  // retrieval round-trips before the first LLM call). Run them together;
+  // only recent-evidence selection depends on the explicit-evidence result.
+  const [
+    selectedEvidenceContext,
+    built,
+    brandSnapshot,
+    regionContext,
+    knowledge,
+    competitorContext,
+    socialPlaybookContext,
+  ] = await Promise.all([
+    buildEvidenceContext(input.evidenceItemIds, regionProfile.locale),
+    buildSystemPrompt(input.templateId),
+    buildBrandSnapshot(input.brandProfileId, input.contentType),
+    buildRegionContextLayer(effectiveRegionId),
+    buildKnowledgeContext(promptTopic, input.brandProfileId),
+    buildCompetitorContext(promptTopic, input.brandProfileId),
+    buildSocialPlaybookContext(input.contentType, input.brandProfileId),
+  ])
+
+  const recentEvidence = selectedEvidenceContext
+    ? { text: '', ids: [], items: [] }
+    : await getRecentEvidenceContext(trimmedTopic, 5, effectiveRegionId)
   const rssText = selectedEvidenceContext || recentEvidence.text
   const evidenceIdsUsed = input.evidenceItemIds?.length ? input.evidenceItemIds : recentEvidence.ids
-
-  const built = await buildSystemPrompt(input.templateId)
-  const brandSnapshot = await buildBrandSnapshot(input.brandProfileId, input.contentType)
-  const regionContext = await buildRegionContextLayer(effectiveRegionId)
-  const knowledge = await buildKnowledgeContext(promptTopic, input.brandProfileId)
-  const competitorContext = await buildCompetitorContext(promptTopic, input.brandProfileId)
-  const socialPlaybookContext = await buildSocialPlaybookContext(input.contentType, input.brandProfileId)
 
   // Build structured content spec — no contradictory length rules
   const contentSpec = {
@@ -199,7 +220,7 @@ Write only the final clean text for publication. No think tags. No Markdown.`
   const generated = await generateArticleWithFallback({
     systemPrompt,
     userPrompt,
-    maxTokens: undefined, // Let the model decide based on format
+    deadlineAt: runtime.deadlineAt,
   })
   await recordAiUsage(input.parentRequestId ? 'generate_refine' : 'generate', generated.model, generated.usage)
 
@@ -302,7 +323,8 @@ Write only the final clean text for publication. No think tags. No Markdown.`
       task: 'utility',
       systemPrompt: `You are a cultural localization consultant. Respond in ${regionProfile.languageName}.`,
       userPrompt: buildLocalizationNotesPrompt(trimmedTopic, input.contentType, rssText, regionProfile),
-      maxTokens: 400,
+      maxOutputTokens: 400,
+      deadlineAt: runtime.deadlineAt,
     })
     for await (const chunk of textStream) {
       localizationNotes += chunk

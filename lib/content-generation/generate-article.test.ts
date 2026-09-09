@@ -44,7 +44,10 @@ vi.mock('@/lib/ai', () => ({
 import { generateAndPersistArticle } from './generate-article'
 
 describe('canonical content generation chain', () => {
-  beforeEach(() => { generatedPrompts.length = 0 })
+  beforeEach(() => {
+    generatedPrompts.length = 0
+    vi.clearAllMocks()
+  })
 
   it('carries market evidence + competitor signals + knowledge + Brand OS into a social generation and persists exact lineage', async () => {
     const recorded: NewContentRequestRecord[] = []
@@ -176,6 +179,29 @@ describe('canonical content generation chain', () => {
     // already explicit -- no reason to spend a DB round-trip resolving a
     // value that will be discarded.
     expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('passes one request-scoped deadline through both AI calls', async () => {
+    const { generateArticleWithFallback, generateWithFallback } = await import('@/lib/ai')
+    const deadlineAt = Date.now() + 42_000
+    const contentRequests: ContentRequestRepository = {
+      record: async () => ({ id: 'request-deadline' }),
+      markCompleted: async () => undefined,
+      markFailed: async () => undefined,
+      getById: async () => null,
+      getThread: async () => [],
+      linkEvidence: async () => undefined,
+    }
+    const articles: ArticleRepository = {
+      create: async () => ({ id: 'article-deadline', error: null }),
+    }
+
+    await generateAndPersistArticle({
+      topic: 'tema', contentType: 'article', brandProfileId: 'brand-1',
+    }, { contentRequests, articles }, { deadlineAt })
+
+    expect(generateArticleWithFallback).toHaveBeenCalledWith(expect.objectContaining({ deadlineAt }))
+    expect(generateWithFallback).toHaveBeenCalledWith(expect.objectContaining({ deadlineAt }))
   })
 
   // Fable review, Phase 1 regression coverage: persist-ordering and

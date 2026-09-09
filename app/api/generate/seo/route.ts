@@ -4,6 +4,7 @@ import { generateAndPersistArticle } from '@/lib/content-generation/generate-art
 import { getErrorMessage } from '@/lib/api/error-message'
 
 export const dynamic = 'force-dynamic'
+const REQUEST_DEADLINE_RESERVE_MS = 8_000
 export const maxDuration = 60
 
 type Body = {
@@ -20,6 +21,7 @@ function keywordScore(topic: string, row: { source_title?: string | null; source
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const deadlineAt = Date.now() + maxDuration * 1000 - REQUEST_DEADLINE_RESERVE_MS
   try {
     const body = await request.json() as Body
     const topic = body.topic?.trim() ?? ''
@@ -68,7 +70,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       regionId: body.regionId,
       seoMode: true,
       evidenceItemIds: evidenceIds,
-    })
+    }, undefined, { deadlineAt })
 
     return NextResponse.json({
       text: result.text,

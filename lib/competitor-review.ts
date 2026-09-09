@@ -89,7 +89,7 @@ async function writeReview(competitor: CompetitorRow, evidence: EvidenceRow[]): 
 
   const userPrompt = buildEvidenceBlock(evidence)
 
-  const result = await generateArticleWithFallback({ systemPrompt, userPrompt, maxTokens: 1500 })
+  const result = await generateArticleWithFallback({ systemPrompt, userPrompt, maxOutputTokens: 1500 })
   await recordAiUsage('competitor_review', result.model, result.usage)
   return { text: result.text, model: result.model }
 }
