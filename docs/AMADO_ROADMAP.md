@@ -2,207 +2,86 @@
 
 Last consolidated: 2026-09-09.
 
-This document tracks current product direction. It intentionally does not preserve the old patch-by-patch delivery diary; Git history is the source for historical implementation detail.
+This file contains only remaining work. Completed implementation history belongs in Git, `HANDOFF.md`, and `docs/fable-review.md`.
 
-## Fable code-review remediation (2026-09-04 to 2026-09-09)
+## Immediate next work
 
-An external Fable 5.1 code review of 9 core files found multiple
-silent-correctness bugs, several confirmed live (notably: every rule
-published through the guideline-import pipeline scope-matched as
-global regardless of intended platform/region/format, due to a
-`scope_json` shape mismatch). Full findings, triage, and the 6-phase
-plan: `docs/fable-review.md`.
+### 1. Fable Phase 5 — market-context first-render correctness
 
-**Phases 0-2 applied, verified, and pushed (2026-09-09):** Brand OS
-integrity (`brand-snapshot.ts` error handling and unordered-LIMIT
-fixes, `brand_rule_sets`/`brand_rules` unique constraints, the
-`scope_json` fix, honest guideline-import insert/publish counts,
-`generate-article.ts` persist-ordering) and region-failure-≠-absence
-(`resolveRegionProfile`/`resolveLanguageProfile` no longer collapse
-DB errors or uncurated regions into a silent Brazil default). See
-`HANDOFF.md` tags `FABLE_REVIEW_PHASE0_20260904` through
-`FABLE_REVIEW_PHASE2_20260908`, and the `FABLE_REVIEW_CLOSEOUT_20260909`
-entry for full detail and verification methodology.
+Goal: eliminate wrong-market requests and race conditions during initial client hydration.
 
-**Phase 3 complete (2026-09-09):** Phase 3A closed the core generation
-reliability items: AI SDK 6 `maxOutputTokens`, deterministic Google fallback
-order, timeout/5xx cooldown, aborting provider timeouts, content-filter
-fail-fast, task-aware extraction budgets, a shared request deadline across the
-canonical generation flow, and parallel pre-generation context assembly.
-Phase 3B closes the status-machine gap: stale `content_requests` and
-`guideline_import_runs` are visible in runtime health and reaped by a guarded
-cron after a conservative 15-minute threshold; the legacy content-request queue
-also now returns successfully processed rows to `completed` instead of leaving
-them permanently in `processing`. See `HANDOFF.md` tags
-`FABLE_REVIEW_PHASE3A_20260909` and `FABLE_REVIEW_PHASE3B_20260909`.
+- Replace the fake `br-fallback` region with `null` while market state is unresolved.
+- Expose a `ready` state that becomes true only after the market cookie has been read and active regions have loaded.
+- Prevent market-dependent consumers from fetching until `ready` is true.
+- Validate the stored market code against the loaded active regions; reset to the default market and rewrite the cookie when it is stale or unknown.
+- Add a focus/visibility cookie re-read only if server-side cookie use makes cross-tab drift observable.
+- Memoize the market-context value.
+- Add regression coverage for first render, stale cookie, valid non-BR cookie, and market switching.
 
-**Phase 4 complete (2026-09-09):** untrusted/semi-trusted prompt material now
-uses one bounded escaping helper across canonical generation and the supporting
-AI workflows; guideline extraction uses AI SDK 6 structured output with Zod
-validation; source quotes are verified against the imported document; and the
-guideline-import request boundary validates enums/URL/content size while pinning
-locale to the brand region. The existing Supabase ping cron is also scheduled
-on a five-day calendar cadence (`0 3 */5 * *`) instead of daily. See
-`HANDOFF.md` tag `FABLE_REVIEW_PHASE4_20260909`.
+Acceptance: opening the app with an ES/DE/US cookie must never issue an initial BR/fake-region request, and an invalid cookie must never produce an unfiltered cross-market fetch.
 
-**Remaining before returning to the priorities below:** Phase 5
-`market-context.tsx` first-render correctness and Phase 6
-`app/competitors/page.tsx` correctness/accessibility.
+### 2. Fable Phase 6 — competitors correctness and accessibility
 
-## Product objective
+Goal: make competitor CRUD market-correct, failure-visible, race-safe, and keyboard/screen-reader accessible.
 
-Build a practical AI-first marketing operating system that turns market evidence, Brand OS and performance feedback into better content and marketing decisions.
+- Confirm and fix market-aware brand/region resolution in `/api/competitors` POST and `/api/rss` POST.
+- Check `res.ok` for add source, add competitor, archive/restore and surface actionable errors.
+- Render the competitors list load-error state instead of an empty screen.
+- Distinguish source-load failure from a genuine empty-source state.
+- Add latest-request cancellation/guarding for region-keyed competitor fetches.
+- Convert the card expand control to a real button with `aria-expanded`.
+- Add accessible names to source type and form inputs.
+- Announce review/mutation errors with semantic alert styling.
+- Give source health a text alternative and explicit failed/error mappings.
+- Label archive/restore actions with the competitor name.
+- Move remaining hardcoded Russian strings through `t()`.
+- Remove remaining inline semantic-color styles in favor of existing August/Tailwind semantic utilities.
 
-The core loop is:
+Acceptance: changing market cannot leave competitor data from another market on screen; failed mutations never look successful; the main competitor workflow is keyboard-operable.
 
-market signals → evidence → brand/market context → content → review → performance → retained learning
+## Product priorities after Fable remediation
 
-## Foundations completed
+### 3. Source quality and observability
 
-### Product shell
+- Measure useful yield per source, duplicate rate, hydration success and downstream evidence use.
+- Remove consistently empty, stale or low-value sources.
+- Keep each regional source set intentionally small and useful.
+- Compare source authority with actual use in briefing and generation.
 
-- Russian-only interface.
-- August design system.
-- Desktop + PWA navigation.
-- Shared feedback/dialog primitives.
+### 4. Brand OS depth by market
 
-### Brand OS
+- Replace placeholder/minimal ES/DE/US profiles with approved local positioning, voice, claims, examples and constraints.
+- Keep Brand OS genuinely market-specific; never mechanically translate the Brazil profile.
 
-- Editable brand profile.
-- Audiences and pain points.
-- Products and claims.
-- Voice and vocabulary.
-- Content pillars.
-- Examples.
-- Compliance.
-- Versioned rule sets.
-- Platform playbooks.
-- Guideline import.
+### 5. Content performance loop
 
-### Knowledge and evidence
-
-- Evidence layer.
-- Source health and ingestion runs.
-- Full-text hydration.
-- Knowledge assets/chunks.
-- Keyword + semantic retrieval.
-- Competitor evidence pipeline.
-- Market briefing.
-
-### Generation
-
-- Canonical content-generation pipeline.
-- Grounded evidence context.
-- Brand snapshot.
-- Region-aware locale prompts.
-- SEO workspace.
-- Localization workspace.
-- Rewrite workspace.
-- AI text review.
-- Persistence/history.
-
-### Multi-market
-
-Active market model:
-
-- Brazil — `pt-BR`
-- Spain — `es-ES`
-- Germany — `de-DE`
-- United States — `en-US`
-
-UI stays Russian.
-
-Market selection should control:
-
-- content locale;
-- Brand OS;
-- sources/evidence;
-- competitor scope;
-- localization target;
-- rewrite target;
-- SEO generation;
-- deep market analysis.
-
-### Social content
-
-The 2026-08-24 social-media brief is integrated into Brand OS platform playbooks and canonical generation.
-
-Current social platforms:
-
-- LinkedIn
-- Instagram
-- Facebook
-- X
-- Threads
-
-The system treats cadence, length and hashtag guidance as testable operating ranges, not algorithm laws.
-
-Primary optimization principle:
-
-business value > vanity engagement
-
-### Market intelligence quality
-
-General market evidence is now explicitly focused on business/SaaS-relevant information.
-
-Exclude from general market intelligence:
-
-- electoral / party politics;
-- geopolitical conflict;
-- sport;
-- entertainment and celebrity noise.
-
-Retain business-relevant:
-
-- SMB activity;
-- SaaS;
-- enterprise technology;
-- AI adoption;
-- ecommerce;
-- customer behavior;
-- payments/fintech;
-- productivity/work;
-- privacy/regulation/tax/labour when materially relevant to businesses.
-
-## Current priorities
-
-### 1. Source quality and observability
-
-- Measure yield per source.
-- Remove consistently empty or low-value sources.
-- Track duplicate rate and hydration success.
-- Compare source authority with actual downstream use in briefing/generation.
-- Keep regional source sets intentionally small and useful.
-
-### 2. Brand OS depth by market
-
-- Replace placeholder/minimal regional profiles with real approved positioning, voice, claims and examples.
-- Keep local Brand OS distinct by market; never translate the Brazil profile mechanically.
-
-### 3. Content performance loop
-
-- Use normalized platform metrics.
-- Separate useful engagement from vanity metrics.
+- Use normalized platform metrics and separate useful engagement from vanity metrics.
 - Connect content to qualified traffic, trial/demo, MQL/PQL and assisted pipeline where data exists.
-- Turn repeated evidence-backed findings into explicit hypotheses, not automatic autonomous rules.
+- Convert repeated evidence-backed findings into explicit hypotheses, not autonomous rules.
 
-### 4. Social experimentation
+### 6. Social experimentation
 
 - One experiment = one main variable.
 - Record hypothesis, primary metric, guardrail and evaluation window.
 - Preserve reply/community behavior as part of the treatment.
 - Amplify paid only after useful organic evidence.
 
-### 5. End-to-end regression coverage
+### 7. End-to-end regression coverage
 
-- Keep multimarket flows tested.
-- Add E2E coverage for market switching → Brand OS → Generate.
-- Add E2E coverage for localization and rewrite market changes.
-- Add source ingestion → market feed → generation evidence coverage.
+- Market switch → Brand OS → Generate.
+- Localization/rewrite across market changes.
+- Source ingestion → market feed → generation evidence.
+- Keep Phase 5/6 race and market-isolation regressions permanently covered.
 
-## Explicitly deferred
+## Operational follow-up
 
-Do not implement without a product decision:
+- Monitor `/api/admin/runtime-health` for stale processing rows after Phase 3B.
+- Keep the existing `/api/cron/ping` scheduler daily, with its deterministic UTC five-day gate before any Supabase request; do not add a duplicate keepalive job.
+- Production generation fallback remains Google-only unless deliberately changed; Groq/OpenAI/DeepSeek adapters are not an active fallback chain.
+
+## Deferred pending product decision
+
+Do not implement autonomously:
 
 - direct automatic social publishing;
 - private/protected social scraping;
@@ -210,162 +89,8 @@ Do not implement without a product decision:
 - automatic Brand OS mutation from performance;
 - uncontrolled person-level social profiling;
 - large multi-agent orchestration;
-- unrelated document/OCR processing.
+- unrelated document/OCR pipelines.
 
-## Engineering principles
+## Completed boundary
 
-- Strangler-fig evolution, not schema rewrite.
-- Preserve working migrations and production compatibility.
-- One consolidated patch per task.
-- Structural edits over brittle text anchors.
-- Verification is part of delivery.
-- Repository root stays clean of one-off patch scripts.
-
-<!-- DATA_SOURCES_DE_US_SEED_20260825 -->
-
-### Source coverage — Germany + US (2026-08-25)
-
-Prior state: DE and US regions were `active = true` with placeholder brand
-profiles but **zero** rss_sources — the single biggest gap in "Source
-quality and observability" (see priority above).
-
-Delivered: `supabase/seeds/008_de_us_sources.sql` — 6 DE + 5 US sources,
-all live-verified (fetched real RSS/Atom XML, confirmed recent publication
-dates) rather than guessed from directory listings. Categories: marketing,
-business, technology, business_technology — matching the existing
-BR/ES source taxonomy. New rows are seeded with `health_status = 'healthy'`
-and a `source_health_events` row, since verification happened at seed time.
-
-Still open: BR has ~15 sources, ES has ~5, DE now has 6, US now has 5.
-Consider a follow-up phase to bring ES and US closer to BR's depth once
-more live-verified candidates are found. Retail Dive, RetailWire, and
-Ad Age were evaluated and explicitly excluded (see HANDOFF.md tag
-`DATA_SOURCES_DE_US_SEED_20260825` for why).
-
-<!-- GUIDELINE_IMPORT_SCHEMA_FIX_20260829 -->
-
-### Brand OS depth -- guideline import pipeline fixed end to end (2026-08-29)
-
-Investigated Priority #2 (DE/US/ES Brand OS all still placeholders).
-Found the intended unblock path -- guideline import via `POST
-/api/brands/[brandId]/guidelines/import` plus publish via `PATCH
-.../import/[runId]` -- was silently broken at both the insert step and
-the publish step, due to several schema mismatches against
-`guideline_rule_candidates`, `policy_conflicts`, and `brand_rules`. Fixed
-in one pass; see HANDOFF.md tag `GUIDELINE_IMPORT_SCHEMA_FIX_20260829`
-for full detail, including why two earlier delivery attempts safely
-no-opped instead of applying (a stale anchor from an outdated repomix
-export, not a database issue).
-
-This does not fill in DE/US/ES Brand OS content -- that still needs Paal
-or each market owner to supply a real brand book through the now-working
-import flow.
-
-<!-- GUI_AUDIT_PHASE1_20260831 -->
-
-## Priority 6 — GUI audit and modernization (added 2026-08-31)
-
-Added as a new roadmap priority at Paal's request: audit the product UI
-for defects and legacy/dead styling layers, and bring every page onto
-the August design token system.
-
-**Audit findings (full detail in HANDOFF.md under this same tag):**
-
-| Area | Issue | Status |
-|---|---|---|
-| `+` button defect | Literal `+` character hardcoded into translated/hardcoded button text in two places (`lib/i18n/config.ts` RU_DICT.competitors.add_source, `components/settings/SourceCard.tsx`) instead of an SVG icon | Fixed — Phase 1 |
-| `app/analytics/page.tsx` | Not wrapped in `<Layout>` (navigation dead-end), Cyrillic function identifier, mixed pt-BR strings in Russian UI, 100% raw Tailwind, no August tokens | Fixed — Phase 1 |
-| `components/settings/SourceCard.tsx` | `HEALTH_COLOR` map used raw Tailwind color pairs instead of August status tokens (worked only via an implicit legacy CSS override) | Fixed — Phase 1 |
-| `app/competitors/page.tsx` | 100% inline `v2-color-*` styles, no `m3-card`/`aug-button`/`aug-field` | Open — Phase 2 |
-| `app/knowledge/page.tsx` | 100% inline `v2-color-*` styles, one fully hardcoded off-token color pair (`#DBEAFE`/`#1E40AF`) | Open — Phase 3 |
-| 8 brand-tab components (Audience, Compliance, Voice, Versions, Pillars, Examples, Overview, ProductsClaims, GuidelineImport) | Raw Tailwind (`bg-blue-600`, `bg-gray-100`, etc.) instead of August tokens | Open — Phase 4 |
-| `app/globals.css` — August token definitions | Confirmed in good shape: tokens complete, `prefers-reduced-motion` and `forced-colors` support present, no legacy Playfair font reference | No action needed |
-| `app/globals.css` — `.aug-app-shell` legacy-Tailwind override block | Load-bearing compatibility shim mapping a narrow set of raw Tailwind color classes to August tokens for older pages. Fragile (silently breaks on any class-name edit) but still required until Phases 2-4 land | Remove after Phase 4 |
-
-**Plan:**
-1. ~~Phase 1: critical `app/analytics/page.tsx` navigation fix + `+` button defect in both locations~~ — done 2026-08-31.
-2. Phase 2: `app/competitors/page.tsx` → August tokens.
-3. Phase 3: `app/knowledge/page.tsx` → August tokens.
-4. Phase 4: 8 brand-tab components → August tokens (`GuidelineImportTab` first, since it's the pipeline unblocked for Priority 2).
-5. Follow-up: remove the now-unused `.aug-app-shell` legacy-Tailwind override block from `app/globals.css` once nothing depends on it.
-
-<!-- GUI_AUDIT_PHASE2_20260901 -->
-
-## Priority 6 — GUI audit and modernization: Phase 2 complete (2026-09-01)
-
-`app/competitors/page.tsx` migrated from 100% inline `v2-color-*` legacy
-styles to August design tokens (`m3-card`, `aug-button` + modifiers,
-`aug-field`, `m3-chip`). Pure visual/structural change — verified no
-state/effect/handler logic changed. Full detail in HANDOFF.md under this
-tag.
-
-**Updated status table:**
-
-| Area | Status |
-|---|---|
-| `+` button defect (both locations) | Fixed — Phase 1 |
-| `app/analytics/page.tsx` | Fixed — Phase 1 |
-| `components/settings/SourceCard.tsx` | Fixed — Phase 1 |
-| `app/competitors/page.tsx` | Fixed — Phase 2 |
-| `app/knowledge/page.tsx` | Open — Phase 3 |
-| 8 brand-tab components | Open — Phase 4 |
-| `.aug-app-shell` legacy-Tailwind override block in `app/globals.css` | Still load-bearing for Phases 3-4; remove after Phase 4 |
-
-<!-- GUI_AUDIT_PHASE3_20260901 -->
-
-## Priority 6 — GUI audit and modernization: Phase 3 complete (2026-09-01)
-
-`app/knowledge/page.tsx` migrated from 100% inline `v2-color-*` legacy
-styles (plus one fully hardcoded off-token hex color pair on the
-search-mode badge) to August design tokens (`m3-card`, `aug-button` +
-modifiers, `aug-field`, `m3-chip`). Pure visual/structural change —
-verified no state/effect/handler logic changed. Full detail in
-HANDOFF.md under this tag.
-
-**Updated status table:**
-
-| Area | Status |
-|---|---|
-| `+` button defect (both locations) | Fixed — Phase 1 |
-| `app/analytics/page.tsx` | Fixed — Phase 1 |
-| `components/settings/SourceCard.tsx` | Fixed — Phase 1 |
-| `app/competitors/page.tsx` | Fixed — Phase 2 |
-| `app/knowledge/page.tsx` (incl. hardcoded `#DBEAFE`/`#1E40AF` badge) | Fixed — Phase 3 |
-| 8 brand-tab components | Open — Phase 4 |
-| `.aug-app-shell` legacy-Tailwind override block in `app/globals.css` | Still load-bearing for Phase 4; remove after |
-
-<!-- GUI_AUDIT_PHASE4_20260902 -->
-
-## Priority 6 — GUI audit and modernization: Phase 4 complete (2026-09-02)
-
-All 8 remaining brand-tab components (`GuidelineImportTab`,
-`AudiencePainsTab`, `ComplianceTab`, `VoiceVocabularyTab`, `VersionsTab`,
-`ContentPillarsTab`, `ExamplesTab`, `OverviewTab`, `ProductsClaimsTab` —
-9 files total counting GuidelineImportTab) migrated from 100% raw
-Tailwind utility colors to August design tokens. Two components
-(`ExamplesTab`, `ContentPillarsTab`) were using `bg-purple-100`/
-`bg-indigo-100`, colors with no entry at all in the legacy
-`.aug-app-shell` override block — their badges were never actually
-on-brand before this fix. `VersionsTab` also had a fully hardcoded
-`#2563EB` publish-button color, fixed the same way as Phase 3's
-`#DBEAFE`/`#1E40AF`. Full detail in HANDOFF.md under this tag.
-
-**Priority 6 — final status table:**
-
-| Area | Status |
-|---|---|
-| `+` button defect (both locations) | Fixed — Phase 1 |
-| `app/analytics/page.tsx` | Fixed — Phase 1 |
-| `components/settings/SourceCard.tsx` | Fixed — Phase 1 |
-| `app/competitors/page.tsx` | Fixed — Phase 2 |
-| `app/knowledge/page.tsx` (incl. hardcoded `#DBEAFE`/`#1E40AF` badge) | Fixed — Phase 3 |
-| 8 brand-tab components (incl. hardcoded `#2563EB`, uncovered purple/indigo badges) | Fixed — Phase 4 |
-| `.aug-app-shell` legacy-Tailwind override block in `app/globals.css` | Ready for removal — pending a final codebase-wide grep confirming nothing else depends on it |
-
-**Plan:**
-1. ~~Phase 1: critical `app/analytics/page.tsx` navigation fix + `+` button defect~~ — done 2026-08-31.
-2. ~~Phase 2: `app/competitors/page.tsx` → August tokens~~ — done 2026-09-01.
-3. ~~Phase 3: `app/knowledge/page.tsx` → August tokens~~ — done 2026-09-01.
-4. ~~Phase 4: 8 brand-tab components → August tokens~~ — done 2026-09-02.
-5. Follow-up: codebase-wide grep for remaining raw Tailwind color usage, then remove the `.aug-app-shell` legacy-Tailwind override block from `app/globals.css`. This closes Priority 6.
-6. Possible future priority (not yet scheduled): full `t()` i18n coverage audit — several pages still hardcode Russian strings inline rather than routing through the dictionary. Flagged but out of scope for the token migration.
+Fable remediation Phases 0–4 are complete as of 2026-09-09. Do not reopen them without a regression or new evidence. Full findings and historical remediation detail remain in `docs/fable-review.md` and `HANDOFF.md`.

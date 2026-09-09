@@ -1514,3 +1514,26 @@ Phase 4 is now complete.
 commit/push.
 
 **Next Fable phase:** Phase 5 — `market-context.tsx` first-render correctness.
+
+<!-- SESSION_CLOSEOUT_20260909_FABLE_PHASE4 -->
+## Session closeout — 2026-09-09
+
+This session completed Fable remediation Phases 3 and 4 and prepared the repository for continuation in a new chat.
+
+**Completed:**
+- Phase 3A: AI SDK 6 token option correctness, deterministic Google fallback order, transient-error cooldown, aborting provider timeouts, content-filter fail-fast, task-aware extraction budgets, one request-scoped deadline and parallel context assembly.
+- Phase 3B: stale `content_requests` / `guideline_import_runs` visibility and guarded recovery, plus the queued content-request status-machine fix so successful work returns to `completed`.
+- Phase 4: shared bounded prompt boundaries, structured guideline extraction with AI SDK 6 + Zod, source-quote verification, and validated guideline-import inputs/locale alignment.
+- The original Phase 4 patch was rejected by legitimate local drift in four files. The corrective v2 used three-way/semantic merging and was successfully applied without reverting those local changes.
+- Supabase keepalive reuses `/api/cron/ping`: Vercel invokes it daily, while a deterministic UTC five-day gate runs before any Supabase access, so database activity occurs once every five days without month-boundary drift.
+
+**Repository hygiene:**
+- Root-level historical `apply_*.py`, `diagnose_*.py`, `fix*.py`, `cleanup_*.py`, `finalize_*.py` and recovery scripts are temporary artifacts, already ignored by `.gitignore`, and should not remain in the repository after this closeout.
+- `node_modules` and `.next` are local runtime/build artifacts and are intentionally not deleted by the closeout patch.
+
+**Next implementation order:**
+1. Fable Phase 5 — `lib/market-context.tsx` first-render correctness.
+2. Fable Phase 6 — `app/competitors/page.tsx` correctness/accessibility.
+3. Return to source quality, market-specific Brand OS depth, performance learning, social experiments and E2E coverage.
+
+`docs/AMADO_ROADMAP.md` has been reduced to remaining work only. Historical detail stays in Git and `docs/fable-review.md`.
