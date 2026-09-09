@@ -4,30 +4,33 @@ Last consolidated: 2026-08-24.
 
 This document tracks current product direction. It intentionally does not preserve the old patch-by-patch delivery diary; Git history is the source for historical implementation detail.
 
-## ⚠ Active override — Fable code-review remediation (added 2026-09-04)
+## Fable code-review remediation (2026-09-04 to 2026-09-09)
 
-**All "Current priorities" below are paused until this is closed.** An
-external code review (Claude Fable 5.1) of 9 core files
-(`generate-article.ts`, `prompts.ts`, `precedence.ts`,
-`guideline-extractor.ts`, the guideline import route, `ai.ts`,
-`brand-snapshot.ts`, `market-context.tsx`, `app/competitors/page.tsx`)
-found multiple confirmed silent-correctness bugs, several of them
-`Critical` severity and live in production today — most notably a
-confirmed end-to-end bug where every rule published through the
-guideline-import pipeline scope-matches as global regardless of its
-intended platform/region/format scope (see `docs/fable-review.md`,
-"Triage notes"), and unordered `LIMIT` queries on forbidden
-claims/terms/rules in `brand-snapshot.ts` that can silently drop hard
-brand constraints from generation.
+An external Fable 5.1 code review of 9 core files found multiple
+silent-correctness bugs, several confirmed live (notably: every rule
+published through the guideline-import pipeline scope-matched as
+global regardless of intended platform/region/format, due to a
+`scope_json` shape mismatch). Full findings, triage, and the 6-phase
+plan: `docs/fable-review.md`.
 
-Full findings, this project's triage against the real schema/routes,
-and a 6-phase remediation plan: **`docs/fable-review.md`**.
+**Phases 0-2 applied, verified, and pushed (2026-09-09):** Brand OS
+integrity (`brand-snapshot.ts` error handling and unordered-LIMIT
+fixes, `brand_rule_sets`/`brand_rules` unique constraints, the
+`scope_json` fix, honest guideline-import insert/publish counts,
+`generate-article.ts` persist-ordering) and region-failure-≠-absence
+(`resolveRegionProfile`/`resolveLanguageProfile` no longer collapse
+DB errors or uncurated regions into a silent Brazil default). See
+`HANDOFF.md` tags `FABLE_REVIEW_PHASE0_20260904` through
+`FABLE_REVIEW_PHASE2_20260908`, and the `FABLE_REVIEW_CLOSEOUT_20260909`
+entry for full detail and verification methodology.
 
-Work proceeds phase-by-phase per that plan until every item is `DONE`
-or explicitly marked `WON'T FIX` / `NEEDS PRODUCT DECISION`. Progress
-is tracked with dated `<!-- FABLE_REVIEW_PHASE_N -->` tags in
-`HANDOFF.md`, same convention as every other priority in this project.
-Once complete, normal "Current priorities" ordering resumes below.
+**Remaining (Phases 3-6, not yet started):** generation reliability
+(`maxTokens`/`maxOutputTokens` SDK rename, fixed model fallback order,
+cooldown on timeout/5xx, shared request deadline), prompt-injection
+surface hardening, `market-context.tsx` first-render correctness,
+`app/competitors/page.tsx` correctness and accessibility. Work through
+these next per `docs/fable-review.md` before returning to the
+priorities below.
 
 ## Product objective
 

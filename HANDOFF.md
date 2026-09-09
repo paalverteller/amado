@@ -1283,3 +1283,70 @@ added, or any input arrives slightly malformed.
   cooldown on timeout/5xx not just quota errors, shared request-scoped
   deadline, parallelizing `generate-article.ts`'s remaining serial
   awaits) follows per `docs/fable-review.md`.
+
+<!-- FABLE_REVIEW_CLOSEOUT_20260909 -->
+
+## Fable review remediation — Phases 0-2 applied and closed out (2026-09-09)
+
+**Status:** Applied, verified, committed, pushed. Confirmed by the user
+directly in Codespaces (all `--verify` steps passed after the
+trailing-newline drift-guard fix described below).
+
+**What shipped:**
+- Phase 0: `docs/fable-review.md` (full review text + triage + 6-phase
+  plan) created; `docs/AMADO_ROADMAP.md` override pointer added and
+  now removed (see roadmap for the current summary).
+- Phase 1A: `lib/brand-snapshot.ts` error handling + `degraded[]`,
+  unordered-LIMIT fix with safety caps, `compileRules()` routing,
+  `resolveBrandRegionId` throws on DB error. `lib/content-generation/
+  generate-article.ts` persist-before-notes reorder, `persistenceWarning`.
+  `lib/repositories/article-repository.ts` optional `updateSourceContext`.
+  `supabase/migrations/046_brand_rules_unique_constraints.sql` applied
+  via Supabase SQL Editor (unique constraints on `brand_rule_sets`/
+  `brand_rules`, validated against real PostgreSQL 16 pre-migration).
+- Phase 1B: confirmed-critical `scope_json` shape fix (`toRuleScope()`)
+  in the guideline import route; honest insert/publish counts in both
+  guideline routes; `error_summary` TEXT-vs-object bug fixed.
+- Phase 2: `resolveRegionProfile`/`buildRegionContextLayer` derive
+  language from `regions.default_language_code` instead of a
+  hand-maintained map, with error/not-found/inactive logging;
+  `resolveLanguageProfile`'s Brazil self-reference removed;
+  `buildEvidenceContext` locale-aware date formatting;
+  `generate-article.ts` regionId `''` normalization;
+  `BrandRegionRequiredError` in `guideline-extractor.ts` (defensive —
+  confirmed no `POST /api/brands` endpoint exists, so unreachable in
+  practice today).
+
+**Post-delivery fixes (found after initial delivery, both resolved
+before this closeout):**
+- `do_verify`/`do_commit` in the Phase 1B/2 patch scripts crashed with
+  an unhandled `FileNotFoundError` instead of a clean `[FAIL]` when a
+  prior phase hadn't applied yet (missing `.exists()` guard in the
+  brace-balance check loop) — fixed in all three scripts.
+- The Phase 1A/1B/2 drift-guards initially compared on-disk files
+  against payloads built from this session's repomix XML snapshot,
+  whose extraction had inconsistently dropped a trailing newline
+  relative to the real files in Codespaces (4 of 11 files affected:
+  `article-repository.ts`, both guideline routes,
+  `guideline-extractor.ts` — confirmed via a dedicated read-only
+  diagnostic script, `diagnose_fable_review_drift_v1.py`, before
+  patching). Fixed by making the drift-guard comparison tolerant of a
+  trailing-newline-only difference while staying byte-exact for any
+  real content change.
+
+**Verification discipline used throughout (for reference in future
+sessions):** every changed `.ts`/`.tsx` file was checked with a real
+`tsc --noEmit --strict` against an isolated reconstruction of its
+actual dependency graph (not text heuristics); the SQL migration was
+validated against a real PostgreSQL 16 instance seeded with the exact
+pre-existing-violation shapes it needed to repair; every new/changed
+test was run 3× via vitest to check for flakiness and order-dependence;
+every patch script was dry-run through a full `--check/--apply/--verify/
+--commit` cycle in an isolated sandbox git repo seeded with the exact
+pre-patch file content before being delivered.
+
+**Not yet done — remaining Fable review scope:** Phases 3-6 of
+`docs/fable-review.md` (generation reliability, prompt-injection
+surface, `market-context.tsx` first-render correctness, `competitors`
+page correctness/accessibility) are still open. See
+`docs/AMADO_ROADMAP.md` for the current pointer.
