@@ -16,6 +16,7 @@ import {
   type ArticleRepository,
 } from '@/lib/repositories/article-repository'
 import { buildSocialPlaybookContext } from '@/lib/social-generation-policy'
+import { promptBlock } from '@/lib/prompt-safety'
 
 export interface GenerateArticleInput {
   topic: string
@@ -204,14 +205,17 @@ STRICT OUTPUT FORMAT:
 Write only the final clean text for publication. No think tags. No Markdown.`
 
   const sections: string[] = []
-  if (rssText) sections.push(`${regionProfile.name.toUpperCase()} MARKET SIGNALS:\n${rssText}`)
-  if (selectedEvidenceContext) sections.push(`EVIDENCE:\n${selectedEvidenceContext}`)
+  if (selectedEvidenceContext) {
+    sections.push(selectedEvidenceContext)
+  } else if (rssText) {
+    sections.push(promptBlock('market_signals', rssText, { maxChars: 10_000 }))
+  }
   if (competitorContext.promptText) sections.push(competitorContext.promptText)
   if (knowledge.promptText) sections.push(knowledge.promptText)
   if (parent?.generated_content && input.refinementNote) {
     sections.push(
-      `PREVIOUS DRAFT (revise this, don't start over from nothing):\n${parent.generated_content}\n\n` +
-      `REQUESTED CHANGE: ${input.refinementNote}`,
+      promptBlock('previous_draft', parent.generated_content, { maxChars: 20_000 }),
+      promptBlock('refinement_request', input.refinementNote, { maxChars: 4_000, mode: 'policy' }),
     )
   }
 

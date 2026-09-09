@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import type { ContentFormat } from '@/lib/content-formats'
+import { promptBlock } from '@/lib/prompt-safety'
 
 const FORMAT_TO_PLATFORM: Partial<Record<ContentFormat, string>> = {
   linkedin_post: 'linkedin',
@@ -58,9 +59,11 @@ export async function buildSocialPlaybookContext(
 
   return `${contract}
 
-<platform_playbook platform="${data.platform}" locale="${data.locale}" version="${data.version}">
-This is the active Brand OS playbook for the selected platform. Apply it unless a higher-priority factual, legal, safety, brand or region rule conflicts.
-STRATEGY: ${JSON.stringify(data.strategy_json ?? {})}
-MEASUREMENT: ${JSON.stringify(data.measurement_json ?? {})}
-</platform_playbook>`
+${promptBlock('platform_playbook', JSON.stringify({
+    platform: data.platform,
+    locale: data.locale,
+    version: data.version,
+    strategy: data.strategy_json ?? {},
+    measurement: data.measurement_json ?? {},
+  }), { maxChars: 12_000, mode: 'policy' })}`
 }

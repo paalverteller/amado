@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   generateText: vi.fn(),
+  outputObject: vi.fn((options: unknown) => ({ kind: 'object', options })),
   streamText: vi.fn(),
   createModel: vi.fn(),
   eligiblePipeline: vi.fn((pipeline: unknown[]) => pipeline),
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('ai', () => ({
   generateText: mocks.generateText,
+  Output: { object: mocks.outputObject },
   streamText: mocks.streamText,
 }))
 
@@ -32,7 +34,8 @@ vi.mock('./ai-utils', () => ({
   TRANSIENT_PROVIDER_COOLDOWN_MS: 90_000,
 }))
 
-import { generateArticleWithFallback, generateWithFallback } from './ai'
+import { generateArticleWithFallback, generateObjectWithFallback, generateWithFallback } from './ai'
+import { z } from 'zod'
 
 function success(text = 'Generated text') {
   return {
@@ -133,5 +136,32 @@ describe('AI generation reliability', () => {
 
     const options = mocks.generateText.mock.calls[0]?.[0] as Record<string, unknown>
     expect(options.timeout).toBeLessThanOrEqual(18_000)
+  })
+
+
+  it('generates schema-validated objects through the same extraction fallback pipeline', async () => {
+    mocks.generateText.mockResolvedValueOnce({
+      output: { value: 'ok' },
+      finishReason: 'stop',
+      usage: { inputTokens: 5, outputTokens: 7, totalTokens: 12 },
+    })
+
+    const result = await generateObjectWithFallback({
+      systemPrompt: 'system',
+      userPrompt: 'extract',
+      task: 'extraction',
+      schema: z.object({ value: z.string() }),
+      maxOutputTokens: 321,
+      deadlineAt: Date.now() + 60_000,
+    })
+
+    expect(result.object).toEqual({ value: 'ok' })
+    const options = mocks.generateText.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(options.output).toBeDefined()
+    expect(mocks.outputObject).toHaveBeenCalledTimes(1)
+    expect((mocks.outputObject.mock.calls[0]?.[0] as { schema?: unknown }).schema).toBeDefined()
+    expect(options.maxOutputTokens).toBe(321)
+    expect(options.timeout).toBeLessThanOrEqual(18_000)
+    expect(options.maxRetries).toBe(0)
   })
 })

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateArticleWithFallback } from '@/lib/ai'
 import { resolveRegionProfile } from '@/lib/prompts'
+import { promptBlock } from '@/lib/prompt-safety'
 
 export const maxDuration = 45
 export const dynamic = 'force-dynamic'
@@ -75,16 +76,17 @@ export async function POST(req: NextRequest): Promise<Response> {
       return NextResponse.json({ error: 'Текст слишком короткий для анализа' }, { status: 400 })
     }
 
-    let userPrompt = `TEXT TO CHECK:\n\n${text.slice(0, 8000)}`
+    const promptParts = [promptBlock('text_to_check', text, { maxChars: 8_000 })]
     if (brandVoice) {
-      userPrompt += `\n\nBRAND VOICE:\n${brandVoice.slice(0, 2000)}`
+      promptParts.push(promptBlock('brand_voice', brandVoice, { maxChars: 2_000, mode: 'policy' }))
     }
     if (forbiddenWords) {
-      userPrompt += `\n\nFORBIDDEN WORDS / PHRASES:\n${forbiddenWords.slice(0, 500)}`
+      promptParts.push(promptBlock('forbidden_words', forbiddenWords, { maxChars: 500, mode: 'policy' }))
     }
     if (examples) {
-      userPrompt += `\n\nREFERENCE EXAMPLES:\n${examples.slice(0, 2000)}`
+      promptParts.push(promptBlock('reference_examples', examples, { maxChars: 2_000 }))
     }
+    const userPrompt = promptParts.join('\n\n')
 
     const result = await generateArticleWithFallback({
       systemPrompt: buildJudgePrompt(

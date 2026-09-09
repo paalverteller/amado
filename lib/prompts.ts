@@ -15,6 +15,7 @@ import { isShortFormat, isSegmentedFormat, getFormatMeta, type ContentFormat } f
 import { createSupabaseKnowledgeRepository } from '@/lib/repositories/knowledge-repository'
 import { embedTexts, isEmbeddingConfigured } from '@/lib/knowledge/embeddings'
 import { isFeatureEnabled } from '@/lib/amado-config'
+import { promptBlock } from '@/lib/prompt-safety'
 
 export const CURRENT_PROMPT_VERSION = 'v1.0_amado_stage0'
 
@@ -377,7 +378,7 @@ export async function buildKnowledgeContext(
     if (results.length === 0) return { promptText: '', chunks: [] }
 
     const parts = results.map((r, i) => `[${i + 1}] ${r.asset_title}\n${r.content}`)
-    const promptText = `<knowledge_context>\nRelevant material from the knowledge library and competitor reviews:\n\n${parts.join('\n\n')}\n</knowledge_context>`
+    const promptText = promptBlock('knowledge_context', `Relevant material from the knowledge library and competitor reviews:\n\n${parts.join('\n\n')}`, { maxChars: 18_000 })
 
     return {
       promptText,
@@ -475,7 +476,7 @@ export async function buildCompetitorContext(
     })
 
     return {
-      promptText: `<competitor_context>\nFresh signals from tracked competitors. Use as market context, never copy wording:\n${lines.join('\n')}\n</competitor_context>`,
+      promptText: promptBlock('competitor_context', `Fresh signals from tracked competitors. Use as market context, never copy wording:\n${lines.join('\n')}`, { maxChars: 8_000 }),
       signals,
     }
   } catch (error) {
@@ -509,22 +510,16 @@ export async function buildEvidenceContext(evidenceItemIds?: string[] | null, lo
   }
   if (!items || items.length === 0) return ''
 
-  const parts: string[] = []
-  parts.push('<evidence_context>')
-  parts.push('Source material for this content:')
-  
+  const parts: string[] = ['Source material for this content:']
   for (const item of items) {
-    const date = item.published_at 
+    const date = item.published_at
       ? (locale ? new Date(item.published_at).toLocaleDateString(locale) : new Date(item.published_at).toISOString().slice(0, 10))
       : 'recent'
     parts.push(`- [${date}] ${item.source_title}`)
-    if (item.source_summary) {
-      parts.push(`  ${item.source_summary.slice(0, 150)}`)
-    }
+    if (item.source_summary) parts.push(`  ${item.source_summary.slice(0, 150)}`)
   }
-  
-  parts.push('</evidence_context>')
-  return parts.join('\n')
+
+  return promptBlock('evidence_context', parts.join('\n'), { maxChars: 8_000 })
 }
 
 /** Everything buildUserPrompt's templates need to phrase themselves in the
@@ -610,8 +605,7 @@ export function buildUserPrompt(spec: ContentSpec): string {
   const lang = resolveLanguageProfile(spec)
   
   if (format === 'quick_note') {
-    return `<task>Raw user text:
-"${topic}"</task>
+    return `${promptBlock('source_text', topic, { maxChars: 12_000 })}
 <role>You are a ghostwriter who transforms rough notes into professional content for the ${lang.marketAdjective} market.</role>
 <format>${buildFormatInstruction(spec)}</format>
 <rules>
@@ -626,7 +620,7 @@ export function buildUserPrompt(spec: ContentSpec): string {
   }
   
   if (format === 'x_thread') {
-    return `<task>Topic: "${topic}"</task>
+    return `${promptBlock('topic', topic, { maxChars: 4_000 })}
 <format>${buildFormatInstruction(spec)}</format>
 <rules>
 - Post 1: hook that makes the reader continue — no "thread about..." introductions.
@@ -640,7 +634,7 @@ export function buildUserPrompt(spec: ContentSpec): string {
   }
   
   if (format === 'threads_post') {
-    return `<task>Topic: "${topic}"</task>
+    return `${promptBlock('topic', topic, { maxChars: 4_000 })}
 <format>${buildFormatInstruction(spec)}</format>
 <rules>
 - One clear idea.
@@ -653,7 +647,7 @@ export function buildUserPrompt(spec: ContentSpec): string {
   }
 
   if (format === 'instagram_carousel') {
-    return `<task>Topic: "${topic}"</task>
+    return `${promptBlock('topic', topic, { maxChars: 4_000 })}
 <format>${buildFormatInstruction(spec)}</format>
 <rules>
 - Slide 1: hook title, max 8 words, no period.
@@ -669,30 +663,27 @@ For first and last slide, "body" may be empty string.</output_contract>`
   const formatInstruction = buildFormatInstruction(spec)
   
   const parts: string[] = []
-  parts.push(`<task>Topic: "${topic}"</task>`)
+  parts.push(promptBlock('topic', topic, { maxChars: 4_000 }))
   
   if (spec.regionContext) {
     parts.push(`<region>${spec.regionContext.regionName || 'Brazil'} (${spec.regionContext.locale || 'pt-BR'})</region>`)
     if (spec.regionContext.culturalNotes) {
-      parts.push(`<cultural_notes>${spec.regionContext.culturalNotes}</cultural_notes>`)
+      parts.push(promptBlock('cultural_notes', spec.regionContext.culturalNotes, { maxChars: 4_000 }))
     }
   }
   
   if (spec.brandVoice) {
-    if (spec.brandVoice.tone) parts.push(`<tone>${spec.brandVoice.tone}</tone>`)
-    if (spec.brandVoice.style) parts.push(`<brand_style>${spec.brandVoice.style}</brand_style>`)
+    if (spec.brandVoice.tone) parts.push(promptBlock('tone', spec.brandVoice.tone, { maxChars: 2_000, mode: 'policy' }))
+    if (spec.brandVoice.style) parts.push(promptBlock('brand_style', spec.brandVoice.style, { maxChars: 4_000, mode: 'policy' }))
   }
   
   if (spec.evidenceItems && spec.evidenceItems.length > 0) {
-    parts.push('<evidence>')
-    for (const item of spec.evidenceItems) {
-      parts.push(`- ${item.title || 'Source'}: ${item.summary || ''}`)
-    }
-    parts.push('</evidence>')
+    const evidence = spec.evidenceItems.map((item) => `- ${item.title || 'Source'}: ${item.summary || ''}`).join('\n')
+    parts.push(promptBlock('evidence', evidence, { maxChars: 8_000 }))
   }
-  
+
   if (spec.customInstructions) {
-    parts.push(`<custom_instructions>${spec.customInstructions}</custom_instructions>`)
+    parts.push(promptBlock('custom_instructions', spec.customInstructions, { maxChars: 4_000, mode: 'policy' }))
   }
   
   parts.push(`<format>${formatInstruction}</format>`)
@@ -715,21 +706,20 @@ export function buildLocalizationNotesPrompt(
   regionProfile?: RegionProfile,
 ): string {
   const profile = regionProfile ?? DEFAULT_REGION_PROFILE
-  return `<task>Generate LOCALIZATION NOTES for head office explaining why this content was adapted this way for ${profile.name}.</task>
-<context>
-Topic: "${topic}"
-Format: ${contentType}
-${profile.name} market signals:
-${rssContext || 'No specific signals available.'}
-</context>
-<rules>
+  return [
+    `<task>Generate LOCALIZATION NOTES for head office explaining why this content was adapted this way for ${profile.name}.</task>`,
+    promptBlock('topic', topic, { maxChars: 4_000 }),
+    `<format>${contentType}</format>`,
+    rssContext ? promptBlock('market_signals', rssContext, { maxChars: 8_000 }) : '<market_signals>No specific signals available.</market_signals>',
+    `<rules>
 - Explain 2-3 cultural adaptation decisions (why something was said a certain way).
 - Mention ${profile.name} cultural references used and why they work.
 - Point out pitfalls avoided (what does NOT work in ${profile.name}).
 - Format: short bullet points, in ${profile.languageName}.
 - Maximum 400 characters.
-</rules>
-<output_contract>Only the localization notes. No introductions, no markdown.</output_contract>`
+</rules>`,
+    '<output_contract>Only the localization notes. No introductions, no markdown.</output_contract>',
+  ].join('\n')
 }
 
 export async function buildBrandVoiceLayer(brandProfileId?: string | null): Promise<string> {
@@ -745,26 +735,26 @@ export async function buildBrandVoiceLayer(brandProfileId?: string | null): Prom
   if (error || !data) return ''
 
   const parts: string[] = []
-  parts.push(`<brand>${data.brand_name}</brand>`)
+  parts.push(promptBlock('brand', data.brand_name, { maxChars: 300 }))
   
   if (data.voice_description) {
-    parts.push(`<brand_voice>${data.voice_description}</brand_voice>`)
+    parts.push(promptBlock('brand_voice', data.voice_description, { maxChars: 4_000, mode: 'policy' }))
   }
   
   if (data.forbidden_words) {
-    parts.push(`<brand_forbidden>Forbidden words and expressions for this brand: ${data.forbidden_words}</brand_forbidden>`)
+    parts.push(promptBlock('brand_forbidden', `Forbidden words and expressions for this brand: ${data.forbidden_words}`, { maxChars: 4_000, mode: 'policy' }))
   }
   
   if (data.example_posts) {
-    parts.push(`<brand_examples>Examples of how this brand writes:\n${data.example_posts}</brand_examples>`)
+    parts.push(promptBlock('brand_examples', `Examples of how this brand writes:\n${data.example_posts}`, { maxChars: 8_000 }))
   }
   
   if (data.target_audience) {
-    parts.push(`<brand_audience>Target audience: ${data.target_audience}</brand_audience>`)
+    parts.push(promptBlock('brand_audience', `Target audience: ${data.target_audience}`, { maxChars: 4_000 }))
   }
   
   if (data.competitors) {
-    parts.push(`<brand_competitors>Competitors for positioning reference: ${data.competitors}</brand_competitors>`)
+    parts.push(promptBlock('brand_competitors', `Competitors for positioning reference: ${data.competitors}`, { maxChars: 4_000 }))
   }
 
   return parts.join('\n')

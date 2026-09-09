@@ -1,13 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { extractGuidelineRules, calculateExtractionStats, BrandRegionRequiredError } from '@/lib/brand-os/guideline-extractor'
-import type { ExtractionInput, ExtractedRule } from '@/lib/brand-os/guideline-extractor'
+import type { ExtractedRule } from '@/lib/brand-os/guideline-extractor'
 import type { RuleScope } from '@/lib/brand-os/types'
 import { getErrorMessage } from '@/lib/api/error-message'
 import { resolveBrandRegionId } from '@/lib/brand-snapshot'
 import { resolveRegionProfile } from '@/lib/prompts'
 
 export const dynamic = 'force-dynamic'
+
+
+const GUIDELINE_IMPORT_MAX_CHARS = 200_000
+const guidelineImportBodySchema = z.object({
+  sourceText: z.string().max(GUIDELINE_IMPORT_MAX_CHARS).optional(),
+  text: z.string().max(GUIDELINE_IMPORT_MAX_CHARS).optional(),
+  documentType: z.enum([
+    'brand_core', 'platform_playbook', 'format_playbook', 'compliance',
+    'product_facts', 'approved_examples', 'measurement',
+  ]).default('brand_core'),
+  platform: z.enum(['instagram', 'facebook', 'linkedin', 'x', 'threads', 'youtube', 'tiktok', 'whatsapp']).nullable().default(null),
+  documentTitle: z.string().trim().min(1).max(200).default('Imported Guideline'),
+  locale: z.string().trim().min(2).max(32).optional(),
+  sourceType: z.enum(['brand_book', 'style_guide', 'legal_review', 'competitor_analysis', 'manual']).default('manual'),
+  sourceUrl: z.string().trim().max(2048).refine((value) => {
+    try {
+      const url = new URL(value)
+      return url.protocol === 'http:' || url.protocol === 'https:'
+    } catch {
+      return false
+    }
+  }, 'sourceUrl must be an http(s) URL').optional(),
+})
+
+export function validateGuidelineImportBody(body: unknown, expectedLocale: string) {
+  const parsed = guidelineImportBodySchema.safeParse(body)
+  if (!parsed.success) {
+    return { ok: false as const, error: parsed.error.issues.map((issue) => `${issue.path.join('.') || 'body'}: ${issue.message}`).join('; ') }
+  }
+  if (parsed.data.locale && parsed.data.locale !== expectedLocale) {
+    return { ok: false as const, error: `locale must match the brand region (${expectedLocale})` }
+  }
+  return { ok: true as const, data: { ...parsed.data, locale: expectedLocale } }
+}
 
 // Fable review, Phase 1 (confirmed critical bug -- see docs/fable-review.md
 // Phase 1 and "Triage notes"): this used to be built as
@@ -32,18 +67,28 @@ export async function POST(
 ): Promise<NextResponse> {
   try {
     const { brandId } = await params
-    const regionProfile = await resolveRegionProfile(await resolveBrandRegionId(brandId))
-    const body = await request.json()
+    const regionId = await resolveBrandRegionId(brandId)
+    if (!regionId) {
+      return NextResponse.json(
+        { error: `Brand ${brandId} has no region set -- cannot import guidelines` },
+        { status: 400 },
+      )
+    }
+    const regionProfile = await resolveRegionProfile(regionId)
+    const validated = validateGuidelineImportBody(await request.json(), regionProfile.locale)
+    if (!validated.ok) {
+      return NextResponse.json({ error: validated.error }, { status: 400 })
+    }
     const {
       sourceText,
       text,
-      documentType = 'brand_core',
-      platform = null,
-      documentTitle = 'Imported Guideline',
-      locale = regionProfile.locale,
-      sourceType = 'manual',
+      documentType,
+      platform,
+      documentTitle,
+      locale,
+      sourceType,
       sourceUrl,
-    } = body
+    } = validated.data
 
     const content = text || sourceText
     if (!content?.trim()) {
@@ -98,7 +143,7 @@ export async function POST(
     // 3. Run extraction agent
     try {
       const extractionResult = await extractGuidelineRules({
-        sourceType: sourceType as ExtractionInput['sourceType'],
+        sourceType,
         sourceUrl,
         sourceText: content,
         brandId,

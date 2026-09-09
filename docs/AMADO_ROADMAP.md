@@ -36,8 +36,17 @@ also now returns successfully processed rows to `completed` instead of leaving
 them permanently in `processing`. See `HANDOFF.md` tags
 `FABLE_REVIEW_PHASE3A_20260909` and `FABLE_REVIEW_PHASE3B_20260909`.
 
-**Remaining before returning to the priorities below:** Phase 4 prompt-injection
-hardening, Phase 5 `market-context.tsx` first-render correctness, and Phase 6
+**Phase 4 complete (2026-09-09):** untrusted/semi-trusted prompt material now
+uses one bounded escaping helper across canonical generation and the supporting
+AI workflows; guideline extraction uses AI SDK 6 structured output with Zod
+validation; source quotes are verified against the imported document; and the
+guideline-import request boundary validates enums/URL/content size while pinning
+locale to the brand region. The existing Supabase ping cron is also scheduled
+on a five-day calendar cadence (`0 3 */5 * *`) instead of daily. See
+`HANDOFF.md` tag `FABLE_REVIEW_PHASE4_20260909`.
+
+**Remaining before returning to the priorities below:** Phase 5
+`market-context.tsx` first-render correctness and Phase 6
 `app/competitors/page.tsx` correctness/accessibility.
 
 ## Product objective

@@ -5,6 +5,7 @@ import { cleanPlainTextOutput } from '@/lib/text-cleanup'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { getErrorMessage } from '@/lib/api/error-message'
 import { resolveRegionProfile } from '@/lib/prompts'
+import { promptBlock } from '@/lib/prompt-safety'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -91,16 +92,14 @@ async function brandContext(brandProfileId?: string): Promise<string> {
     .maybeSingle()
 
   if (!data) return ''
-  return [
-    '<brand_context>',
-    `Brand: ${data.brand_name}`,
-    `Voice: ${data.voice_description || ''}`,
-    `Forbidden: ${data.forbidden_words || ''}`,
-    `Glossary: ${data.glossary || ''}`,
-    `CTA library: ${data.cta_library || ''}`,
-    `Legal: ${data.legal_disclaimers || ''}`,
-    '</brand_context>',
-  ].join('\n')
+  return promptBlock('brand_context', JSON.stringify({
+    brand: data.brand_name,
+    voice: data.voice_description || '',
+    forbidden: data.forbidden_words || '',
+    glossary: data.glossary || '',
+    ctaLibrary: data.cta_library || '',
+    legal: data.legal_disclaimers || '',
+  }), { maxChars: 12_000, mode: 'policy' })
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -133,15 +132,16 @@ STRICT EXECUTION CONTRACT:
 - Apply a native-speaker test before returning.
 - Return ONLY the localized final copy. No explanation, no alternatives, no markdown wrapper.`
 
-    const userPrompt = `${await brandContext(body.brandProfileId)}
-
-SOURCE LANGUAGE: ${body.sourceLanguage || 'auto-detect'}
-CONTENT CONTEXT: ${contextType}
-TARGET MARKET: ${regionProfile.name}
-TARGET LOCALE: ${regionProfile.locale}
-
-SOURCE TEXT:
-${sourceText}`
+    const userPrompt = [
+      await brandContext(body.brandProfileId),
+      promptBlock('localization_metadata', JSON.stringify({
+        sourceLanguage: body.sourceLanguage || 'auto-detect',
+        contextType,
+        targetMarket: regionProfile.name,
+        targetLocale: regionProfile.locale,
+      }), { maxChars: 2_000 }),
+      promptBlock('source_text', sourceText, { maxChars: 40_000 }),
+    ].filter(Boolean).join('\n\n')
 
     const result = await generateArticleWithFallback({ systemPrompt, userPrompt, maxOutputTokens: 5000 })
     await recordAiUsage('localization', result.model, result.usage)

@@ -3,6 +3,7 @@ import { generateArticleWithFallback } from '@/lib/ai'
 import { cleanPlainTextOutput } from '@/lib/text-cleanup'
 import { apiError } from '@/lib/api/errors'
 import { resolveRegionProfile } from '@/lib/prompts'
+import { promptBlock } from '@/lib/prompt-safety'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       'No preamble, no markdown wrapper, no alternatives and no commentary about the rewrite process.',
     ].join('\n')
 
-    const userPrompt = `ORIGINAL TEXT:\n\n${sourceText}`
+    const userPrompt = promptBlock('original_text', sourceText, { maxChars: 20_000 })
 
     const result = await generateArticleWithFallback({
       systemPrompt,

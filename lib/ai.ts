@@ -1,4 +1,5 @@
-import { streamText, generateText } from 'ai'
+import { streamText, generateText, Output } from 'ai'
+import type { ZodType } from 'zod'
 import { cleanPlainTextOutput } from '@/lib/text-cleanup'
 import {
   type AiTask, type PipelineEntry, createModel, modelLabel, eligiblePipeline,
@@ -86,6 +87,18 @@ export interface GenerateAttemptResult {
   model: string
   /** null when the provider (e.g. the DeepSeek raw-HTTP path) doesn't
    *  report usage, or when usage wasn't in the SDK response. */
+  usage: TokenUsage | null
+}
+
+export interface GenerateObjectParams<T> extends GenerateParams {
+  schema: ZodType<T>
+  schemaName?: string
+  schemaDescription?: string
+}
+
+export interface GenerateObjectResult<T> {
+  object: T
+  model: string
   usage: TokenUsage | null
 }
 
@@ -274,4 +287,81 @@ export async function generateArticleWithFallback(params: GenerateParams): Promi
     }
   }
   throw new Error(`All ${task} models failed. ${errors.join(' | ')}`)
+}
+
+
+// ─── Task: Structured Extraction (Schema-validated Fallback) ────────────────
+
+/**
+ * Structured-output companion to generateArticleWithFallback. It preserves the
+ * same provider ordering, deadline budget and cooldown behavior while letting
+ * AI SDK 6 `Output.object()` validate the generated object against a Zod schema
+ * before it reaches application code. The current production pipeline is
+ * Google-only, so the raw-HTTP DeepSeek adapter is intentionally skipped for
+ * structured output.
+ */
+export async function generateObjectWithFallback<T>(params: GenerateObjectParams<T>): Promise<GenerateObjectResult<T>> {
+  const task = params.task ?? 'extraction'
+  const pipeline = buildPipelines()[task]
+  const errors: string[] = []
+  const deadlineAt = operationDeadline(params)
+  const minAttemptMs = task === 'generation' ? MIN_GENERATION_ATTEMPT_MS : MIN_OTHER_ATTEMPT_MS
+  const eligible = eligiblePipeline(pipeline)
+
+  if (eligible.length === 0) {
+    throw new Error(`No configured ${task} models are currently eligible (missing credentials or cooldown).`)
+  }
+
+  for (const entry of eligible) {
+    const remaining = remainingMs(deadlineAt)
+    if (remaining < minAttemptMs) {
+      errors.push(`${entry.model}: skipped, request deadline reached`)
+      break
+    }
+
+    const timeoutMs = Math.min(entry.budgetMs ?? 15_000, remaining)
+
+    try {
+      if (entry.provider === 'deepseek') {
+        errors.push(`${entry.model}: structured output is unavailable for the raw DeepSeek adapter`)
+        continue
+      }
+
+      const model = createModel(entry)
+      if (!model) continue
+
+      console.info(`[${task} object pipeline] trying ${entry.model} (budget ${timeoutMs}ms, remaining ${remaining}ms)`)
+      const result = await generateText({
+        model,
+        system: params.systemPrompt,
+        prompt: params.userPrompt,
+        output: Output.object({
+          schema: params.schema,
+          ...(params.schemaName ? { name: params.schemaName } : {}),
+          ...(params.schemaDescription ? { description: params.schemaDescription } : {}),
+        }),
+        maxRetries: 0,
+        ...(params.maxOutputTokens ? { maxOutputTokens: params.maxOutputTokens } : {}),
+        timeout: timeoutMs,
+      })
+
+      if (result.finishReason === 'content-filter') {
+        throw new NonRetryableGenerationError(`${modelLabel(entry)} blocked the prompt (content-filter)`)
+      }
+
+      console.info(`[${task} object pipeline] SUCCESS using ${entry.model}`)
+      const usage: TokenUsage | null = result.usage ? {
+        promptTokens: result.usage.inputTokens ?? null,
+        completionTokens: result.usage.outputTokens ?? null,
+        totalTokens: result.usage.totalTokens ?? null,
+      } : null
+      return { object: result.output as T, model: modelLabel(entry), usage }
+    } catch (error) {
+      if (error instanceof NonRetryableGenerationError) throw error
+      recordFailureCooldown(entry, error)
+      errors.push(`${entry.model}: ${getErrorMessage(error).slice(0, 100)}`)
+    }
+  }
+
+  throw new Error(`All ${task} structured-output models failed. ${errors.join(' | ')}`)
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toRuleScope } from './route'
+import { toRuleScope, validateGuidelineImportBody } from './route'
 
 // Fable review, Phase 1B (docs/fable-review.md): confirmed critical bug --
 // scope_json used to be written as `{ scope: rule.scope, target:
@@ -52,5 +52,34 @@ describe('toRuleScope', () => {
     // which scopeMatches() would need special-case handling for.
     const result = toRuleScope({ scope: 'platform', scopeTarget: undefined })
     expect(result).toEqual({})
+  })
+})
+
+
+describe('validateGuidelineImportBody', () => {
+  it('accepts the documented source types and pins locale to the brand region', () => {
+    const result = validateGuidelineImportBody({
+      sourceType: 'brand_book',
+      sourceText: 'Brand rules',
+      sourceUrl: 'https://example.com/brand-book',
+      locale: 'pt-BR',
+    }, 'pt-BR')
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.data.locale).toBe('pt-BR')
+  })
+
+  it('rejects a locale that disagrees with the brand region', () => {
+    const result = validateGuidelineImportBody({ sourceText: 'Brand rules', locale: 'de-DE' }, 'pt-BR')
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/locale must match/i)
+  })
+
+  it('rejects invalid enum and URL values instead of casting them through', () => {
+    const result = validateGuidelineImportBody({
+      sourceText: 'Brand rules',
+      sourceType: 'anything',
+      sourceUrl: 'javascript:alert(1)',
+    }, 'pt-BR')
+    expect(result.ok).toBe(false)
   })
 })

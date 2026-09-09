@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { generateArticleWithFallback } from '@/lib/ai'
 import { getErrorMessage } from '@/lib/api/error-message'
 import { recordAiUsage } from '@/lib/ai-usage'
+import { promptBlock } from '@/lib/prompt-safety'
 
 export interface HypothesisResult {
   status: 'ready' | 'failed'
@@ -64,7 +65,7 @@ export async function generatePerformanceHypothesis(snapshotId: string): Promise
     'для содержательной гипотезы, и не выдумывай.',
   ].join('\n')
 
-  const userPrompt = [
+  const userPrompt = promptBlock('performance_snapshot', [
     article?.topic ? `Тема: ${article.topic}` : null,
     article?.content_type ? `Тип контента: ${article.content_type}` : null,
     `Платформа: ${snapshot.platform}`,
@@ -72,7 +73,7 @@ export async function generatePerformanceHypothesis(snapshotId: string): Promise
     metricLines.length ? `Метрики:\n${metricLines.join('\n')}` : null,
     snapshot.qualitative_notes ? `Заметки команды: ${snapshot.qualitative_notes}` : null,
     contentPreview ? `Текст контента (начало):\n${contentPreview}` : null,
-  ].filter(Boolean).join('\n\n')
+  ].filter(Boolean).join('\n\n'), { maxChars: 8_000 })
 
   try {
     const result = await generateArticleWithFallback({ systemPrompt, userPrompt, maxOutputTokens: 400 })

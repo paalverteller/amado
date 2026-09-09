@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/client'
 import type { ContentFormat } from '@/lib/content-formats'
 import { compileRules, type CompileContext } from '@/lib/brand-os/precedence'
 import type { BrandRule } from '@/lib/brand-os/types'
+import { promptBlock } from '@/lib/prompt-safety'
 
 // content format -> platform_playbooks.platform, where a mapping exists.
 // Formats with no real platform (article, email, quick_note, rewrite) are
@@ -164,13 +165,13 @@ export async function buildBrandSnapshot(
   const parts: string[] = []
 
   const brandName = profile.data?.brand_name
-  if (brandName) parts.push(`<brand>${brandName}</brand>`)
+  if (brandName) parts.push(promptBlock('brand', brandName, { maxChars: 300 }))
 
   // Legacy voice description -- kept as a fallback layer even when
   // structured data exists, since it may still hold useful free-text
   // color (tone adjectives etc.) that has no structured equivalent yet.
   if (profile.data?.voice_description) {
-    parts.push(`<brand_voice>${profile.data.voice_description}</brand_voice>`)
+    parts.push(promptBlock('brand_voice', profile.data.voice_description, { maxChars: 4_000, mode: 'policy' }))
     facts.push({ category: 'voice', label: 'Голос бренда (описание)' })
   }
 
@@ -180,19 +181,19 @@ export async function buildBrandSnapshot(
       const pains = a.pains?.length ? ` Боли: ${a.pains.slice(0, 3).join('; ')}.` : ''
       return `- ${a.name}${roles}.${pains}`
     })
-    parts.push(`<target_audiences>\n${lines.join('\n')}\n</target_audiences>`)
+    parts.push(promptBlock('target_audiences', lines.join('\n'), { maxChars: 8_000 }))
     for (const a of audiences.data) facts.push({ category: 'audience', label: a.name })
   }
 
   if (painPoints.data?.length) {
     const lines = painPoints.data.map((p) => `- ${p.canonical_name}: ${p.description ?? ''}`)
-    parts.push(`<audience_pain_points>\n${lines.join('\n')}\n</audience_pain_points>`)
+    parts.push(promptBlock('audience_pain_points', lines.join('\n'), { maxChars: 8_000 }))
     for (const p of painPoints.data) facts.push({ category: 'pain_point', label: p.canonical_name })
   }
 
   if (products.data?.length) {
     const lines = products.data.map((p) => `- ${p.name}${p.product_role ? ` [${p.product_role}]` : ''}: ${p.approved_definition ?? p.description ?? ''}`)
-    parts.push(`<products>\n${lines.join('\n')}\n</products>`)
+    parts.push(promptBlock('products', lines.join('\n'), { maxChars: 10_000 }))
     for (const p of products.data) facts.push({ category: 'product', label: p.name })
   }
 
@@ -204,11 +205,11 @@ export async function buildBrandSnapshot(
     const approved = claims.data.filter((c) => c.claim_type === 'approved' || c.claim_type === 'qualified')
     const forbidden = claims.data.filter((c) => c.claim_type === 'forbidden')
     if (approved.length) {
-      parts.push(`<approved_claims>\n${approved.map((c) => `- ${c.claim_text}${c.qualifier ? ` (${c.qualifier})` : ''}`).join('\n')}\n</approved_claims>`)
+      parts.push(promptBlock('approved_claims', approved.map((c) => `- ${c.claim_text}${c.qualifier ? ` (${c.qualifier})` : ''}`).join('\n'), { maxChars: 12_000, mode: 'policy' }))
       for (const c of approved) facts.push({ category: 'claim', label: c.claim_text.slice(0, 60) })
     }
     if (forbidden.length) {
-      parts.push(`<forbidden_claims>NEVER state these -- they are legally/factually prohibited for this brand:\n${forbidden.map((c) => `- ${c.claim_text}`).join('\n')}\n</forbidden_claims>`)
+      parts.push(promptBlock('forbidden_claims', `NEVER state these -- they are legally/factually prohibited for this brand:\n${forbidden.map((c) => `- ${c.claim_text}`).join('\n')}`, { maxChars: 12_000, mode: 'policy' }))
       for (const c of forbidden) facts.push({ category: 'claim', label: `⛔ ${c.claim_text.slice(0, 60)}` })
     }
   }
@@ -221,18 +222,18 @@ export async function buildBrandSnapshot(
     const forbidden = terms.data.filter((t) => t.policy === 'forbidden')
     const preferred = terms.data.filter((t) => t.policy === 'preferred')
     if (forbidden.length) {
-      parts.push(`<forbidden_terms>Never use these words/phrases${forbidden.some((t) => t.replacement) ? ' (use the replacement when given)' : ''}:\n${forbidden.map((t) => `- "${t.term}"${t.replacement ? ` → use "${t.replacement}" instead` : ''}`).join('\n')}\n</forbidden_terms>`)
+      parts.push(promptBlock('forbidden_terms', `Never use these words/phrases${forbidden.some((t) => t.replacement) ? ' (use the replacement when given)' : ''}:\n${forbidden.map((t) => `- "${t.term}"${t.replacement ? ` → use "${t.replacement}" instead` : ''}`).join('\n')}`, { maxChars: 12_000, mode: 'policy' }))
       for (const t of forbidden) facts.push({ category: 'term', label: `⛔ ${t.term}` })
     }
     if (preferred.length) {
-      parts.push(`<preferred_terms>Prefer these terms when relevant: ${preferred.map((t) => `"${t.term}"`).join(', ')}</preferred_terms>`)
+      parts.push(promptBlock('preferred_terms', `Prefer these terms when relevant: ${preferred.map((t) => `"${t.term}"`).join(', ')}`, { maxChars: 8_000, mode: 'policy' }))
       for (const t of preferred) facts.push({ category: 'term', label: t.term })
     }
   }
 
   if (pillars.data?.length) {
     const lines = pillars.data.map((p) => `- ${p.name}: ${p.purpose ?? ''}`)
-    parts.push(`<content_pillars>\n${lines.join('\n')}\n</content_pillars>`)
+    parts.push(promptBlock('content_pillars', lines.join('\n'), { maxChars: 8_000 }))
     for (const p of pillars.data) facts.push({ category: 'pillar', label: p.name })
   }
 
@@ -289,14 +290,14 @@ export async function buildBrandSnapshot(
 
       if (compiled.length) {
         const lines = compiled.map((r) => `- [${r.enforcement}] ${r.ruleClass}/${r.ruleKey} ${r.operator} ${JSON.stringify(r.value)}`)
-        parts.push(`<compliance_rules>These are hard constraints, not suggestions -- violating them is a compliance failure:\n${lines.join('\n')}\n</compliance_rules>`)
+        parts.push(promptBlock('compliance_rules', `These are hard constraints, not suggestions -- violating them is a compliance failure:\n${lines.join('\n')}`, { maxChars: 20_000, mode: 'policy' }))
         for (const r of compiled) facts.push({ category: 'rule', label: `${r.ruleClass}: ${r.ruleKey}` })
       }
     }
   }
 
   if (playbook && 'data' in playbook && playbook.data?.strategy_json && Object.keys(playbook.data.strategy_json).length > 0) {
-    parts.push(`<platform_playbook platform="${platform}">${JSON.stringify(playbook.data.strategy_json)}</platform_playbook>`)
+    parts.push(promptBlock('platform_playbook', JSON.stringify({ platform, strategy: playbook.data.strategy_json }), { maxChars: 12_000, mode: 'policy' }))
     facts.push({ category: 'playbook', label: `Плейбук: ${platform}` })
   }
 

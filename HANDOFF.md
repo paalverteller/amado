@@ -1459,3 +1459,58 @@ commit/push.
 
 **Next Fable phase:** Phase 4 — prompt-injection surface and validation.
 
+
+
+<!-- FABLE_REVIEW_PHASE4_20260909 -->
+## Fable review remediation — Phase 4: prompt boundaries and validation (2026-09-09)
+
+Phase 4 is now complete.
+
+**Prompt boundary hardening:**
+- `lib/prompt-safety.ts` is the shared boundary helper for untrusted and
+  semi-trusted prompt material. `promptBlock()` caps field size, escapes `&`,
+  `<` and `>`, validates static block tags, and distinguishes source/data blocks
+  from intentional lower-priority policy blocks.
+- The helper is wired through canonical generation plus the prompt-producing
+  paths for evidence, knowledge, competitor monitoring, Brand OS fields/rules,
+  platform playbooks, previous drafts/refinement notes, localization, rewrite,
+  AI checks, briefing, market analysis/translation and performance hypotheses.
+  Raw source text can no longer close an XML-like delimiter and inject a sibling
+  pseudo-system block.
+
+**Structured guideline extraction:**
+- `lib/brand-os/guideline-extractor.ts` no longer asks for free-form JSON and
+  regex-parses/`JSON.parse`s cleaned article text. It uses the current AI SDK 6
+  structured-output path (`generateText` + `Output.object`) with a Zod schema,
+  so enum/type/range failures are rejected before application code receives the
+  object.
+- Extracted `sourceQuote` values are accepted as reviewer-facing provenance only
+  when the exact quote exists in the imported source text. A miss removes the
+  quote and downgrades confidence one level.
+- The old template `.replace()` interpolation path was removed entirely, which
+  also eliminates JavaScript replacement-token expansion (`$&`, `$'`, `$\`` and
+  `$$`) from imported document text.
+
+**Guideline import boundary:**
+- `app/api/brands/[brandId]/guidelines/import/route.ts` validates document type,
+  platform, source type, URL, content size/title and locale with Zod. `sourceUrl`
+  is restricted to HTTP(S). A supplied locale must equal the brand region's
+  resolved locale; the stored locale is always pinned to that region instead of
+  trusting an independently supplied request value.
+
+**Supabase keepalive:**
+- The existing authenticated `/api/cron/ping` route remains the single keepalive
+  implementation and performs a real lightweight `rss_sources` query before
+  reporting success. Vercel invokes it daily at `0 3 * * *`, but the route applies a deterministic
+  UTC five-day gate before any Supabase call. Actual database activity therefore
+  occurs once every five days without month-boundary drift. This avoids adding a duplicate cron path.
+- The route continues to use `CRON_SECRET` and `cron_runs` logging. This is an
+  availability aid for Free-plan inactivity, not a substitute for a paid-plan
+  availability guarantee.
+
+**Verification contract:**
+`npm test`, `npm run build`, `node scripts/verify-amado-chain.mjs`,
+`node scripts/verify-august-ui.mjs`, and `git diff --check` must pass before
+commit/push.
+
+**Next Fable phase:** Phase 5 — `market-context.tsx` first-render correctness.

@@ -7,6 +7,7 @@ import { processKnowledgeAsset } from '@/lib/knowledge/process-asset'
 import { getErrorMessage } from '@/lib/api/error-message'
 import { resolveRegionProfile } from '@/lib/prompts'
 import { isMarketEvidenceEligible } from '@/lib/market-source-policy'
+import { promptBlock } from '@/lib/prompt-safety'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
@@ -107,7 +108,7 @@ EXECUTION CONSTRAINTS FOR AMADO:
 
     const result = await generateArticleWithFallback({
       systemPrompt,
-      userPrompt: `EVIDENCE PACK — ${regionProfile.name.toUpperCase()} — LAST 60 DAYS ONLY\n\n${evidenceBlock(rows)}`,
+      userPrompt: promptBlock('evidence_pack', evidenceBlock(rows), { maxChars: 80_000 }),
       maxOutputTokens: 8000,
     })
     await recordAiUsage('market_deep_analysis', result.model, result.usage)

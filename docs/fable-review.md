@@ -236,32 +236,39 @@ is an undocumented, silent failure mode hitting five files.
 
 ### Phase 4 — Prompt-injection surface and validation
 
-- [ ] Add one shared `promptBlock(tag, text, { maxChars })` helper
+- [x] Add one shared `promptBlock(tag, text, { maxChars })` helper
       that escapes `<`/`>` in interpolated text and truncates long
       fields; use it everywhere untrusted or semi-trusted text is
       interpolated into a prompt (competitor RSS text, evidence
       summaries, knowledge documents, brand fields, previous drafts,
       refinement notes, customInstructions).
-- [ ] `lib/brand-os/guideline-extractor.ts`: replace the current
-      regex-extraction + manual cast with AI SDK v6's `generateObject`
-      / `Output.object` against a zod schema, so malformed/partial LLM
+- [x] `lib/brand-os/guideline-extractor.ts`: replace the current
+      regex-extraction + manual cast with AI SDK v6 structured output
+      (`generateText` + `Output.object`) against a Zod schema, so malformed/partial LLM
       JSON is caught by validation instead of silently producing
       `undefined` fields that later fail a NOT NULL insert.
-- [ ] `lib/brand-os/guideline-extractor.ts`: verify `sourceQuote`
+- [x] `lib/brand-os/guideline-extractor.ts`: verify `sourceQuote`
       against the source text (`sourceText.includes(quote)`) and
       downgrade confidence on a miss, rather than trusting a
       potentially hallucinated quote shown to the human reviewer as
       evidence.
-- [ ] `lib/brand-os/guideline-extractor.ts`: replace the string-pattern
-      `.replace()` calls that interpolate `$&`/`` $` ``/`$'`/`$$` from
-      document text with a function replacer.
-- [ ] `app/api/brands/[brandId]/guidelines/import/route.ts`: validate
+- [x] `lib/brand-os/guideline-extractor.ts`: remove the string-pattern
+      template `.replace()` interpolation path that could interpret `$&`,
+      `` $` ``, `$'` and `$$` from document text. The extraction prompt is
+      now built from fixed instructions plus escaped `promptBlock()` values.
+- [x] `app/api/brands/[brandId]/guidelines/import/route.ts`: validate
       unchecked body fields (`documentType`, `platform`, `locale`,
       `sourceType`, `sourceUrl`) instead of casting with `as`; decide
       whether `locale` should be validated against the brand's region
       or dropped as a field entirely (currently the extractor ignores
       it and derives language from the brand's region regardless of
-      what's stored).
+      what's stored). Phase 4 validates it against the resolved brand
+      locale and stores that resolved locale as the canonical value.
+
+Phase 4 also reuses the existing authenticated `/api/cron/ping` route as a
+Supabase keepalive. Vercel invokes it daily at `0 3 * * *`, while the route gates
+all Supabase activity to one deterministic UTC run every five days before any
+database call; successful keepalive runs are recorded in `cron_runs`.
 
 ### Phase 5 — `market-context.tsx` first-render correctness
 

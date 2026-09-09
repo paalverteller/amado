@@ -14,6 +14,7 @@ import { buildSourceConnector } from '@/lib/ingestion/types'
 import { generateWithFallback } from '@/lib/ai'
 import { isFeatureEnabled } from '@/lib/amado-config'
 import { getErrorMessage } from '@/lib/api/error-message'
+import { promptBlock } from '@/lib/prompt-safety'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -101,7 +102,7 @@ async function translateOne(item: CandidateRow): Promise<(TResult & { id: string
         'Заголовок: [русский заголовок]',
         'Резюме: [краткое описание главного вывода]',
       ].join('\n'),
-      userPrompt: `Title: ${srcTitle}\nPreview: ${srcDesc}`,
+      userPrompt: promptBlock('source_article', `Title: ${srcTitle}\nPreview: ${srcDesc}`, { maxChars: 1_000 }),
       maxOutputTokens: 400,
     })
 

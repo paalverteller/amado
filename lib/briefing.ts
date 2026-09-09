@@ -3,6 +3,7 @@ import { generateArticleWithFallback } from '@/lib/ai'
 import { getErrorMessage } from '@/lib/api/error-message'
 import { recordAiUsage, checkDailyAiBudget } from '@/lib/ai-usage'
 import { isMarketEvidenceEligible } from '@/lib/market-source-policy'
+import { promptBlock } from '@/lib/prompt-safety'
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const CANDIDATE_WINDOW_HOURS = 48
@@ -138,7 +139,7 @@ async function rankAndExplain(candidates: CandidateRow[]): Promise<{ items: Rank
     '(самый важный первым). Не придумывай материалы, которых нет в списке.',
   ].join('\n')
 
-  const userPrompt = buildCandidateBlock(candidates)
+  const userPrompt = promptBlock('candidate_evidence', buildCandidateBlock(candidates), { maxChars: 40_000 })
 
   const result = await generateArticleWithFallback({ systemPrompt, userPrompt, maxOutputTokens: 2000 })
   await recordAiUsage('briefing', result.model, result.usage)
