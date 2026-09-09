@@ -62,3 +62,30 @@ Do not implement autonomously:
 ## Completed boundary
 
 Fable remediation Phases 0–6 are complete as of 2026-09-09. Phase 5 removed fake-region first-render behavior across market-scoped workspaces. Phase 6 made competitor CRUD/load states race-safe and accessible, then extended competitor intelligence with shared official sources plus independent regional mentions. Do not reopen them without a regression or new evidence. Full findings and historical remediation detail remain in `docs/fable-review.md` and `HANDOFF.md`.
+<!-- MARKET_INTELLIGENCE_POST_SPRINT_20260909 -->
+
+## Next work after Market Intelligence sprint
+
+### Source quality and observability
+- Add source-health scoring that separates availability, freshness, extraction success, duplicate rate, and evidence yield.
+- Add per-region source coverage diagnostics for BR, ES, DE, and US.
+- Surface stale/dead/low-yield sources in Settings with actionable remediation instead of silent degradation.
+- Add source-level collection metrics and trend history so weak sources can be replaced based on evidence.
+- Review curated sources periodically for relevance to B2B software, CRM, task/project management, ERP, real estate, accounting/finance, AI, SMEs/Mittelstand, marketing, and digital business.
+
+### Competitor intelligence depth
+- Add a competitor activity timeline that merges official company updates with independent regional mentions.
+- Add review history comparison so AI can identify what changed since the previous competitor review.
+- Add structured competitor signals for product, AI, pricing, partnerships, positioning, GTM, hiring, and market expansion.
+- Add explicit source provenance in competitor-review UI so users can distinguish company-owned claims from independent evidence.
+- Add source coverage for competitors that currently rely only on independent market mentions and do not yet have an official source.
+
+### Brand OS / market context
+- Deepen Brand OS market-specific context so generation can consume region-aware competitor, source, positioning, and evidence signals consistently.
+- Add observability for unresolved/stale market cookies and region-switch race conditions.
+- Consider focus/visibility re-read of market context only if real production evidence shows stale-tab issues.
+
+### Product / UX follow-up
+- Run one full production UI pass after deployment for Quick Create, Market, Competitors, Settings, Localization, Rewrite, Brand, Generate, SEO Generate, Ideas, and Market Analysis across all four regions.
+- Add targeted E2E coverage for market switching during in-flight requests and Quick Create region safety.
+- Add E2E coverage for competitor creation, source linking, review generation, and failure-visible states.

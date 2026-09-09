@@ -1567,3 +1567,39 @@ Fable Phases 5 and 6 are complete in this sprint.
 
 **Required verification:**
 `npm test`, `npm run build`, `node scripts/verify-market-intelligence-sprint.mjs`, `node scripts/verify-august-ui.mjs`, `node scripts/verify-multimarket-localization.mjs`, `node scripts/verify-amado-chain.mjs`, and `git diff --check`.
+<!-- MARKET_INTELLIGENCE_SPRINT_20260909_FINAL -->
+
+## 2026-09-09 — Market intelligence / competitor sprint finalized
+
+Status: completed and production-ready.
+
+What changed:
+- Market context no longer exposes a fake BR fallback region while `/api/regions` is unresolved.
+- Market-scoped workspaces now wait for resolved market state before fetching or mutating regional data.
+- Quick Create submits only a real region UUID and blocks submission while market context is unresolved.
+- AugustDialog gained focus trapping, Escape handling, focus restore, body-scroll lock, and improved ARIA wiring.
+- Competitors UX now has explicit loading/error/empty states, safer mutation handling, semantic controls, accessible source health, and region-safe creation.
+- Competitor creation resolves the active/default Brand OS for the selected region instead of relying on a global/default brand.
+- Competitor source architecture now supports many-to-many links through `competitor_source_links` while preserving the legacy `rss_sources.competitor_id` path.
+- Competitor review combines official company evidence with independent regional market evidence and labels the evidence type in the AI prompt.
+- Competitor ingestion preserves company-news signals such as press releases, investor-relations items, shareholder news, and quarterly results instead of dropping them as generic noise.
+- Curated market sources and competitor sets were expanded for BR, ES, DE, and US.
+- Market-context tests were added.
+- Localization and Market nullable-region TypeScript regressions were fixed after the sprint.
+- Settings now imports `useCallback` correctly.
+- Global CSS import ordering was corrected so the production build no longer emits the Google Fonts `@import` ordering warning.
+
+Validation completed:
+- `npm test`: 15 test files / 174 tests passed.
+- `npm run build`: passed after the final TypeScript fixes.
+- Supabase market-intelligence SQL: applied successfully in Supabase SQL Editor.
+- Repository delivery files are expected to be uploaded to the repository root; patch scripts must relocate canonical files themselves when needed.
+
+Supabase production rule:
+- Do not run historical `supabase db push` against production.
+- For production changes, provide one ready-to-run SQL block for Supabase SQL Editor.
+- This sprint introduced `supabase/migrations/047_competitor_source_links.sql` and `supabase/seeds/009_market_intelligence_sprint_20260909.sql` as the canonical repository records for the applied SQL.
+
+Delivery convention:
+- The operator uploads patch/SQL/delivery files to the repository root.
+- Automation/patch scripts must assume root-first delivery and move files to canonical paths themselves when required.
