@@ -1415,3 +1415,47 @@ current provider strategy.
 `npm test`, `npm run build`, `node scripts/verify-amado-chain.mjs`,
 `node scripts/verify-august-ui.mjs`, and `git diff --check` must all pass before
 commit/push.
+
+<!-- FABLE_REVIEW_PHASE3B_20260909 -->
+## Fable review remediation — Phase 3B: stale processing ownership (2026-09-09)
+
+Phase 3 is now complete.
+
+**What changed:**
+- `lib/stale-processing.ts` defines the operational policy for stuck status
+  machines. A row is stale after 15 minutes in `processing`, intentionally far
+  above the 60-second synchronous guideline/generation request budget.
+- `/api/admin/runtime-health` now exposes stale `content_requests` and
+  `guideline_import_runs` counts, oldest timestamps and small ID samples. A
+  stale row makes the top-level runtime `ok` flag false without pretending the
+  database itself is unavailable.
+- `/api/cron/stale-processing` is authenticated with the shared cron guard,
+  records every run through `cron_runs`, and conditionally reaps only rows that
+  are still `processing` and still older than the cutoff at update time. The
+  cron runs daily at 03:15 UTC.
+- Reaping moves stale `content_requests` to `failed` with a deterministic
+  `error_message`, and stale `guideline_import_runs` to `failed` with
+  `error_summary.code = stale_processing_timeout`. It does not rewrite
+  completed/review rows and does not revive rows that changed state during the
+  check.
+- While wiring the reaper, a pre-existing queue-state bug was found in
+  `app/api/content-requests/process/route.ts`: every successful queued request
+  was left in `processing` forever because the route only reported
+  `status: completed` in its response and never persisted that transition.
+  The route now atomically claims pending rows, stamps `updated_at` at claim
+  time, persists `completed` after a successful canonical generation call, and
+  constrains recovery updates to rows that are still `processing`.
+
+**Operational invariant:**
+`content_requests.updated_at` is the processing-age clock for content requests;
+`guideline_import_runs.created_at` is the processing-age clock for guideline
+imports. Any future code path that moves an existing content request into
+`processing` must stamp `updated_at` in the same write.
+
+**Verification contract:**
+`npm test`, `npm run build`, `node scripts/verify-amado-chain.mjs`,
+`node scripts/verify-august-ui.mjs`, and `git diff --check` must pass before
+commit/push.
+
+**Next Fable phase:** Phase 4 — prompt-injection surface and validation.
+

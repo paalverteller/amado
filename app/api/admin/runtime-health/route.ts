@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getSupabaseRuntimeInfo } from '@/lib/supabase/client'
 import { getAiRuntimeInfo } from '@/lib/ai-utils'
 import { getErrorMessage } from '@/lib/api/error-message'
+import { inspectStaleProcessing } from '@/lib/stale-processing'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,10 +18,12 @@ export async function GET(): Promise<NextResponse> {
       { count: brands, error: brandsError },
       { count: sources, error: sourcesError },
       { count: competitors, error: competitorsError },
+      staleProcessing,
     ] = await Promise.all([
       admin.from('brand_profiles').select('id', { count: 'exact', head: true }),
       admin.from('rss_sources').select('id', { count: 'exact', head: true }),
       admin.from('competitors').select('id', { count: 'exact', head: true }),
+      inspectStaleProcessing(),
     ])
 
     const errors = [brandsError, sourcesError, competitorsError]
@@ -31,7 +34,7 @@ export async function GET(): Promise<NextResponse> {
 
     return NextResponse.json(
       {
-        ok: databaseOk && ai.googleConfigured,
+        ok: databaseOk && ai.googleConfigured && staleProcessing.total === 0,
         database: {
           ok: databaseOk,
           supabase,
@@ -43,6 +46,9 @@ export async function GET(): Promise<NextResponse> {
           errors,
         },
         ai,
+        operations: {
+          staleProcessing,
+        },
         deployment: {
           gitCommit: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
           environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? null,

@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/briefing",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/stale-processing",
+      "schedule": "15 3 * * *"
     }
   ]
 }

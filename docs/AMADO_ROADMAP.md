@@ -24,15 +24,19 @@ DB errors or uncurated regions into a silent Brazil default). See
 `FABLE_REVIEW_PHASE2_20260908`, and the `FABLE_REVIEW_CLOSEOUT_20260909`
 entry for full detail and verification methodology.
 
-**Phase 3 in progress (2026-09-09):** Phase 3A closes the core generation
+**Phase 3 complete (2026-09-09):** Phase 3A closed the core generation
 reliability items: AI SDK 6 `maxOutputTokens`, deterministic Google fallback
 order, timeout/5xx cooldown, aborting provider timeouts, content-filter
 fail-fast, task-aware extraction budgets, a shared request deadline across the
-canonical generation flow, and parallel pre-generation context assembly. See
-`HANDOFF.md` tag `FABLE_REVIEW_PHASE3A_20260909`.
+canonical generation flow, and parallel pre-generation context assembly.
+Phase 3B closes the status-machine gap: stale `content_requests` and
+`guideline_import_runs` are visible in runtime health and reaped by a guarded
+cron after a conservative 15-minute threshold; the legacy content-request queue
+also now returns successfully processed rows to `completed` instead of leaving
+them permanently in `processing`. See `HANDOFF.md` tags
+`FABLE_REVIEW_PHASE3A_20260909` and `FABLE_REVIEW_PHASE3B_20260909`.
 
-**Remaining before returning to the priorities below:** finish Phase 3 with
-stale `processing` row visibility/reaping, then Phase 4 prompt-injection
+**Remaining before returning to the priorities below:** Phase 4 prompt-injection
 hardening, Phase 5 `market-context.tsx` first-render correctness, and Phase 6
 `app/competitors/page.tsx` correctness/accessibility.
 

@@ -224,10 +224,15 @@ is an undocumented, silent failure mode hitting five files.
       context-building calls (evidence, system prompt, brand snapshot,
       region layer/profile, knowledge, competitor, playbook) with
       `Promise.all` instead of ~8 serial awaits.
-- [ ] Add a stale-row detection rule (view or scheduled check) for
+- [x] Add a stale-row detection rule (view or scheduled check) for
       `content_requests` and `guideline_import_runs` stuck in
       `processing` past a reasonable timeout, so stranded rows are
-      visible instead of silent.
+      visible instead of silent. Phase 3B adds a 15-minute policy,
+      exposes current stale counts/samples in `/api/admin/runtime-health`,
+      and runs an authenticated daily reaper that records its result in
+      `cron_runs`. The legacy content-request queue now stamps processing
+      start time and moves successful queue rows to `completed`, preventing
+      its previous systematic false-stale state.
 
 ### Phase 4 — Prompt-injection surface and validation
 
