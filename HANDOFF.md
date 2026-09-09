@@ -1537,3 +1537,33 @@ This session completed Fable remediation Phases 3 and 4 and prepared the reposit
 3. Return to source quality, market-specific Brand OS depth, performance learning, social experiments and E2E coverage.
 
 `docs/AMADO_ROADMAP.md` has been reduced to remaining work only. Historical detail stays in Git and `docs/fable-review.md`.
+
+<!-- MARKET_INTELLIGENCE_SPRINT_20260909 -->
+## Market intelligence + frontend hardening sprint — 2026-09-09
+
+Fable Phases 5 and 6 are complete in this sprint.
+
+**Frontend / market correctness:**
+- `lib/market-context.tsx` no longer exposes a fake `br-fallback` id. It resolves the persisted market only after active regions load, validates stale cookies, exposes `ready`, and memoizes the context.
+- Market-scoped workspaces now wait for a resolved region and cancel stale requests on market changes where applicable. This includes Generate, SEO, Market, deep analysis, Ideas, Localization, Rewrite, Brand, Competitors and Settings.
+- Quick Create never submits an unresolved/fake region and shows market/generation failures through the August feedback system.
+- `AugustDialog` now traps focus, restores focus to the opener and keeps Escape/backdrop behavior. Competitor cards use semantic buttons/labels, explicit loading/error/empty states and visible source-health text.
+
+**Market intelligence sources:**
+- `supabase/seeds/009_market_intelligence_sprint_20260909.sql` refreshes compact BR/ES/DE/US source sets around B2B software, AI, digital business, SMB/Mittelstand, CRM/work management/ERP and adjacent marketing/buyer signals.
+- The seed is additive/idempotent and preserves historical evidence. Do not use historical `supabase db push` to install it in production; apply the reviewed migration/seed SQL explicitly.
+
+**Competitor intelligence:**
+- `supabase/migrations/047_competitor_source_links.sql` adds the many-to-many competitor/source relation and backfills legacy one-to-one links. This is required because `rss_sources.url` is globally unique while Salesforce/HubSpot/etc. are tracked in multiple markets.
+- The seed establishes 12 active competitors per BR/ES/DE/US, aligned to CRM, work/project management, ERP, accounting/finance and real-estate software.
+- Competitor reviews now merge two provenance layers for the last 30 days: linked official company sources and independent mentions from active sources in that competitor’s market. AI is explicitly told not to treat owned/PR claims as independent confirmation.
+- Competitor ingestion preserves company-news signals such as press releases, investor relations and quarterly results that the general-market noise filter intentionally suppresses.
+
+**Production order:**
+1. Apply `047_competitor_source_links.sql` in Supabase.
+2. Apply `009_market_intelligence_sprint_20260909.sql` and review its verification queries.
+3. Run code verification.
+4. Commit/push; Vercel deploy remains automatic.
+
+**Required verification:**
+`npm test`, `npm run build`, `node scripts/verify-market-intelligence-sprint.mjs`, `node scripts/verify-august-ui.mjs`, `node scripts/verify-multimarket-localization.mjs`, `node scripts/verify-amado-chain.mjs`, and `git diff --check`.

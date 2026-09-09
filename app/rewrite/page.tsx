@@ -13,8 +13,8 @@ const INTENSITIES = [
 type Intensity = typeof INTENSITIES[number]['id']
 
 export default function RewritePage() {
-  const { regions, marketCode } = useMarket()
-  const currentRegionId = regions.find((region) => region.code === marketCode)?.id ?? null
+  const { currentRegion, ready: marketReady, error: marketError } = useMarket()
+  const currentRegionId = currentRegion?.id ?? null
   const [sourceText, setSourceText]   = useState('')
   const [intensity, setIntensity]     = useState<Intensity>('deep')
   const [rewritten, setRewritten]     = useState('')
@@ -28,6 +28,11 @@ export default function RewritePage() {
     setRewritten('')
     setUniqueness(null)
 
+    if (!marketReady || !currentRegionId) {
+      setError(marketError ?? 'Рынок ещё не загружен')
+      return
+    }
+
     if (sourceText.trim().length < 200) {
       setError('Текст слишком короткий: минимум 200 знаков')
       return
@@ -38,7 +43,7 @@ export default function RewritePage() {
       const res = await fetch('/api/rewrite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceText: sourceText.trim(), intensity, regionId: currentRegionId || undefined }),
+        body: JSON.stringify({ sourceText: sourceText.trim(), intensity, regionId: currentRegionId }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Не удалось переписать текст')
@@ -148,7 +153,7 @@ export default function RewritePage() {
         <button
           type="button"
           onClick={handleRewrite}
-          disabled={loading || sourceText.trim().length < 200}
+          disabled={loading || !marketReady || !currentRegionId || sourceText.trim().length < 200}
           className="m3-button-filled w-full h-12 text-base disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {loading ? 'Переписываю…' : 'Переписать'}

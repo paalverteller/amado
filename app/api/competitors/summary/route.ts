@@ -5,10 +5,6 @@ import type { CompetitorSummary } from '@/lib/domain/competitor'
 
 export const dynamic = 'force-dynamic'
 
-// Lightweight, read-only rollup for the Market page's "Конкуренты" section.
-// Reuses the same tables as /api/competitors/[id] (rss_sources, knowledge_assets)
-// but batches across all active competitors in a handful of queries instead of
-// one round-trip per card, since the Market page renders every competitor at once.
 const MAX_COMPETITORS = 12
 
 type CompetitorRow = {
@@ -20,6 +16,7 @@ type CompetitorRow = {
 }
 
 type SourceRow = {
+  id: string
   competitor_id: string | null
   active: boolean | null
   health_status: string | null
@@ -53,21 +50,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (brandId) {
       competitorQuery = competitorQuery.eq('brand_id', brandId)
     } else if (regionId) {
-      // Sprint 12 Phase 4: competitors have no region_id of their own --
-      // they inherit their market through the brand they're tracked
-      // against (see supabase/migrations/*_competitors.sql: only brand_id
-      // is a FK). Resolve the region's brand ids first, then scope
-      // competitors to those. A brand with no competitors of its own
-      // (region has brands but nobody tracks anyone yet) correctly yields
-      // an empty list here rather than falling back to showing every
-      // competitor across every market.
-      const { data: brandsInRegion, error: brandsError } = await admin
-        .from('brand_profiles')
-        .select('id')
-        .eq('region_id', regionId)
+      const { data: brandsInRegion, error: brandsError } = await admin.from('brand_profiles').select('id').eq('region_id', regionId)
       if (brandsError) return NextResponse.json({ error: brandsError.message }, { status: 500 })
-
-      const brandIds = (brandsInRegion ?? []).map((b: { id: string }) => b.id)
+      const brandIds = (brandsInRegion ?? []).map((brand: { id: string }) => brand.id)
       if (brandIds.length === 0) return NextResponse.json({ competitors: [] })
       competitorQuery = competitorQuery.in('brand_id', brandIds)
     }
@@ -77,14 +62,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const rows = (competitors ?? []) as CompetitorRow[]
     if (rows.length === 0) return NextResponse.json({ competitors: [] })
+    const ids = rows.map((competitor) => competitor.id)
 
-    const ids = rows.map((c) => c.id)
-
-    const [sourcesRes, reviewsRes] = await Promise.all([
-      admin
-        .from('rss_sources')
-        .select('competitor_id, active, health_status')
-        .in('competitor_id', ids),
+    const [directSourcesResult, linksResult, reviewsResult] = await Promise.all([
+      admin.from('rss_sources').select('id, competitor_id, active, health_status').in('competitor_id', ids),
+      admin.from('competitor_source_links').select('competitor_id, source_id').in('competitor_id', ids),
       admin
         .from('knowledge_assets')
         .select('competitor_id, title, raw_text, created_at')
@@ -93,44 +75,57 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         .order('created_at', { ascending: false }),
     ])
 
-    if (sourcesRes.error) return NextResponse.json({ error: sourcesRes.error.message }, { status: 500 })
-    if (reviewsRes.error) return NextResponse.json({ error: reviewsRes.error.message }, { status: 500 })
+    if (directSourcesResult.error) return NextResponse.json({ error: directSourcesResult.error.message }, { status: 500 })
+    if (linksResult.error) return NextResponse.json({ error: linksResult.error.message }, { status: 500 })
+    if (reviewsResult.error) return NextResponse.json({ error: reviewsResult.error.message }, { status: 500 })
 
-    const sourcesByCompetitor = new Map<string, SourceRow[]>()
-    for (const s of (sourcesRes.data ?? []) as SourceRow[]) {
-      if (!s.competitor_id) continue
-      const list = sourcesByCompetitor.get(s.competitor_id) ?? []
-      list.push(s)
-      sourcesByCompetitor.set(s.competitor_id, list)
+    const linkedSourceIds = Array.from(new Set((linksResult.data ?? []).map((row: { source_id: string }) => row.source_id)))
+    const linkedSourcesResult = linkedSourceIds.length > 0
+      ? await admin.from('rss_sources').select('id, active, health_status').in('id', linkedSourceIds)
+      : { data: [], error: null }
+    if (linkedSourcesResult.error) return NextResponse.json({ error: linkedSourcesResult.error.message }, { status: 500 })
+
+    const linkedSourceById = new Map<string, Omit<SourceRow, 'competitor_id'>>()
+    for (const source of (linkedSourcesResult.data ?? []) as Array<Omit<SourceRow, 'competitor_id'>>) linkedSourceById.set(source.id, source)
+
+    const sourcesByCompetitor = new Map<string, Map<string, SourceRow>>()
+    function addSource(competitorId: string, source: SourceRow) {
+      const map = sourcesByCompetitor.get(competitorId) ?? new Map<string, SourceRow>()
+      map.set(source.id, source)
+      sourcesByCompetitor.set(competitorId, map)
     }
 
-    // Reviews are ordered newest-first, so the first match per competitor is the latest.
+    for (const source of (directSourcesResult.data ?? []) as SourceRow[]) {
+      if (source.competitor_id) addSource(source.competitor_id, source)
+    }
+    for (const link of (linksResult.data ?? []) as Array<{ competitor_id: string; source_id: string }>) {
+      const source = linkedSourceById.get(link.source_id)
+      if (source) addSource(link.competitor_id, { ...source, competitor_id: link.competitor_id })
+    }
+
     const latestReviewByCompetitor = new Map<string, ReviewRow>()
-    for (const r of (reviewsRes.data ?? []) as ReviewRow[]) {
-      if (!r.competitor_id || latestReviewByCompetitor.has(r.competitor_id)) continue
-      latestReviewByCompetitor.set(r.competitor_id, r)
+    for (const review of (reviewsResult.data ?? []) as ReviewRow[]) {
+      if (!review.competitor_id || latestReviewByCompetitor.has(review.competitor_id)) continue
+      latestReviewByCompetitor.set(review.competitor_id, review)
     }
 
-    const summaries: CompetitorSummary[] = rows.map((c) => {
-      const sources = sourcesByCompetitor.get(c.id) ?? []
-      const activeSources = sources.filter((s) => s.active !== false)
-      const review = latestReviewByCompetitor.get(c.id) ?? null
-
+    const summaries: CompetitorSummary[] = rows.map((competitor) => {
+      const sources = Array.from(sourcesByCompetitor.get(competitor.id)?.values() ?? [])
+      const activeSources = sources.filter((source) => source.active !== false)
+      const review = latestReviewByCompetitor.get(competitor.id) ?? null
       return {
-        id: c.id,
-        name: c.name,
-        website: c.website,
-        lastReviewedAt: c.last_reviewed_at,
+        id: competitor.id,
+        name: competitor.name,
+        website: competitor.website,
+        lastReviewedAt: competitor.last_reviewed_at,
         sourceCount: activeSources.length,
-        healthySourceCount: activeSources.filter((s) => s.health_status === 'healthy').length,
-        latestReview: review
-          ? { title: review.title, snippet: snippet(review.raw_text), createdAt: review.created_at }
-          : null,
+        healthySourceCount: activeSources.filter((source) => source.health_status === 'healthy').length,
+        latestReview: review ? { title: review.title, snippet: snippet(review.raw_text), createdAt: review.created_at } : null,
       }
     })
 
     return NextResponse.json({ competitors: summaries })
-  } catch (err) {
-    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
+  } catch (error) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 })
   }
 }

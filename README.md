@@ -10,7 +10,7 @@ Amado is an AI-first marketing workspace for teams that research markets, manage
 - Brand OS is market-specific.
 - Social content uses platform-specific Brand OS playbooks.
 - General market intelligence excludes politics, elections, sport and entertainment noise.
-- Competitor monitoring is a separate evidence workflow and is not filtered out at ingestion.
+- Competitor monitoring is a separate evidence workflow. Reviews combine linked official company sources with independent mentions found in the selected market’s evidence.
 - Production deployment: Vercel.
 - Database: Supabase/Postgres with pgvector.
 
@@ -95,7 +95,9 @@ The market pipeline intentionally excludes:
 
 Business-relevant regulation, privacy, taxation, labour and macroeconomic coverage may remain eligible.
 
-Region filtering is applied when automatic evidence is selected for generation.
+Region filtering is applied when automatic evidence is selected for generation. Market-scoped client workspaces wait until the selected region is resolved before requesting data; there is no fallback pseudo-region.
+
+Competitor intelligence uses a many-to-many `competitor_source_links` relation so one global company newsroom can support the same competitor across multiple market-specific Brand OS profiles. Official/owned evidence and independent market mentions are labeled separately before AI synthesis.
 
 ## Brand OS
 
@@ -149,6 +151,7 @@ Current important verifiers include:
 - `scripts/verify-mvp-runtime.mjs`
 - `scripts/verify-multimarket-localization.mjs`
 - `scripts/verify-social-source-sprint.mjs`
+- `scripts/verify-market-intelligence-sprint.mjs`
 
 ## Development rules
 

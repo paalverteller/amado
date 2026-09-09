@@ -1,29 +1,6 @@
 'use client'
 
-/**
- * Amado — Sprint 12 Phase 2: selected-market client state.
- *
- * This is deliberately separate from lib/i18n/config.ts's Locale/t()
- * system. That system controls the UI language (ru/pt-BR/en labels).
- * This module controls which *market/region* the workspace is scoped to
- * (Brazil, Spain, ...) -- an independent axis. Do not merge them: the
- * project convention (see HANDOFF.md) is UI language and content
- * market/language are never conflated.
- *
- * Storage: a plain cookie, not the unused `user_preferences` table.
- * Reasoning: there is no per-user session model in this app (single shared
- * ACCESS_PASSWORD, see proxy.ts) -- there is no user row to key a
- * `user_preferences` record against. A cookie is the honest fit for
- * "this browser's chosen market" today. If real per-user accounts ever
- * land, migrating this to `user_preferences` is a small, isolated change
- * (one function: getStoredMarket/setStoredMarket below).
- *
- * IMPORTANT — scope of this phase: this module only stores and broadcasts
- * the *selection*. It does not yet change generation, prompts, or any API
- * route's query filtering (that's Phase 3/4, see docs/AMADO_ROADMAP.md).
- */
-
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 
 export type MarketRegion = {
   id: string
@@ -36,8 +13,6 @@ export const DEFAULT_MARKET_CODE = 'BR'
 const COOKIE_NAME = 'amado_market'
 const COOKIE_MAX_AGE_DAYS = 365
 
-// Small hand-maintained map so the switcher can show a flag without a
-// schema change. Extend when a new region is added in a later phase.
 export const MARKET_FLAGS: Record<string, string> = {
   BR: '🇧🇷',
   ES: '🇪🇸',
@@ -48,10 +23,10 @@ export const MARKET_FLAGS: Record<string, string> = {
   GB: '🇬🇧',
 }
 
-export function getStoredMarketCode(): string {
-  if (typeof document === 'undefined') return DEFAULT_MARKET_CODE
+export function getStoredMarketCode(): string | null {
+  if (typeof document === 'undefined') return null
   const match = document.cookie.match(/(?:^|;\s*)amado_market=([^;]+)/)
-  return match ? decodeURIComponent(match[1]) : DEFAULT_MARKET_CODE
+  return match ? decodeURIComponent(match[1]) : null
 }
 
 export function setStoredMarketCode(code: string): void {
@@ -60,55 +35,95 @@ export function setStoredMarketCode(code: string): void {
   document.cookie = `${COOKIE_NAME}=${encodeURIComponent(code)}; path=/; max-age=${maxAge}; SameSite=Lax`
 }
 
+export function resolveMarketCode(storedCode: string | null, regions: MarketRegion[]): string | null {
+  if (regions.length === 0) return null
+  if (storedCode && regions.some((region) => region.code === storedCode)) return storedCode
+  if (regions.some((region) => region.code === DEFAULT_MARKET_CODE)) return DEFAULT_MARKET_CODE
+  return regions[0].code
+}
+
 type MarketContextValue = {
-  marketCode: string
+  marketCode: string | null
   regions: MarketRegion[]
+  currentRegion: MarketRegion | null
   loading: boolean
+  ready: boolean
+  error: string | null
   setMarketCode: (code: string) => void
 }
 
 const MarketContext = createContext<MarketContextValue | null>(null)
 
-/** Mount once near the app shell root. Fetches active regions from
- *  /api/regions and reads/writes the selection cookie. Falls back to a
- *  single-entry Brazil list if the fetch fails, so the switcher always
- *  renders something usable even offline. */
+/**
+ * Resolves the selected market before exposing a usable region to consumers.
+ * Market-scoped screens must wait for `ready` instead of issuing an unfiltered
+ * request during hydration. There is deliberately no fake Brazil UUID.
+ */
 export function useMarketState(): MarketContextValue {
-  const [marketCode, setMarketCodeState] = useState<string>(DEFAULT_MARKET_CODE)
-  const [regions, setRegions] = useState<MarketRegion[]>([{ id: 'br-fallback', code: 'BR', name: 'Brasil' }])
+  const [marketCode, setMarketCodeState] = useState<string | null>(null)
+  const [regions, setRegions] = useState<MarketRegion[]>([])
   const [loading, setLoading] = useState(true)
+  const [ready, setReady] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    setMarketCodeState(getStoredMarketCode())
-  }, [])
+    const controller = new AbortController()
 
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/regions')
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('failed'))))
-      .then((data: { regions?: MarketRegion[] }) => {
-        if (cancelled) return
-        if (Array.isArray(data.regions) && data.regions.length > 0) {
-          setRegions(data.regions)
-        }
-      })
-      .catch(() => {
-        // keep the Brazil-only fallback already in state
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
+    async function loadRegions() {
+      setLoading(true)
+      setReady(false)
+      setError(null)
+
+      try {
+        const storedCode = getStoredMarketCode()
+        const response = await fetch('/api/regions', { cache: 'no-store', signal: controller.signal })
+        const data = await response.json().catch(() => ({})) as { regions?: MarketRegion[]; error?: string }
+        if (!response.ok) throw new Error(data.error ?? 'Не удалось загрузить рынки')
+
+        const activeRegions = Array.isArray(data.regions) ? data.regions : []
+        if (activeRegions.length === 0) throw new Error('Нет доступных рынков')
+
+        const resolvedCode = resolveMarketCode(storedCode, activeRegions)
+        if (!resolvedCode) throw new Error('Не удалось определить рынок')
+
+        setRegions(activeRegions)
+        setMarketCodeState(resolvedCode)
+        if (storedCode !== resolvedCode) setStoredMarketCode(resolvedCode)
+        setReady(true)
+      } catch (loadError) {
+        if (controller.signal.aborted) return
+        setRegions([])
+        setMarketCodeState(null)
+        setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить рынки')
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
     }
+
+    void loadRegions()
+    return () => controller.abort()
   }, [])
 
   const setMarketCode = useCallback((code: string) => {
+    if (!regions.some((region) => region.code === code)) return
     setMarketCodeState(code)
     setStoredMarketCode(code)
-  }, [])
+  }, [regions])
 
-  return { marketCode, regions, loading, setMarketCode }
+  const currentRegion = useMemo(
+    () => regions.find((region) => region.code === marketCode) ?? null,
+    [marketCode, regions],
+  )
+
+  return useMemo(() => ({
+    marketCode,
+    regions,
+    currentRegion,
+    loading,
+    ready,
+    error,
+    setMarketCode,
+  }), [marketCode, regions, currentRegion, loading, ready, error, setMarketCode])
 }
 
 export function MarketProvider({ children }: { children: React.ReactNode }) {
@@ -116,9 +131,6 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
   return <MarketContext.Provider value={value}>{children}</MarketContext.Provider>
 }
 
-/** Read the current market selection from anywhere under MarketProvider.
- *  Throws in dev if used outside the provider, matching the project's
- *  existing pattern for scoped context hooks. */
 export function useMarket(): MarketContextValue {
   const ctx = useContext(MarketContext)
   if (!ctx) throw new Error('useMarket must be used within MarketProvider')

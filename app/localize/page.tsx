@@ -17,8 +17,7 @@ const TARGET_LOCALES: Record<string, { locale: string; label: string }> = {
 }
 
 export default function LocalizePage() {
-  const { regions, marketCode } = useMarket()
-  const currentRegion = regions.find((region) => region.code === marketCode)
+  const { currentRegion, marketCode, ready: marketReady, error: marketError } = useMarket()
   const currentRegionId = currentRegion?.id ?? null
   const target = TARGET_LOCALES[marketCode] ?? {
     locale: currentRegion?.code ?? marketCode,
@@ -36,26 +35,41 @@ export default function LocalizePage() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    let cancelled = false
+    if (!marketReady || !currentRegionId) {
+      setBrands([])
+      setBrandId('')
+      return
+    }
+    const controller = new AbortController()
     Promise.all([
-      fetch('/api/prompts?contentType=localization', { cache: 'no-store' }).then((r) => r.json()),
-      fetch(currentRegionId ? `/api/brand-profiles?region_id=${encodeURIComponent(currentRegionId)}` : '/api/brand-profiles', { cache: 'no-store' }).then((r) => r.json()),
+      fetch('/api/prompts?contentType=localization', { cache: 'no-store', signal: controller.signal }).then(async (response) => {
+        if (!response.ok) throw new Error('Не удалось загрузить промпты локализации')
+        return response.json()
+      }),
+      fetch(`/api/brand-profiles?region_id=${encodeURIComponent(currentRegionId)}`, { cache: 'no-store', signal: controller.signal }).then(async (response) => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data?.error ?? 'Не удалось загрузить Brand OS')
+        return data
+      }),
     ]).then(([promptData, brandData]) => {
-      if (cancelled) return
       const promptRows = Array.isArray(promptData) ? promptData as PromptTemplate[] : []
       const brandRows = (brandData?.profiles ?? []) as BrandProfile[]
       setTemplates(promptRows)
-      setTemplateId(promptRows.find((item) => item.is_active)?.id ?? '')
+      setTemplateId(promptRows.find((item) => item.is_default)?.id ?? promptRows[0]?.id ?? '')
       setBrands(brandRows)
       setBrandId(brandRows.find((item) => item.is_default)?.id ?? brandRows[0]?.id ?? '')
     }).catch((error) => {
-      if (!cancelled) toast.error(error instanceof Error ? error.message : 'Не удалось загрузить профили')
+      if (!controller.signal.aborted) toast.error(error instanceof Error ? error.message : 'Не удалось загрузить профили')
     })
-    return () => { cancelled = true }
-  }, [currentRegionId])
+    return () => controller.abort()
+  }, [currentRegionId, marketReady])
 
   async function localize() {
     if (!sourceText.trim()) return
+    if (!marketReady || !currentRegionId) {
+      toast.error(marketError ?? 'Рынок ещё не загружен', 'Локализация')
+      return
+    }
     setLoading(true)
     try {
       const response = await fetch('/api/localize', {
@@ -67,7 +81,7 @@ export default function LocalizePage() {
           contextType,
           templateId: templateId || undefined,
           brandProfileId: brandId || undefined,
-          regionId: currentRegionId || undefined,
+          regionId: currentRegionId,
         }),
       })
       const data = await response.json() as { localizedText?: string; model?: string; error?: string }
@@ -154,7 +168,7 @@ export default function LocalizePage() {
               type="button"
               className="aug-button aug-button--primary mt-5"
               onClick={localize}
-              disabled={loading || !sourceText.trim()}
+              disabled={loading || !sourceText.trim() || !marketReady || !currentRegionId}
               aria-busy={loading}
             >
               {loading ? 'Локализую…' : `Локализовать · ${target.locale}`}

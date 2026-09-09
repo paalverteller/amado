@@ -7,19 +7,23 @@ import { toast } from '@/components/ui/AugustFeedback'
 import { useMarket } from '@/lib/market-context'
 
 export default function MarketAnalysisPage() {
-  const { regions, marketCode } = useMarket()
-  const currentRegionId = regions.find((region) => region.code === marketCode)?.id ?? null
+  const { currentRegion, ready: marketReady, error: marketError } = useMarket()
+  const currentRegionId = currentRegion?.id ?? null
   const [report, setReport] = useState('')
   const [loading, setLoading] = useState(false)
   const [meta, setMeta] = useState<{ model?: string; evidenceCount?: number; knowledgeAssetId?: string | null }>({})
 
   async function runAnalysis() {
+    if (!marketReady || !currentRegionId) {
+      toast.error(marketError ?? 'Рынок ещё не загружен', 'Анализ рынка')
+      return
+    }
     setLoading(true)
     try {
       const response = await fetch('/api/market/deep-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ regionId: currentRegionId || undefined }),
+        body: JSON.stringify({ regionId: currentRegionId }),
       })
       const data = await response.json() as { report?: string; model?: string; evidenceCount?: number; knowledgeAssetId?: string | null; error?: string }
       if (!response.ok) throw new Error(data.error ?? 'Не удалось собрать анализ')
@@ -43,7 +47,7 @@ export default function MarketAnalysisPage() {
             Только последние 60 дней. Экономика, бизнес-модели, цифровые продукты, финтех, программы поддержки, риски, поисковые темы и возможности — на основе проверяемых источников из базы Amado.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <button type="button" className="aug-button aug-button--primary" onClick={runAnalysis} disabled={loading} aria-busy={loading}>
+            <button type="button" className="aug-button aug-button--primary" onClick={runAnalysis} disabled={loading || !marketReady || !currentRegionId} aria-busy={loading}>
               {loading ? 'Анализирую источники…' : 'Собрать анализ за 60 дней'}
             </button>
             <Link href="/market" className="aug-button aug-button--secondary">Вернуться к рынку</Link>

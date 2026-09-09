@@ -114,8 +114,8 @@ function SegmentedOutput({ contentType, raw }: { contentType: string; raw: strin
 function GenerateContent() {
   const searchParams = useSearchParams()
   const abortRef = useRef<AbortController | null>(null)
-  const { regions, marketCode } = useMarket()
-  const currentRegionId = regions.find((r) => r.code === marketCode)?.id ?? null
+  const { currentRegion, ready: marketReady, error: marketError } = useMarket()
+  const currentRegionId = currentRegion?.id ?? null
 
   const [topic, setTopic] = useState(() => {
     const t = searchParams.get('topic')
@@ -190,29 +190,35 @@ function GenerateContent() {
   }, [brandProfileId])
 
   useEffect(() => {
-    // Sprint 12 Phase 4: scope the brand dropdown to the selected market.
-    // currentRegionId starts null on first render (regions haven't loaded
-    // from /api/regions yet) -- that's fine, it just means "show every
-    // brand" until MarketProvider resolves the cookie, same as before this
-    // phase. Re-runs whenever the market switcher changes selection, so
-    // switching markets refreshes which brands are selectable.
-    const url = currentRegionId ? `/api/brand-profiles?region_id=${encodeURIComponent(currentRegionId)}` : '/api/brand-profiles'
-    fetch(url)
-      .then((r) => r.json() as Promise<{ profiles: BrandProfile[] }>)
-      .then((d) => {
-        const profiles = d.profiles ?? []
+    if (!marketReady || !currentRegionId) {
+      setBrandProfiles([])
+      setBrandProfileId('')
+      return
+    }
+    const controller = new AbortController()
+    fetch(`/api/brand-profiles?region_id=${encodeURIComponent(currentRegionId)}`, { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json() as { profiles?: BrandProfile[]; error?: string }
+        if (!response.ok) throw new Error(data.error ?? 'Не удалось загрузить Brand OS выбранного рынка')
+        return data
+      })
+      .then((data) => {
+        const profiles = data.profiles ?? []
         setBrandProfiles(profiles)
         const savedBp = localStorage.getItem('amado_brand_profile')
-        if (savedBp && profiles.some((p: BrandProfile) => p.id === savedBp)) {
+        if (savedBp && profiles.some((profile) => profile.id === savedBp)) {
           setBrandProfileId(savedBp)
         } else {
-          const fallback = profiles.find((profile: BrandProfile) => profile.is_default && profile.is_active)
-            ?? profiles.find((profile: BrandProfile) => profile.is_active)
-          setBrandProfileId(fallback ? fallback.id : '')
+          const fallback = profiles.find((profile) => profile.is_default && profile.is_active)
+            ?? profiles.find((profile) => profile.is_active)
+          setBrandProfileId(fallback?.id ?? '')
         }
       })
-      .catch(() => {})
-  }, [currentRegionId])
+      .catch((loadError) => {
+        if (!controller.signal.aborted) setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить Brand OS')
+      })
+    return () => controller.abort()
+  }, [currentRegionId, marketReady])
 
   useEffect(() => {
     fetch('/api/templates')
@@ -233,6 +239,10 @@ function GenerateContent() {
   async function handleGenerate(e?: React.FormEvent, refinement?: { parentRequestId: string; note: string }) {
     if (e) e.preventDefault()
     if (!topic.trim() || loading) return
+    if (!marketReady || !currentRegionId) {
+      setError(marketError ?? 'Рынок ещё не загружен')
+      return
+    }
     if (refinement && !refinement.note.trim()) return
 
     if (abortRef.current) abortRef.current.abort()
@@ -259,7 +269,7 @@ function GenerateContent() {
           contentType,
           templateId,
           brandProfileId: brandProfileId || undefined,
-          regionId: currentRegionId || undefined,
+          regionId: currentRegionId,
           seoMode,
           parentRequestId: refinement?.parentRequestId,
           refinementNote: refinement?.note,
@@ -370,7 +380,7 @@ function GenerateContent() {
           brandVoice: selectedBrand?.voice_description,
           forbiddenWords: selectedBrand?.forbidden_words,
           examples: selectedBrand?.example_posts,
-          regionId: currentRegionId || undefined,
+          regionId: currentRegionId,
         }),
       })
       const data = await response.json()
@@ -525,10 +535,10 @@ function GenerateContent() {
 
         <button
           type="submit"
-          disabled={loading || !topic.trim()}
-          className={`w-full m3-button-filled mt-2 text-base h-12 ${loading || !topic.trim() ? 'opacity-50 cursor-not-allowed bg-surface-variant text-on-surface-variant hover:shadow-none hover:bg-surface-variant' : ''}`}
+          disabled={loading || !topic.trim() || !marketReady || !currentRegionId}
+          className={`w-full m3-button-filled mt-2 text-base h-12 ${loading || !topic.trim() || !marketReady || !currentRegionId ? 'opacity-50 cursor-not-allowed bg-surface-variant text-on-surface-variant hover:shadow-none hover:bg-surface-variant' : ''}`}
         >
-          {loading ? 'Создаю…' : 'Создать материал'}
+          {loading ? 'Создаю…' : !marketReady ? 'Загрузка рынка…' : 'Создать материал'}
         </button>
       </form>
 

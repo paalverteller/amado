@@ -13,26 +13,20 @@ const MARKET_NAMES_RU: Record<string, string> = {
   IT: 'Италия',
 }
 
-function marketName(code?: string, fallback?: string): string {
-  if (!code) return fallback || 'Бразилия'
+function marketName(code?: string | null, fallback?: string): string {
+  if (!code) return fallback || 'Рынок'
   return MARKET_NAMES_RU[code] ?? fallback ?? code
 }
 
-/** Dropdown showing the active market (Brazil by default) with other active
- *  regions to switch to. Sprint 12 Phase 2: selection only, does not yet
- *  change prompts/content language/API filtering (see docs/AMADO_ROADMAP.md
- *  Sprint 12 Phase 3/4). */
 export default function MarketSwitcher({ compact = false }: { compact?: boolean }) {
-  const { marketCode, regions, setMarketCode } = useMarket()
+  const { marketCode, regions, currentRegion, ready, loading, error, setMarketCode } = useMarket()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
     function onClickOutside(event: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setOpen(false)
-      }
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false)
     }
     function onEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') setOpen(false)
@@ -45,27 +39,34 @@ export default function MarketSwitcher({ compact = false }: { compact?: boolean 
     }
   }, [open])
 
-  const current = regions.find((r) => r.code === marketCode) ?? regions[0]
-  const currentFlag = current ? (MARKET_FLAGS[current.code] ?? '🌐') : '🌐'
+  useEffect(() => {
+    if (!ready) setOpen(false)
+  }, [ready])
+
+  const currentFlag = currentRegion ? (MARKET_FLAGS[currentRegion.code] ?? '🌐') : '🌐'
+  const label = error ? 'Рынок недоступен' : loading ? 'Загрузка рынка…' : marketName(currentRegion?.code, currentRegion?.name)
 
   return (
     <div ref={rootRef} className="aug-market-switcher">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen((value) => !value)}
         className="aug-market-switcher__trigger"
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-busy={loading}
+        aria-label={error ? `${label}: ${error}` : `Текущий рынок: ${label}`}
+        disabled={!ready}
       >
         <span className="aug-market-switcher__flag" aria-hidden="true">{currentFlag}</span>
-        {!compact && <span className="aug-market-switcher__label">{marketName(current?.code, current?.name)}</span>}
+        {!compact && <span className="aug-market-switcher__label">{label}</span>}
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="m6 9 6 6 6-6" />
         </svg>
       </button>
 
-      {open && (
-        <div className="aug-market-switcher__menu" role="listbox">
+      {open && ready && (
+        <div className="aug-market-switcher__menu" role="listbox" aria-label="Выберите рынок">
           {regions.map((region) => (
             <button
               key={region.id}
@@ -82,7 +83,7 @@ export default function MarketSwitcher({ compact = false }: { compact?: boolean 
               <span className="aug-market-switcher__flag" aria-hidden="true">{MARKET_FLAGS[region.code] ?? '🌐'}</span>
               <span>{marketName(region.code, region.name)}</span>
               {region.code === marketCode && (
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginInlineStart: 'auto' }}>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="ms-auto">
                   <path d="m5 12 5 5 9-9" />
                 </svg>
               )}

@@ -71,9 +71,9 @@ export function stripHtml(v: string | undefined | null): string {
     .replace(/\s+/g, ' ').trim()
 }
 
-function isIrrelevantContent(title: string, description: string): boolean {
+function isIrrelevantContent(title: string, description: string, preserveCompanyNews = false): boolean {
   const text = `${title} ${description}`.toLowerCase()
-  const badWords = [
+  const genericNoise = [
     'job', 'jobs', 'vacancy', 'vacancies', 'hiring', 'apply now', 'career', 'position available',
     'we are looking', 'join our team', 'full.?time', 'part.?time', 'salary', 'stipend', 'internship',
     'fellowship', 'conference', 'workshop', 'webinar', 'register now', 'sign up now', 'subscribe',
@@ -91,8 +91,12 @@ function isIrrelevantContent(title: string, description: string): boolean {
     'diagnostic imaging', 'patient monitoring', 'electronic health', 'medical device',
     'wef ', 'world economic forum', 'davos', 'annual meeting',
     'investor relations', 'press release', 'shareholder', 'quarterly results'
-  ].join('|')
-  const regex = new RegExp(`\\b(${badWords})\\b`, 'i')
+  ]
+  const companyNewsSignals = new Set(['investor relations', 'press release', 'shareholder', 'quarterly results'])
+  const badWords = preserveCompanyNews
+    ? genericNoise.filter((word) => !companyNewsSignals.has(word))
+    : genericNoise
+  const regex = new RegExp(`\\b(${badWords.join('|')})\\b`, 'i')
   return regex.test(text)
 }
 
@@ -279,19 +283,19 @@ function isArticleHref(href: string, base: URL): URL | null {
   }
 }
 
-function extractDescFromReaderText(text: string, fallback: string): string {
+function extractDescFromReaderText(text: string, fallback: string, preserveCompanyNews = false): string {
   const lines = text
     .split(/\n+/)
     .map((l) => l.replace(/^[#*>\-\s]+/, '').trim())
     .filter((l) => l.length > 40)
   for (const line of lines) {
-    if (isIrrelevantContent(line, '')) continue
+    if (isIrrelevantContent(line, '', preserveCompanyNews)) continue
     return line.slice(0, MAX_DESC_CHARS)
   }
   return fallback.slice(0, MAX_DESC_CHARS)
 }
 
-async function fetchHtmlFallback(sourceId: string, indexUrl: string): Promise<number> {
+async function fetchHtmlFallback(sourceId: string, indexUrl: string, preserveCompanyNews = false): Promise<number> {
   const startMs = Date.now()
   try {
     const res = await fetch(indexUrl, {
@@ -377,7 +381,7 @@ async function fetchHtmlFallback(sourceId: string, indexUrl: string): Promise<nu
             if (headingMatch?.[1] && headingMatch[1].length > 10) {
               title = headingMatch[1].trim().slice(0, 300)
             }
-            description = extractDescFromReaderText(readerText, title)
+            description = extractDescFromReaderText(readerText, title, preserveCompanyNews)
           } else {
             const pageRes = await fetch(link, {
               signal: AbortSignal.timeout(8_000),
@@ -409,7 +413,7 @@ async function fetchHtmlFallback(sourceId: string, indexUrl: string): Promise<nu
           }
 
           if (title.length < 10 || description.length < 20) return
-          if (isIrrelevantContent(title, description)) return
+          if (isIrrelevantContent(title, description, preserveCompanyNews)) return
 
           rows.push({
             source_id: sourceId,
@@ -503,12 +507,26 @@ export async function saveManualItem(sourceId: string, input: ManualItemInput): 
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 
+async function sourceIsCompetitor(sourceId: string): Promise<boolean> {
+  const { data, error } = await getSupabaseAdmin()
+    .from('rss_sources')
+    .select('source_category')
+    .eq('id', sourceId)
+    .maybeSingle()
+  if (error) {
+    console.warn(`[rss] Could not resolve source category for ${sourceId}: ${error.message}`)
+    return false
+  }
+  return data?.source_category === 'competitor'
+}
+
 export async function fetchAndSaveRss(
   sourceId: string,
   url: string,
   sourceType: ConnectorType | string = 'rss',
 ): Promise<number> {
   const startMs = Date.now()
+  const preserveCompanyNews = await sourceIsCompetitor(sourceId)
 
   // Manual sources have no feed to poll — content comes in via saveManualItem
   // (POST /api/rss/[id]/manual-item). Treat as a no-op success, not a failure:
@@ -519,7 +537,7 @@ export async function fetchAndSaveRss(
 
   // html_index goes directly to scraper
   if (sourceType === 'html_index') {
-    return fetchHtmlFallback(sourceId, url)
+    return fetchHtmlFallback(sourceId, url, preserveCompanyNews)
   }
 
   // PubMed gated
@@ -545,7 +563,7 @@ export async function fetchAndSaveRss(
       )
       const description = stripHtml(rawDesc).slice(0, MAX_DESC_CHARS) || title
 
-      if (isIrrelevantContent(title, description)) {
+      if (isIrrelevantContent(title, description, preserveCompanyNews)) {
         console.info(`[rss] skipping irrelevant: "${title.slice(0, 60)}"`)
         continue
       }
@@ -576,7 +594,7 @@ export async function fetchAndSaveRss(
       errorMessage: getErrorMessage(err),
       responseTimeMs: Date.now() - startMs,
     })
-    return fetchHtmlFallback(sourceId, url)
+    return fetchHtmlFallback(sourceId, url, preserveCompanyNews)
   }
 }
 

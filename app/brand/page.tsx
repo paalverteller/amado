@@ -62,34 +62,39 @@ const TABS: Tab[] = [
 ]
 
 export default function BrandBrainPage() {
-  const { regions, marketCode } = useMarket()
-  const currentRegionId = regions.find((region) => region.code === marketCode)?.id ?? null
+  const { currentRegion, ready: marketReady } = useMarket()
+  const currentRegionId = currentRegion?.id ?? null
   const [activeTab, setActiveTab] = useState<TabId>('overview')
   const [brands, setBrands] = useState<BrandListItem[]>([])
   const [brandId, setBrandId] = useState<string>('')
   const [brandsLoading, setBrandsLoading] = useState(true)
 
   useEffect(() => {
-    let cancelled = false
-    fetch(currentRegionId ? `/api/brands?region_id=${encodeURIComponent(currentRegionId)}` : '/api/brands')
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('request failed'))))
-      .then((data: { items?: BrandListItem[] }) => {
-        if (cancelled) return
+    if (!marketReady || !currentRegionId) {
+      setBrands([])
+      setBrandId('')
+      setBrandsLoading(true)
+      return
+    }
+    const controller = new AbortController()
+    setBrands([])
+    setBrandId('')
+    setBrandsLoading(true)
+    fetch(`/api/brands?region_id=${encodeURIComponent(currentRegionId)}`, { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json() as { items?: BrandListItem[]; error?: string }
+        if (!response.ok) throw new Error(data.error ?? 'Не удалось загрузить Brand OS')
+        return data
+      })
+      .then((data) => {
         const items = data.items ?? []
         setBrands(items)
-        const preferred = items.find((b) => b.is_default) ?? items[0]
-        if (preferred) setBrandId(preferred.id)
+        setBrandId(items.find((item) => item.is_default)?.id ?? items[0]?.id ?? '')
       })
-      .catch(() => {
-        if (!cancelled) setBrands([])
-      })
-      .finally(() => {
-        if (!cancelled) setBrandsLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [currentRegionId])
+      .catch(() => { if (!controller.signal.aborted) setBrands([]) })
+      .finally(() => { if (!controller.signal.aborted) setBrandsLoading(false) })
+    return () => controller.abort()
+  }, [currentRegionId, marketReady])
 
   const renderTab = () => {
     switch (activeTab) {

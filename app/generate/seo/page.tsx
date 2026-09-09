@@ -7,8 +7,8 @@ import type { BrandProfile } from '@/lib/domain/brand-profile'
 import { useMarket } from '@/lib/market-context'
 
 export default function SeoArticlePage() {
-  const { regions, marketCode } = useMarket()
-  const currentRegionId = regions.find((region) => region.code === marketCode)?.id ?? null
+  const { currentRegion, ready: marketReady, error: marketError } = useMarket()
+  const currentRegionId = currentRegion?.id ?? null
   const [topic, setTopic] = useState('')
   const [context, setContext] = useState('')
   const [brands, setBrands] = useState<BrandProfile[]>([])
@@ -19,27 +19,39 @@ export default function SeoArticlePage() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    let cancelled = false
-    fetch(currentRegionId ? `/api/brand-profiles?region_id=${encodeURIComponent(currentRegionId)}` : '/api/brand-profiles', { cache: 'no-store' })
-      .then((r) => r.json())
+    if (!marketReady || !currentRegionId) {
+      setBrands([])
+      setBrandId('')
+      return
+    }
+    const controller = new AbortController()
+    fetch(`/api/brand-profiles?region_id=${encodeURIComponent(currentRegionId)}`, { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json() as { profiles?: BrandProfile[]; error?: string }
+        if (!response.ok) throw new Error(data.error ?? 'Не удалось загрузить Brand OS')
+        return data
+      })
       .then((data) => {
-        if (cancelled) return
-        const rows = (data?.profiles ?? []) as BrandProfile[]
+        const rows = data.profiles ?? []
         setBrands(rows)
         setBrandId(rows.find((row) => row.is_default)?.id ?? rows[0]?.id ?? '')
       })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [currentRegionId])
+      .catch((error) => { if (!controller.signal.aborted) toast.error(error instanceof Error ? error.message : 'Не удалось загрузить Brand OS') })
+    return () => controller.abort()
+  }, [currentRegionId, marketReady])
 
   async function generate() {
     if (!topic.trim()) return
+    if (!marketReady || !currentRegionId) {
+      toast.error(marketError ?? 'Рынок ещё не загружен', 'SEO-статья')
+      return
+    }
     setLoading(true)
     try {
       const response = await fetch('/api/generate/seo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, context, brandProfileId: brandId || undefined, regionId: currentRegionId || undefined }),
+        body: JSON.stringify({ topic, context, brandProfileId: brandId || undefined, regionId: currentRegionId }),
       })
       const data = await response.json() as { text?: string; model?: string; evidenceItems?: number; error?: string }
       if (!response.ok) throw new Error(data.error ?? 'Не удалось создать SEO-статью')
@@ -81,7 +93,7 @@ export default function SeoArticlePage() {
                 {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.brand_name}</option>)}
               </select>
             </label>
-            <button type="button" className="aug-button aug-button--primary mt-5" onClick={generate} disabled={loading || !topic.trim()} aria-busy={loading}>
+            <button type="button" className="aug-button aug-button--primary mt-5" onClick={generate} disabled={loading || !topic.trim() || !marketReady || !currentRegionId} aria-busy={loading}>
               {loading ? 'Собираю статью…' : 'Создать SEO-статью'}
             </button>
           </section>

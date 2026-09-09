@@ -10,6 +10,7 @@ import { RssSource } from '@/lib/domain/rss'
 import { BrandProfile } from '@/lib/domain/brand-profile'
 import { t } from '@/lib/i18n/config'
 import { useMarket } from '@/lib/market-context'
+import { toast } from '@/components/ui/AugustFeedback'
 
 const MARKET_LANGUAGE_CODES: Record<string, string> = {
   BR: 'pt-BR',
@@ -29,8 +30,7 @@ const MARKET_NAMES_RU: Record<string, string> = {
 }
 
 export default function SettingsPage() {
-  const { regions: marketRegions, marketCode } = useMarket()
-  const currentMarket = marketRegions.find((region) => region.code === marketCode)
+  const { currentRegion: currentMarket, marketCode, ready: marketReady } = useMarket()
   const [templates, setTemplates] = useState<PromptTemplate[]>([])
   const [sources, setSources] = useState<RssSource[]>([])
   const [sourceHealth, setSourceHealth] = useState<Record<string, {
@@ -60,44 +60,66 @@ export default function SettingsPage() {
   const [newBrandSensitive, setNewBrandSensitive] = useState('')
   const [newBrandRegion, setNewBrandRegion] = useState('')
 
-  const reloadData = () => {
-    fetch('/api/templates').then(res => res.json()).then(data => setTemplates(data.templates || []))
-    fetch('/api/rss').then(res => res.json()).then(data => setSources(data.sources || []))
-    fetch('/api/brand-profiles').then(res => res.json()).then(data => setBrandProfiles(data.profiles || []))
-    fetch('/api/regions').then(res => res.json()).then(data => setRegions(data.regions || []))
-    fetch('/api/sources/health').then(res => res.json()).then(data => {
+  const reloadData = useCallback(() => {
+    if (!marketReady || !currentMarket) return
+    const regionParam = encodeURIComponent(currentMarket.id)
+    Promise.all([
+      fetch('/api/templates').then(async (response) => {
+        if (!response.ok) throw new Error('Не удалось загрузить шаблоны')
+        return response.json()
+      }),
+      fetch(`/api/rss?region_id=${regionParam}`, { cache: 'no-store' }).then(async (response) => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data?.error ?? 'Не удалось загрузить источники')
+        return data
+      }),
+      fetch(`/api/brand-profiles?region_id=${regionParam}`, { cache: 'no-store' }).then(async (response) => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data?.error ?? 'Не удалось загрузить бренды')
+        return data
+      }),
+      fetch('/api/regions').then((response) => response.json()),
+      fetch('/api/sources/health').then((response) => response.json()),
+    ]).then(([templateData, sourceData, brandData, regionData, healthData]) => {
+      setTemplates(templateData.templates || [])
+      setSources(sourceData.sources || [])
+      setBrandProfiles(brandData.profiles || [])
+      setRegions(regionData.regions || [])
       const bySourceId: typeof sourceHealth = {}
-      for (const s of data.sources || []) {
-        bySourceId[s.id] = s.health
-      }
+      for (const source of healthData.sources || []) bySourceId[source.id] = source.health
       setSourceHealth(bySourceId)
-    })
-  }
-
-  useEffect(() => reloadData(), [])
+    }).catch((error) => toast.error(error instanceof Error ? error.message : 'Не удалось загрузить настройки', 'Настройки'))
+  }, [currentMarket, marketReady])
 
   useEffect(() => {
-    if (currentMarket?.id && currentMarket.id !== 'br-fallback') {
-      setNewBrandRegion(currentMarket.id)
-    }
+    reloadData()
+  }, [reloadData])
+
+  useEffect(() => {
+    if (currentMarket?.id) setNewBrandRegion(currentMarket.id)
   }, [currentMarket?.id])
 
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newSourceName.trim() || !newSourceUrl.trim()) return
+    if (!newSourceName.trim() || !newSourceUrl.trim() || !marketReady || !currentMarket) return
 
-    await fetch('/api/rss', {
+    const response = await fetch('/api/rss', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: newSourceName,
         url: newSourceUrl,
         source_type: newSourceType,
-        country: currentMarket?.name ?? 'Brasil',
-        region_id: currentMarket?.id && currentMarket.id !== 'br-fallback' ? currentMarket.id : undefined,
-        language_code: MARKET_LANGUAGE_CODES[marketCode] ?? 'pt-BR',
+        country: currentMarket.name,
+        region_id: currentMarket.id,
+        language_code: MARKET_LANGUAGE_CODES[marketCode ?? ''] ?? 'pt-BR',
       }),
     })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      toast.error(data?.error ?? 'Не удалось добавить источник', 'Источники')
+      return
+    }
 
     setNewSourceName('')
     setNewSourceUrl('')
@@ -123,7 +145,7 @@ export default function SettingsPage() {
         strategic_themes: newBrandThemes,
         product_facts: newBrandFacts,
         sensitive_topics: newBrandSensitive,
-        region_id: newBrandRegion || (currentMarket?.id !== 'br-fallback' ? currentMarket?.id : undefined),
+        region_id: newBrandRegion || currentMarket?.id || undefined,
       }),
     })
 
@@ -171,6 +193,7 @@ export default function SettingsPage() {
             <input
               value={newSourceName}
               onChange={(e) => setNewSourceName(e.target.value)}
+              aria-label={t('settings.source_name')}
               placeholder={t('settings.source_name')}
               className="flex-1 rounded-xl bg-surface-container px-4 py-2 text-sm outline-none w-full"
               required
@@ -178,11 +201,13 @@ export default function SettingsPage() {
             <input
               value={newSourceUrl}
               onChange={(e) => setNewSourceUrl(e.target.value)}
+              aria-label={t('settings.source_url')}
               placeholder={t('settings.source_url')}
               className="flex-1 rounded-xl bg-surface-container px-4 py-2 text-sm outline-none w-full"
               required
             />
             <select
+              aria-label={t('settings.source_type')}
               value={newSourceType}
               onChange={(e) => setNewSourceType(e.target.value)}
               className="rounded-xl bg-surface-container px-4 py-2 text-sm outline-none"
@@ -193,7 +218,7 @@ export default function SettingsPage() {
               <option value="api">API</option>
               <option value="manual">{t('settings.manual')}</option>
             </select>
-            <button type="submit" className="m3-button-filled w-full sm:w-auto shrink-0 py-2">
+            <button type="submit" disabled={!marketReady || !currentMarket} className="m3-button-filled w-full sm:w-auto shrink-0 py-2 disabled:opacity-40">
               + {t('action.add')}
             </button>
           </form>

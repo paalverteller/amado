@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { PromptTemplate } from '@/lib/domain/prompt-template'
 import Link from 'next/link'
 import Layout from '@/components/Layout'
+import { toast } from '@/components/ui/AugustFeedback'
 import { t } from '@/lib/i18n/config'
 import { useMarket } from '@/lib/market-context'
 import type { CompetitorSummary } from '@/lib/domain/competitor'
@@ -89,23 +90,23 @@ function buildDisplayTitle(item: MarketItem): string {
 
 // ─── API calls ────────────────────────────────────────────────────────────────
 
-async function fetchMarketItems(regionId?: string | null): Promise<{ items: MarketItem[]; meta: MarketMeta }> {
-  const url = regionId ? `/api/market?region_id=${encodeURIComponent(regionId)}` : '/api/market'
+async function fetchMarketItems(regionId: string): Promise<{ items: MarketItem[]; meta: MarketMeta }> {
+  const url = `/api/market?region_id=${encodeURIComponent(regionId)}`
   const res  = await fetch(url, { cache: 'no-store' })
   const data = await res.json()
   if (!res.ok) throw new Error(data?.error ?? 'Не удалось загрузить анализ рынка')
   return { items: Array.isArray(data.items) ? data.items : [], meta: data.meta ?? {} }
 }
 
-async function refreshMarketItems(regionId?: string | null): Promise<{ items: MarketItem[]; meta: MarketMeta }> {
+async function refreshMarketItems(regionId: string): Promise<{ items: MarketItem[]; meta: MarketMeta }> {
   const refreshRes  = await fetch('/api/market/refresh', { method: 'POST', cache: 'no-store' })
   const refreshData = await refreshRes.json().catch(() => ({}))
   if (!refreshRes.ok) throw new Error(refreshData?.error ?? 'Не удалось собрать свежие данные')
   return fetchMarketItems(regionId)
 }
 
-async function fetchCompetitorSummaries(regionId?: string | null): Promise<CompetitorSummary[]> {
-  const url = regionId ? `/api/competitors/summary?region_id=${encodeURIComponent(regionId)}` : '/api/competitors/summary'
+async function fetchCompetitorSummaries(regionId: string): Promise<CompetitorSummary[]> {
+  const url = `/api/competitors/summary?region_id=${encodeURIComponent(regionId)}`
   const res = await fetch(url, { cache: 'no-store' })
   if (!res.ok) return []
   const data = await res.json().catch(() => ({}))
@@ -124,8 +125,8 @@ function formatReviewDate(value: string | null): string {
 export default function MarketPage() {
   const { selectedIds, toggleSelect, clearSelection } = useBatchSelection()
   const router = useRouter()
-  const { regions, marketCode } = useMarket()
-  const currentRegionId = regions.find((r) => r.code === marketCode)?.id ?? null
+  const { currentRegion, ready: marketReady, error: marketError } = useMarket()
+  const currentRegionId = currentRegion?.id ?? null
   const [batchLoading, setBatchLoading] = useState(false)
   const [batchContentType, setBatchContentType] = useState('linkedin_post')
   const [batchTemplateId, setBatchTemplateId] = useState('')
@@ -148,6 +149,11 @@ export default function MarketPage() {
   const [competitorsLoading, setCompetitorsLoading] = useState(true)
 
   useEffect(() => {
+    if (!marketReady || !currentRegionId) {
+      setItems([])
+      setInitialLoading(true)
+      return
+    }
     let cancelled = false
     async function load() {
       setInitialLoading(true)
@@ -163,16 +169,21 @@ export default function MarketPage() {
     }
     void load()
     return () => { cancelled = true }
-  }, [currentRegionId])
+  }, [currentRegionId, marketReady])
 
   useEffect(() => {
+    if (!marketReady || !currentRegionId) {
+      setCompetitors([])
+      setCompetitorsLoading(true)
+      return
+    }
     let cancelled = false
     setCompetitorsLoading(true)
     fetchCompetitorSummaries(currentRegionId)
       .then((result) => { if (!cancelled) setCompetitors(result) })
       .finally(() => { if (!cancelled) setCompetitorsLoading(false) })
     return () => { cancelled = true }
-  }, [currentRegionId])
+  }, [currentRegionId, marketReady])
 
   useEffect(() => {
     if (!refreshing) return
@@ -192,6 +203,10 @@ export default function MarketPage() {
   }, [meta.countries])
 
   async function handleRefresh() {
+    if (!marketReady || !currentRegionId) {
+      setError(marketError ?? 'Рынок ещё не загружен')
+      return
+    }
     setRefreshing(true)
     setPhraseIndex(0)
     setError(null)
@@ -227,7 +242,7 @@ export default function MarketPage() {
               <button
                 type="button"
                 onClick={handleRefresh}
-                disabled={refreshing}
+                disabled={refreshing || !marketReady || !currentRegionId}
                 title="Собрать свежие материалы"
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -499,7 +514,7 @@ export default function MarketPage() {
             </button>
             <button
               type="button"
-              disabled={batchLoading || selectedIds.size > 10}
+              disabled={batchLoading || selectedIds.size > 10 || !marketReady || !currentRegionId}
               onClick={async () => {
                 setBatchLoading(true)
                 try {
@@ -513,14 +528,14 @@ export default function MarketPage() {
                   const res = await fetch('/api/generate/batch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ topics, templateId: batchTemplateId || undefined }),
+                    body: JSON.stringify({ topics, templateId: batchTemplateId || undefined, regionId: currentRegionId }),
                   })
                   const data = await res.json()
                   if (!res.ok) throw new Error(data.error ?? 'Ошибка пакетной генерации')
                   clearSelection()
                   router.push('/history')
                 } catch (e) {
-                  alert(e instanceof Error ? e.message : 'Ошибка пакетной генерации')
+                  toast.error(e instanceof Error ? e.message : 'Ошибка пакетной генерации', 'Пакетная генерация')
                 } finally {
                   setBatchLoading(false)
                 }

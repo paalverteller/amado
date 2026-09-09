@@ -1,6 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400..850&display=swap');
-
+@import "tailwindcss";
 @layer august.reset, august.tokens, august.base, august.layout, august.components, august.utilities, august.accessibility, august.overrides;
 
 @theme {
