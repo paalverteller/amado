@@ -177,4 +177,63 @@ describe('canonical content generation chain', () => {
     // value that will be discarded.
     expect(spy).not.toHaveBeenCalled()
   })
+
+  // Fable review, Phase 1 regression coverage: persist-ordering and
+  // record()-failure handling. See docs/fable-review.md Phase 1.
+  it('persists the article and marks the request completed even when the localization-notes call fails', async () => {
+    const { generateWithFallback } = await import('@/lib/ai')
+    vi.mocked(generateWithFallback).mockRejectedValueOnce(new Error('provider outage'))
+
+    let markedCompleted = false
+    const contentRequests: ContentRequestRepository = {
+      record: async () => ({ id: 'request-5' }),
+      markCompleted: async () => { markedCompleted = true },
+      markFailed: async () => undefined,
+      getById: async () => null,
+      getThread: async () => [],
+      linkEvidence: async () => undefined,
+    }
+    const articles: ArticleRepository = {
+      create: async () => ({ id: 'article-5', error: null }),
+    }
+
+    const result = await generateAndPersistArticle({
+      topic: 'tema', contentType: 'article', brandProfileId: 'brand-1',
+    }, { contentRequests, articles })
+
+    // The article and the content_requests row are both already in their
+    // terminal state before the (failed) localization-notes call runs --
+    // a platform kill or provider outage at that point strands nothing.
+    expect(result.articleId).toBe('article-5')
+    expect(markedCompleted).toBe(true)
+    expect(result.persistenceWarning).toBeNull()
+  })
+
+  it('still persists the article and surfaces a warning when content_requests.record() fails', async () => {
+    let createCalled = false
+    const contentRequests: ContentRequestRepository = {
+      // Mirrors the repository's documented contract: null on insert failure.
+      record: async () => null,
+      markCompleted: async () => undefined,
+      markFailed: async () => undefined,
+      getById: async () => null,
+      getThread: async () => [],
+      linkEvidence: async () => undefined,
+    }
+    const articles: ArticleRepository = {
+      create: async (data) => { createCalled = true; expect(data.content_request_id).toBeNull(); return { id: 'article-6', error: null } },
+    }
+
+    const result = await generateAndPersistArticle({
+      topic: 'tema', contentType: 'article', brandProfileId: 'brand-1',
+    }, { contentRequests, articles })
+
+    // The paid LLM call already happened -- a bookkeeping-row failure
+    // must not discard a good result. The gap is now visible instead of
+    // looking identical to a normal successful generation.
+    expect(createCalled).toBe(true)
+    expect(result.articleId).toBe('article-6')
+    expect(result.contentRequestId).toBeNull()
+    expect(result.persistenceWarning).toBeTruthy()
+  })
 })

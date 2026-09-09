@@ -825,3 +825,149 @@ touched):**
   publish-route silent-failure and lying-count fixes, and the
   `generate-article.ts` persist-ordering / `record()`-failure fixes.
   See `docs/fable-review.md` for the full itemized list.
+
+<!-- FABLE_REVIEW_PHASE1A_20260905 -->
+
+## Fable review remediation — Phase 1A: brand-snapshot + generate-article (2026-09-05)
+
+**What was done:**
+- `lib/brand-snapshot.ts`: every query inside `buildBrandSnapshot`'s
+  `Promise.all` now checks `error` (previously silently discarded on
+  ~10 queries — the same failure class as the guideline-import bug
+  this project fixed once before, in the file whose entire job is
+  enforcing brand rules). Added a `degraded: string[]` field to
+  `BrandSnapshotResult` so a query failure produces a visibly
+  incomplete brand context instead of an innocent-looking empty fact
+  list. `brand_claims`, `brand_terms`, and the `brand_rules` query
+  (forbidden claims/terms, hard compliance rules) now have a
+  deterministic `ORDER BY` and a 200-row safety cap that logs loudly
+  if it's ever actually hit — replacing the old unordered
+  `LIMIT 15`/`LIMIT 20` that could silently drop an arbitrary subset
+  of a real brand's forbidden claims/terms/rules, with the dropped
+  subset changing between requests.
+- `brand_rules` is now routed through `compileRules()`/`scopeMatches()`
+  (`lib/brand-os/precedence.ts`) with a `CompileContext` built from the
+  brand/platform/format instead of being read raw with zero scope
+  filtering — a LinkedIn-only `hard_block` can no longer be injected
+  into an email generation, and duplicate `rule_key`s are now
+  arbitrated by real precedence instead of "whichever DB row came back
+  first" (see the SQL migration below for the write-side half of this
+  fix).
+- `resolveBrandRegionId` now throws on a genuine DB error instead of
+  collapsing "brand not found", "brand has no region set", and "DB
+  query failed" into the same `null` → Brazil-default fallback.
+  Verified all three call sites (`generate-article.ts`, the guideline
+  import route, `guideline-extractor.ts`) already have a top-level
+  `try/catch` that turns this into a loud 500 instead of an unhandled
+  rejection — confirmed by reading each file, not assumed.
+- `lib/content-generation/generate-article.ts`: reordered so the
+  article is persisted **before** the best-effort localization-notes
+  LLM call (previously after). The old ordering meant a platform kill
+  during the second LLM call left a `content_requests` row stuck in
+  `processing` forever, with `generated_content` populated and no
+  article row ever created — nothing ever transitioned it. Now the
+  article and `content_requests` row both reach their terminal state
+  first; the notes are attached via a follow-up update afterward, and
+  a failure there only means the article's `source_context` stays
+  null (which the UI already treats as "no notes available").
+- `content_requests.record()` returning `null` (the repository's
+  documented contract on insert failure) was previously treated as an
+  unremarkable null id, with the code silently proceeding to create an
+  orphaned article (no `content_request_id`, no version history, no
+  evidence-usage tracking) and reporting success. This is now surfaced
+  via a new `persistenceWarning: string | null` field on
+  `GenerateArticleResult` plus a `console.error`, while still
+  persisting the article — the paid LLM call already happened, and
+  discarding a good result over a bookkeeping-row failure would be
+  worse than a visible gap.
+- `lib/repositories/article-repository.ts`: added an **optional**
+  `updateSourceContext()` method, needed by the reorder above. Made
+  optional specifically so the existing fake repositories in
+  `generate-article.test.ts` (which don't implement it) keep compiling
+  unchanged — confirmed via `tsc`, not assumed.
+- `supabase/migrations/046_brand_rules_unique_constraints.sql`: adds a
+  unique partial index (`brand_rule_sets(brand_id) WHERE
+  status='active'`, replacing the old non-unique
+  `idx_brand_rule_sets_active`) and a unique constraint
+  (`brand_rules(rule_set_id, rule_key)`). Both are defensively
+  preceded by a repair step for any pre-existing violations (keeps the
+  most recently published active rule_set per brand and archives the
+  rest; keeps the highest-precedence row per duplicate `rule_key` and
+  deletes the rest), so the migration cannot fail on data that
+  predates it. **Not applied by the patch script** — per this
+  project's database discipline, run it via the Supabase SQL Editor.
+
+**Consciously not done in this phase:**
+- The `scope_json` shape fix itself (writing `RuleScope`-correct data
+  instead of `{ scope, target }`) is **not** in this phase — it's
+  Phase 1B, in the guideline import route. This phase's SQL migration
+  and `brand-snapshot.ts`'s `compileRules()` routing prepare the
+  ground for that fix (a rule with a correctly-shaped scope will now
+  actually be scope-filtered at read time, and can't silently
+  duplicate at write time) but don't fix the shape at the source.
+- Did not touch `app/generate/page.tsx` to surface the new
+  `persistenceWarning` field in the UI. The `console.error` is the
+  load-bearing part of this fix (making the failure loud in logs
+  instead of silent); wiring it into the generation UI is a
+  reasonable follow-up but wasn't treated as required for this phase.
+- Did not attempt to fix the `maxTokens` passed as `undefined` in
+  `generateArticleWithFallback`'s call in `generate-article.ts` — that
+  line is pre-existing and unrelated to this phase's scope; the
+  `maxTokens`/`maxOutputTokens` SDK-rename issue is tracked under
+  Phase 3 in `docs/fable-review.md`.
+
+**Bugs found and fixed along the way (beyond the review's own list):**
+- `error_summary` is a `TEXT` column (confirmed against
+  `supabase/migrations/033_guideline_compiler.sql`), not `JSONB`. This
+  doesn't affect brand-snapshot.ts/generate-article.ts directly, but
+  was caught while cross-checking schemas for Phase 1B and is fixed
+  there — noting it here since it was discovered during this phase's
+  verification pass.
+
+**Verification performed:**
+- `python3 -m py_compile` on the patch script.
+- Real `tsc --noEmit --strict` against an isolated reconstruction of
+  the actual dependency graph (real `lib/brand-os/types.ts`,
+  `lib/brand-os/precedence.ts`, `lib/content-formats.ts`; type-accurate
+  stubs for `lib/supabase/client.ts`, `lib/ai.ts`, `lib/ai-usage.ts`,
+  `lib/prompts.ts`, `lib/evidence.ts` matched field-for-field against
+  the real files' exported signatures) — zero errors, including the
+  **unmodified, pre-existing** `generate-article.test.ts`.
+- Ran the actual pre-existing `generate-article.test.ts` suite via
+  vitest against the new implementation: all 4 existing tests pass
+  unchanged (region precedence, evidence linking, brand snapshot
+  injection, explicit-regionId-wins). Added 2 new regression tests for
+  this phase's specific fixes (persist-before-notes ordering,
+  `record()`-failure surfacing) — 6/6 pass, run 3× for flakiness, zero
+  failures.
+- SQL migration validated against a real PostgreSQL 16 instance (not
+  a syntax-only check): loaded the exact `brand_rule_sets`/
+  `brand_rules` DDL from migration 030, seeded two violation shapes
+  (a brand with two active rule sets; a rule set with three duplicate
+  `rule_key` rows of differing enforcement/priority/human_approved/
+  created_at), ran the migration, and confirmed: the correct rule set
+  was kept active and the other archived; the correct single row
+  survived the duplicate-`rule_key` cleanup (highest enforcement class,
+  then priority, then human_approved, then most recent); unrelated
+  rows were untouched; both constraints reject new violations
+  afterward; a second migration run is a clean idempotent no-op.
+- Structural balance checks (braces/parens/brackets/backticks) on all
+  changed TypeScript files.
+- Drift-guard: this patch script compares the full on-disk content of
+  each changed file, byte-for-byte, against the exact pre-patch
+  content pulled from this session's repomix snapshot, before writing
+  — refuses to overwrite a file that doesn't match (already patched a
+  different way, hand-edited, or a previous phase's write never
+  landed) rather than blindly proceeding.
+
+**Next steps queued:**
+- Phase 1B: fix `scope_json` construction in the guideline import
+  route (currently `{ scope, target }`, zero fields in common with
+  `RuleScope` — confirmed live bug, not hypothetical), honest
+  inserted/failed candidate counts in both the import route and the
+  publish route (`[runId]/route.ts` PATCH), and the pre-existing
+  `error_summary` TEXT-vs-object bug found during this phase's
+  cross-checking.
+- After Phase 1B, Phase 1 is complete; Phase 2 (region-failure ≠
+  absence, collapsing the four hand-maintained region maps) follows
+  per `docs/fable-review.md`.

@@ -48,6 +48,17 @@ export interface GenerateArticleResult {
     knowledgeChunks: { chunkId: string; assetId: string; assetTitle: string; snippet: string }[]
     competitorSignals: { evidenceId: string; competitor: string; title: string; publishedAt: string | null }[]
   }
+  /**
+   * Fable review, Phase 1: set when something about persisting this
+   * generation's bookkeeping degraded -- currently only "the
+   * content_requests row could not be recorded, so this article has no
+   * content_request_id and won't show up in version history / evidence
+   * linking". The article itself (`articleId`) is still saved when this
+   * is set; only the audit-trail row failed. Previously this failure was
+   * completely silent (a null contentRequestId with no signal anywhere).
+   * null when nothing degraded.
+   */
+  persistenceWarning: string | null
 }
 
 function defaultDeps(): GenerateArticleDeps {
@@ -68,6 +79,19 @@ function defaultDeps(): GenerateArticleDeps {
  * If persisting the article fails, the content request is marked
  * 'failed' and the error is re-thrown — callers must not treat a
  * resolved promise as "the article was saved" without checking for this.
+ *
+ * Fable review, Phase 1 (status machines with no owner): the article
+ * insert now happens BEFORE the best-effort localization-notes call,
+ * not after. The old ordering (record processing -> localization notes
+ * LLM call -> article insert -> markCompleted) meant a platform kill
+ * during the second LLM call left a content_requests row stuck in
+ * 'processing' forever, with generated_content populated and no article
+ * row ever created. Localization notes are strictly best-effort color
+ * for the article's source_context field; if they fail or the function
+ * is killed after the article already exists, the article is still
+ * there and content_requests is already 'completed' -- nothing is
+ * stranded. The notes are attached with a follow-up update after the
+ * article insert instead of being included in the initial insert.
  *
  * `deps` defaults to the real Supabase-backed repositories; pass fakes
  * here to unit-test this function without a database.
@@ -188,26 +212,29 @@ Write only the final clean text for publication. No think tags. No Markdown.`
     marketing_campaign_id: input.marketingCampaignId ?? null,
   })
 
+  // Fable review, Phase 1: requestRecord is null when the insert failed
+  // (ContentRequestRepository.record()'s documented contract is "returns
+  // null on failure, callers decide whether that's fatal"). The old code
+  // used `requestRecord?.id ?? null` and silently proceeded as if a null
+  // contentRequestId were a normal, expected case -- indistinguishable
+  // from "this call legitimately has no content request yet". It is not:
+  // record() only returns null when the insert itself failed, which also
+  // means linkEvidence, markCompleted and markFailed below all silently
+  // no-op for this generation, and the article that's about to be created
+  // will be orphaned (no content_request_id, no version history, no
+  // evidence-usage tracking). We still persist the article -- the LLM
+  // call already happened and is paid for, discarding a good result over
+  // a bookkeeping-row failure would be worse -- but the gap is now loud
+  // (console.error) and visible to the caller via persistenceWarning
+  // instead of being indistinguishable from success.
   const contentRequestId = requestRecord?.id ?? null
+  let persistenceWarning: string | null = null
+  if (!contentRequestId) {
+    persistenceWarning = 'content_requests row could not be recorded; this article will have no content_request_id, version history, or evidence-usage tracking.'
+    console.error('[generate-article]', persistenceWarning, 'topic:', trimmedTopic)
+  }
   if (contentRequestId && evidenceIdsUsed.length) {
     await deps.contentRequests.linkEvidence(contentRequestId, evidenceIdsUsed)
-  }
-
-  // Generate localization notes (non-blocking, best-effort)
-  let localizationNotes = ''
-  try {
-    const { textStream } = await generateWithFallback({
-      task: 'utility',
-      systemPrompt: `You are a cultural localization consultant. Respond in ${regionProfile.languageName}.`,
-      userPrompt: buildLocalizationNotesPrompt(trimmedTopic, input.contentType, rssText, regionProfile),
-      maxTokens: 400,
-    })
-    for await (const chunk of textStream) {
-      localizationNotes += chunk
-    }
-    localizationNotes = cleanPlainTextOutput(localizationNotes)
-  } catch (e) {
-    console.warn('[generate] localization notes failed:', e)
   }
 
   const { id: articleId, error: articleInsertError } = await deps.articles.create({
@@ -217,7 +244,7 @@ Write only the final clean text for publication. No think tags. No Markdown.`
     status: 'draft',
     generation_model: generated.model,
     prompt_version: built.version,
-    source_context: localizationNotes || null,
+    source_context: null,
     template_id: input.templateId ?? null,
     brand_profile_id: input.brandProfileId ?? null,
     word_count: words,
@@ -241,6 +268,37 @@ Write only the final clean text for publication. No think tags. No Markdown.`
     await deps.contentRequests.markCompleted(contentRequestId)
   }
 
+  // Generate localization notes (non-blocking, best-effort). Moved to
+  // AFTER the article is persisted (Fable review, Phase 1) -- these are
+  // supplementary color for the article's source_context field, not part
+  // of the core generation. If this call is slow, fails, or the function
+  // is killed here, the article and content_requests row already exist
+  // and are already in their terminal state; nothing is left stranded in
+  // 'processing'. A failure here only means the article's source_context
+  // stays null, which the UI already treats as "no notes available".
+  let localizationNotes = ''
+  try {
+    const { textStream } = await generateWithFallback({
+      task: 'utility',
+      systemPrompt: `You are a cultural localization consultant. Respond in ${regionProfile.languageName}.`,
+      userPrompt: buildLocalizationNotesPrompt(trimmedTopic, input.contentType, rssText, regionProfile),
+      maxTokens: 400,
+    })
+    for await (const chunk of textStream) {
+      localizationNotes += chunk
+    }
+    localizationNotes = cleanPlainTextOutput(localizationNotes)
+  } catch (e) {
+    console.warn('[generate] localization notes failed:', e)
+  }
+
+  if (localizationNotes && articleId && deps.articles.updateSourceContext) {
+    const { error: notesUpdateError } = await deps.articles.updateSourceContext(articleId, localizationNotes)
+    if (notesUpdateError) {
+      console.warn('[generate] failed to attach localization notes to article', articleId, ':', notesUpdateError.message)
+    }
+  }
+
   return {
     text: cleanText,
     model: generated.model,
@@ -251,5 +309,6 @@ Write only the final clean text for publication. No think tags. No Markdown.`
       knowledgeChunks: knowledge.chunks.map((c) => ({ chunkId: c.chunkId, assetId: c.assetId, assetTitle: c.assetTitle, snippet: c.snippet })),
       competitorSignals: competitorContext.signals,
     },
+    persistenceWarning,
   }
 }
