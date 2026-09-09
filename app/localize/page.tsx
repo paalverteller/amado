@@ -19,9 +19,9 @@ const TARGET_LOCALES: Record<string, { locale: string; label: string }> = {
 export default function LocalizePage() {
   const { currentRegion, marketCode, ready: marketReady, error: marketError } = useMarket()
   const currentRegionId = currentRegion?.id ?? null
-  const target = TARGET_LOCALES[marketCode] ?? {
-    locale: currentRegion?.code ?? marketCode,
-    label: currentRegion?.name ?? marketCode,
+  const target = (marketCode ? TARGET_LOCALES[marketCode] : undefined) ?? {
+    locale: currentRegion?.code ?? marketCode ?? '',
+    label: currentRegion?.name ?? marketCode ?? '',
   }
   const [sourceText, setSourceText] = useState('')
   const [output, setOutput] = useState('')
