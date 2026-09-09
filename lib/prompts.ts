@@ -194,17 +194,30 @@ export interface RegionProfile {
   languageName: string
 }
 
-// Human-readable language names for prompt authoring (output_contract lines,
-// role descriptions). Deliberately separate from lib/locale.ts's
-// REGION_LOCALES, which only carries locale/currency/timezone -- this map is
-// prompt-specific content, not a generic locale utility. Keep the code list
-// in sync with REGION_LOCALES and the culturalNotes map below.
-const LANGUAGE_NAMES: Record<string, string> = {
-  BR: 'Portuguese (Brazil)',
-  ES: 'Spanish (Spain)',
-  DE: 'German (Germany)',
-  US: 'English (US)',
-  GB: 'English (UK)',
+// Fable review, Phase 2 (docs/fable-review.md): this used to be a second,
+// independently-hand-maintained "region code -> language name" map that
+// could (and did, for unmapped codes) silently disagree with the `regions`
+// table's own `default_language_code` column -- the actual source of
+// truth, already selected by buildRegionContextLayer below. Language
+// display names are now derived from `default_language_code` (a BCP-47-ish
+// locale string like 'es-ES') via this smaller, genuinely-static lookup,
+// keyed by LOCALE rather than by our own region codes -- this table is a
+// property of the language itself, not of Amado's region model, so it
+// can't drift out of sync with `regions` the way the old map did. A locale
+// missing from this table degrades to its raw code (e.g. 'fr-FR') rather
+// than silently becoming "Portuguese (Brazil)" -- see resolveRegionProfile.
+const LANGUAGE_DISPLAY_NAMES: Record<string, string> = {
+  'pt-BR': 'Portuguese (Brazil)',
+  'es-ES': 'Spanish (Spain)',
+  'es-MX': 'Spanish (Mexico)',
+  'de-DE': 'German (Germany)',
+  'en-US': 'English (US)',
+  'en-GB': 'English (UK)',
+  'it-IT': 'Italian (Italy)',
+}
+
+function languageNameForLocale(localeCode: string): string {
+  return LANGUAGE_DISPLAY_NAMES[localeCode] ?? localeCode
 }
 
 const DEFAULT_REGION_PROFILE: RegionProfile = {
@@ -221,27 +234,58 @@ const DEFAULT_REGION_PROFILE: RegionProfile = {
  * return is interpolated directly into system prompts at existing call
  * sites (lib/content-generation/generate-article.ts, /api/generate/batch) --
  * changing its shape would silently break those. This is new, additive.
- * Falls back to the Brazil profile for a missing/inactive/unknown region,
- * so every call site that doesn't pass a regionId keeps today's exact
- * pt-BR behavior.
+ * Falls back to the Brazil profile for a missing regionId (the documented
+ * "no region given -> Brazil" contract), so every call site that doesn't
+ * pass a regionId keeps today's exact pt-BR behavior.
+ *
+ * Fable review, Phase 2: a regionId that IS given but fails to resolve
+ * (DB error, unknown id, or an inactive region) used to collapse into the
+ * exact same DEFAULT_REGION_PROFILE with no log line -- indistinguishable
+ * from the documented "no region" contract. That's the "region given but
+ * unresolvable -> Brazil" failure mode the review flags as the core
+ * cross-cutting bug: it's undocumented and was silent. Both failure paths
+ * below now log loudly before falling back, so a DE/ES/US brand that
+ * silently produced Brazilian Portuguese output has a visible trail
+ * explaining why, instead of looking like a correctly-configured Brazil
+ * generation. Still falls back rather than throwing -- resolveRegionProfile
+ * is called from several places mid-generation after a paid LLM call may
+ * already have happened (see generate-article.ts), so aborting the whole
+ * request over a region lookup issue would be worse than degrading loudly.
+ * Contrast with resolveBrandRegionId (lib/brand-snapshot.ts), which DOES
+ * throw on a DB error -- that function runs before any LLM call, so
+ * throwing there is cheap and surfaces as a normal 500.
  */
 export async function resolveRegionProfile(regionId?: string | null): Promise<RegionProfile> {
   if (!regionId) return DEFAULT_REGION_PROFILE
 
   const { data: region, error } = await getSupabaseAdmin()
     .from('regions')
-    .select('code, name, locale_code')
+    .select('code, name, locale_code, default_language_code, active')
     .eq('id', regionId)
-    .eq('active', true)
     .maybeSingle()
 
-  if (error || !region) return DEFAULT_REGION_PROFILE
+  if (error) {
+    console.error('[resolveRegionProfile] DB error resolving region', regionId, '-- falling back to Brazil:', error.message)
+    return DEFAULT_REGION_PROFILE
+  }
+  if (!region) {
+    console.error('[resolveRegionProfile] regionId', regionId, 'does not exist -- falling back to Brazil')
+    return DEFAULT_REGION_PROFILE
+  }
+  if (!region.active) {
+    console.error('[resolveRegionProfile] region', regionId, `(${region.code}) is inactive -- falling back to Brazil`)
+    return DEFAULT_REGION_PROFILE
+  }
 
   return {
     code: region.code,
     name: region.name,
     locale: region.locale_code,
-    languageName: LANGUAGE_NAMES[region.code] ?? DEFAULT_REGION_PROFILE.languageName,
+    // Fable review, Phase 2: derive from the region's own
+    // default_language_code (the actual source of truth, already used by
+    // buildRegionContextLayer below) instead of a second hand-maintained
+    // "region code -> language name" map that could disagree with it.
+    languageName: languageNameForLocale(region.default_language_code),
   }
 }
 
@@ -250,12 +294,22 @@ export async function buildRegionContextLayer(regionId?: string | null): Promise
 
   const { data: region, error: regionError } = await getSupabaseAdmin()
     .from('regions')
-    .select('code, name, default_language_code, locale_code, currency_code, timezone')
+    .select('code, name, default_language_code, locale_code, currency_code, timezone, active')
     .eq('id', regionId)
-    .eq('active', true)
     .maybeSingle()
 
-  if (regionError || !region) return ''
+  if (regionError) {
+    console.error('[buildRegionContextLayer] DB error resolving region', regionId, '-- omitting region context:', regionError.message)
+    return ''
+  }
+  if (!region) {
+    console.error('[buildRegionContextLayer] regionId', regionId, 'does not exist -- omitting region context')
+    return ''
+  }
+  if (!region.active) {
+    console.error('[buildRegionContextLayer] region', regionId, `(${region.code}) is inactive -- omitting region context`)
+    return ''
+  }
 
   const parts: string[] = []
   parts.push(`<region>${region.name} (${region.code})</region>`)
@@ -402,8 +456,15 @@ export async function buildCompetitorContext(
       const competitorId = competitorBySource.get(item.source_id) ?? null
       return {
         evidenceId: item.id,
-        competitor: competitorId ? (names.get(competitorId) ?? 'Конкурент') : 'Конкурент',
-        title: item.source_title ?? 'Без названия',
+        // Fable review: these fallback strings feed BOTH the UI-facing
+        // `signals` array below AND, via `lines` a few lines down, the
+        // actual LLM prompt text -- a Russian UI-axis string leaking into
+        // the content-language axis of the prompt. English fallbacks are
+        // correct for the prompt; the UI reads structured data (evidenceId
+        // etc.) and applies its own t()-based labels, not this string
+        // directly, so this change does not remove Russian from the UI.
+        competitor: competitorId ? (names.get(competitorId) ?? 'Competitor') : 'Competitor',
+        title: item.source_title ?? 'Untitled',
         publishedAt: item.published_at ?? null,
       }
     })
@@ -423,7 +484,16 @@ export async function buildCompetitorContext(
   }
 }
 
-export async function buildEvidenceContext(evidenceItemIds?: string[] | null): Promise<string> {
+/**
+ * Fable review, Phase 2: `date` used to be formatted with a hardcoded
+ * `toLocaleDateString('pt-BR')` regardless of which market this evidence
+ * is being injected for -- a US generation would see a Brazilian-format
+ * date (DD/MM) and could misread or miswrite it. `locale` is optional and
+ * defaults to ISO 8601 (unambiguous, no locale assumption at all) rather
+ * than guessing a non-Brazil default; callers that already have the
+ * resolved region's locale (see generate-article.ts) should pass it.
+ */
+export async function buildEvidenceContext(evidenceItemIds?: string[] | null, locale?: string | null): Promise<string> {
   if (!evidenceItemIds || evidenceItemIds.length === 0) return ''
 
   const { data: items, error } = await getSupabaseAdmin()
@@ -433,7 +503,11 @@ export async function buildEvidenceContext(evidenceItemIds?: string[] | null): P
     .order('discovered_at', { ascending: false })
     .limit(10)
 
-  if (error || !items || items.length === 0) return ''
+  if (error) {
+    console.error('[buildEvidenceContext] DB error fetching evidence items -- omitting evidence context:', error.message)
+    return ''
+  }
+  if (!items || items.length === 0) return ''
 
   const parts: string[] = []
   parts.push('<evidence_context>')
@@ -441,7 +515,7 @@ export async function buildEvidenceContext(evidenceItemIds?: string[] | null): P
   
   for (const item of items) {
     const date = item.published_at 
-      ? new Date(item.published_at).toLocaleDateString('pt-BR')
+      ? (locale ? new Date(item.published_at).toLocaleDateString(locale) : new Date(item.published_at).toISOString().slice(0, 10))
       : 'recent'
     parts.push(`- [${date}] ${item.source_title}`)
     if (item.source_summary) {
@@ -502,11 +576,23 @@ function resolveLanguageProfile(spec: ContentSpec): {
     }
   }
 
-  if (ctx.languageName && ctx.languageName !== 'Portuguese (Brazil)') {
+  // Fable review, Phase 2: this branch used to be gated on
+  // `ctx.languageName !== 'Portuguese (Brazil)'` -- a string-equality
+  // self-reference against the exact same literal DEFAULT_REGION_PROFILE
+  // falls back to elsewhere in this file. Any locale not explicitly listed
+  // above (IT, MX, or any future region) that happened to resolve a
+  // languageName equal to that literal string would incorrectly skip this
+  // branch; more importantly, the OLD final fallback below hardcoded
+  // Brazil for every such region regardless of what real region data was
+  // available right here in `ctx`. Gate on locale instead of a language
+  // NAME string match -- unambiguous, and correctly falls through to using
+  // the real region's own name/language for any region not explicitly
+  // curated above, rather than silently mislabeling it as Brazil.
+  if (ctx.locale && ctx.locale !== DEFAULT_REGION_PROFILE.locale) {
     return {
-      languageName: ctx.languageName,
-      marketAdjective: ctx.regionName || ctx.languageName,
-      marketLabel: `${(ctx.regionName || ctx.languageName).toUpperCase()} MARKET SIGNALS`,
+      languageName: ctx.languageName || ctx.locale,
+      marketAdjective: ctx.regionName || ctx.languageName || ctx.locale,
+      marketLabel: `${(ctx.regionName || ctx.languageName || ctx.locale).toUpperCase()} MARKET SIGNALS`,
       seasonalityExample: 'locally relevant seasonal dates',
     }
   }

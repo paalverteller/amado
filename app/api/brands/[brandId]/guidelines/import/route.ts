@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
-import { extractGuidelineRules, calculateExtractionStats } from '@/lib/brand-os/guideline-extractor'
+import { extractGuidelineRules, calculateExtractionStats, BrandRegionRequiredError } from '@/lib/brand-os/guideline-extractor'
 import type { ExtractionInput, ExtractedRule } from '@/lib/brand-os/guideline-extractor'
 import type { RuleScope } from '@/lib/brand-os/types'
 import { getErrorMessage } from '@/lib/api/error-message'
@@ -272,7 +272,35 @@ export async function POST(
       }, { status: runFailed ? 500 : 201 })
     } catch (extractError) {
       console.error('[guideline-import] extraction failed:', extractError)
-      
+
+      // Fable review, Phase 2 (docs/fable-review.md): a brand with no
+      // region set used to fall through extractGuidelineRules into a
+      // silent Brazil-language extraction instead of a clear error.
+      // extractGuidelineRules now throws BrandRegionRequiredError for
+      // this case -- surface it as a 400 the caller can act on (set the
+      // brand's region, then retry) instead of the generic 500 every
+      // other extraction failure gets, and don't mark the run 'failed'
+      // as if extraction itself broke -- it never started.
+      if (extractError instanceof BrandRegionRequiredError) {
+        await admin
+          .from('guideline_import_runs')
+          .update({
+            status: 'failed',
+            error_summary: JSON.stringify({ message: extractError.message, code: 'brand_region_required' }),
+          })
+          .eq('id', importRun.id)
+
+        return NextResponse.json({
+          importRun: {
+            id: importRun.id,
+            status: 'failed',
+            documentType: importRun.document_type,
+            createdAt: importRun.created_at,
+          },
+          error: extractError.message,
+        }, { status: 400 })
+      }
+
       await admin
         .from('guideline_import_runs')
         .update({

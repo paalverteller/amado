@@ -115,16 +115,21 @@ export async function generateAndPersistArticle(
 
   // Resolve the market before automatic evidence selection so recent
   // context from one region cannot leak into another region's generation.
-  const effectiveRegionId = input.regionId ?? await resolveBrandRegionId(input.brandProfileId)
+  //
+  // Fable review, Phase 2 (docs/fable-review.md): `input.regionId ??
+  // resolveBrandRegionId(...)` used to accept a caller-supplied empty
+  // string as if it were a real, explicit regionId -- `??` only falls
+  // through on null/undefined, not on ''. A client that sends
+  // `regionId: ''` (a plausible default for an unset <select> in a form)
+  // would silently skip brand-derived region resolution entirely, then
+  // resolveRegionProfile('') hits its own falsy-check fallback to Brazil
+  // -- the same "region given but unresolvable -> Brazil" failure mode as
+  // a genuinely missing region, just reached via a different input shape.
+  // Treat the API boundary as untrusted: normalize '' (and any
+  // whitespace-only string) to nullish before applying the brand fallback.
+  const normalizedRegionId = input.regionId?.trim() || null
+  const effectiveRegionId = normalizedRegionId ?? await resolveBrandRegionId(input.brandProfileId)
 
-  // Stage 3: Use evidence_items instead of rss_items
-  const selectedEvidenceContext = await buildEvidenceContext(input.evidenceItemIds)
-  const recentEvidence = selectedEvidenceContext ? { text: '', ids: [], items: [] } : await getRecentEvidenceContext(trimmedTopic, 5, effectiveRegionId)
-  const rssText = selectedEvidenceContext || recentEvidence.text
-  const evidenceIdsUsed = input.evidenceItemIds?.length ? input.evidenceItemIds : recentEvidence.ids
-
-  const built = await buildSystemPrompt(input.templateId)
-  const brandSnapshot = await buildBrandSnapshot(input.brandProfileId, input.contentType)
   // Sprint 12 Phase 4: derive the region from the chosen brand when the
   // caller didn't pass one explicitly. A brand is scoped to one market --
   // trusting the caller to also independently pass a matching regionId
@@ -132,8 +137,23 @@ export async function generateAndPersistArticle(
   // Spain brandProfileId with the previous session's Brazil regionId still
   // cached). input.regionId stays authoritative when a caller does pass
   // it explicitly -- this is a fallback, not an override.
-  const regionContext = await buildRegionContextLayer(effectiveRegionId)
+  //
+  // Fable review, Phase 2: moved before buildEvidenceContext (was after)
+  // so its resolved locale can be passed through instead of that function
+  // defaulting to a locale-less ISO date format for every generation. Both
+  // calls only depend on effectiveRegionId, already resolved above, so
+  // reordering has no other effect.
   const regionProfile = await resolveRegionProfile(effectiveRegionId)
+
+  // Stage 3: Use evidence_items instead of rss_items
+  const selectedEvidenceContext = await buildEvidenceContext(input.evidenceItemIds, regionProfile.locale)
+  const recentEvidence = selectedEvidenceContext ? { text: '', ids: [], items: [] } : await getRecentEvidenceContext(trimmedTopic, 5, effectiveRegionId)
+  const rssText = selectedEvidenceContext || recentEvidence.text
+  const evidenceIdsUsed = input.evidenceItemIds?.length ? input.evidenceItemIds : recentEvidence.ids
+
+  const built = await buildSystemPrompt(input.templateId)
+  const brandSnapshot = await buildBrandSnapshot(input.brandProfileId, input.contentType)
+  const regionContext = await buildRegionContextLayer(effectiveRegionId)
   const knowledge = await buildKnowledgeContext(promptTopic, input.brandProfileId)
   const competitorContext = await buildCompetitorContext(promptTopic, input.brandProfileId)
   const socialPlaybookContext = await buildSocialPlaybookContext(input.contentType, input.brandProfileId)

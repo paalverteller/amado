@@ -15,6 +15,28 @@ import { generateArticleWithFallback } from '@/lib/ai'
 import { resolveBrandRegionId } from '@/lib/brand-snapshot'
 import { resolveRegionProfile } from '@/lib/prompts'
 
+/**
+ * Fable review, Phase 2 (docs/fable-review.md): thrown instead of silently
+ * falling through to the Brazil default when a brand has no region_id set.
+ * Given a brand is the unit guideline import operates on, "this brand has
+ * no region" should be a 4xx the caller can act on (set the brand's
+ * region, then retry), not a Brazil-language guideline extraction for a
+ * brand that might not be Brazilian at all. In practice this should be
+ * unreachable through normal application flows -- there is no POST
+ * /api/brands endpoint in this codebase; every brand that exists today was
+ * created via a SQL seed that sets region_id (confirmed by reading
+ * supabase/seeds/002_mvp_brazil_saas.sql, 006_spain_market_and_brand.sql,
+ * 007_germany_us_locales.sql). This guards against a brand created without
+ * one in the future (a hand-run insert, a new creation path) rather than
+ * an actively-exploitable gap today.
+ */
+export class BrandRegionRequiredError extends Error {
+  constructor(public readonly brandId: string) {
+    super(`Brand ${brandId} has no region set -- cannot import guidelines without a target market. Set the brand's region_id first.`)
+    this.name = 'BrandRegionRequiredError'
+  }
+}
+
 export interface ExtractionInput {
   sourceType: 'brand_book' | 'style_guide' | 'legal_review' | 'competitor_analysis' | 'manual'
   sourceUrl?: string
@@ -122,6 +144,9 @@ export async function extractGuidelineRules(
   input: ExtractionInput
 ): Promise<ExtractionResult> {
   const regionId = await resolveBrandRegionId(input.brandId)
+  if (!regionId) {
+    throw new BrandRegionRequiredError(input.brandId)
+  }
   const regionProfile = await resolveRegionProfile(regionId)
 
   // Build prompt

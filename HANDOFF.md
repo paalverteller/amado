@@ -1090,3 +1090,196 @@ touched):**
   `resolveLanguageProfile`'s Brazil-default leak for unmapped region
   codes, collapsing the four hand-maintained region maps onto the
   `regions` table) follows per `docs/fable-review.md`.
+
+<!-- FABLE_REVIEW_PHASE2_20260908 -->
+
+## Fable review remediation — Phase 2: region-failure ≠ absence (2026-09-08)
+
+**Correction to the review's own assumption, found during this phase's
+intake (documented here since it changes this phase's actual scope):**
+The original review assumed DE/US/ES brands might not have `region_id`
+set and treated that as the likely near-term trigger for the Brazil-
+default bugs it found. Checking `supabase/seeds/005_spain_region.sql`,
+`006_spain_market_and_brand.sql`, and `007_germany_us_locales.sql`
+(not in the review's 9-file bundle) against `HANDOFF.md`'s own record
+— which states as current fact that "the current product has four
+active market contexts: BR, ES, DE, US" — confirms these seeds are
+already applied. ES/DE/US regions and their placeholder brand profiles
+already exist with a `region_id` set. This phase is therefore a code
+correctness fix (removing latent risk and making a currently-hidden
+class of failure loud) rather than a fix for an actively-manifesting
+Brazil-language bug in production today — none of the severity ratings
+below are downgraded on that basis, since the underlying code defects
+are real and would bite the moment a query fails, a new region is
+added, or any input arrives slightly malformed.
+
+**What was done:**
+- `lib/prompts.ts` (`resolveRegionProfile`): now derives `languageName`
+  from the region's own `default_language_code` column (already the
+  source of truth `buildRegionContextLayer` uses) instead of a second,
+  independently hand-maintained `LANGUAGE_NAMES` map keyed by region
+  code. That map already covered `ES`/`DE`/`US`/`GB` correctly today,
+  but had no defense against a future region being added to `regions`
+  without a matching code added there too — it would have silently
+  produced `'Portuguese (Brazil)'` for the language name via its own
+  `?? DEFAULT_REGION_PROFILE.languageName` fallback, the exact
+  "unresolvable → Brazil" pattern this phase targets. Replaced with a
+  much smaller `LANGUAGE_DISPLAY_NAMES` map keyed by *locale code*
+  (`'es-ES'`, `'de-DE'`, …) — a property of the language itself, not
+  of Amado's region model, so it can't drift out of sync with
+  `regions` the way the old map did — and an unmapped locale now
+  degrades to its raw code (e.g. `'fr-FR'`) rather than silently
+  becoming Brazilian Portuguese.
+- Same function: distinguishes and logs three previously-identical
+  silent outcomes — DB query error, region genuinely not found, and
+  region found but `active = false` — each with its own
+  `console.error` before falling back to the documented Brazil
+  default. Previously all three (plus genuine absence) produced the
+  exact same `DEFAULT_REGION_PROFILE` with no log line at all.
+- `buildRegionContextLayer`: same three-way error/not-found/inactive
+  distinction and logging added.
+- `buildEvidenceContext`: removed the hardcoded
+  `toLocaleDateString('pt-BR')` — a US or DE generation would see a
+  Brazilian-format date (`DD/MM`) in its evidence context regardless
+  of target market. Added an optional `locale` parameter (defaults to
+  ISO 8601 — unambiguous, no locale assumption — when not given); also
+  fixed the same silently-collapsed `error || !items` pattern the rest
+  of this review's Phase 1/2 work has been fixing elsewhere.
+- `resolveLanguageProfile`: removed the risky
+  `ctx.languageName !== 'Portuguese (Brazil)'` string-equality
+  self-reference (checking a language *name* string against the exact
+  literal produced by this same file's own default). Replaced with a
+  check on `ctx.locale !== DEFAULT_REGION_PROFILE.locale` — unambiguous
+  — so any region not explicitly curated in this function (today: any
+  region other than BR/ES/DE/US, e.g. Italy, which is seeded in
+  `regions` per migration 023 but has no dedicated branch here) uses
+  its own real region data instead of silently being mislabeled as
+  Brazil. The three curated branches (ES/DE/US, which carry genuinely
+  market-specific seasonal/cultural authoring content, not just a
+  language name) are unchanged.
+- Bonus, one-line fix found while in this function: the fallback
+  strings `'Конкурент'` / `'Без названия'` in `buildCompetitorContext`
+  fed both the UI-facing `signals` array *and* the actual LLM prompt
+  text — a Russian UI-axis string leaking into the content-language
+  axis. Changed to `'Competitor'` / `'Untitled'`. Confirmed via
+  `app/generate/page.tsx` that the UI renders these values directly
+  (`{c.competitor}: {c.title}`) with no `t()` wrapper around them
+  specifically, so this is a pure improvement (consistent English
+  fallback next to otherwise-real evidence data) rather than removing
+  Russian from anywhere the UI actually intends it — the surrounding
+  static label stays Russian and is untouched.
+- `lib/content-generation/generate-article.ts` (building on Phase 1A):
+  `input.regionId ?? await resolveBrandRegionId(...)` used `??`, which
+  only falls through on `null`/`undefined` — a client sending
+  `regionId: ''` (a plausible default for an unset `<select>`) would
+  skip brand-derived region resolution entirely and hit
+  `resolveRegionProfile('')`'s own falsy fallback to Brazil. Normalized
+  to `input.regionId?.trim() || null` before applying the brand
+  fallback. Also reordered `resolveRegionProfile` before
+  `buildEvidenceContext` (both only depend on `effectiveRegionId`,
+  already resolved earlier) so the resolved locale can be passed
+  through instead of evidence context always defaulting to ISO dates.
+- `lib/brand-os/guideline-extractor.ts`: added `BrandRegionRequiredError`,
+  thrown by `extractGuidelineRules` when a brand has no `region_id` set,
+  before any LLM call is made. Previously this case fell through to
+  `resolveRegionProfile(null)` → Brazil defaults, extracting guideline
+  rules in Portuguese for a brand that might target any market. Given a
+  brand is the unit this operates on, "brand has no region" is now an
+  error the caller can act on, not a silent default. **In practice this
+  should be unreachable through normal application flows** — confirmed
+  there is no `POST /api/brands` endpoint anywhere in this codebase;
+  every brand that exists was created via a SQL seed that sets
+  `region_id`. This is defensive hardening against a brand created
+  without one in the future, not a fix for an actively-reachable gap
+  today — noted explicitly rather than overstating the severity.
+- `app/api/brands/[brandId]/guidelines/import/route.ts` (building on
+  Phase 1B): catches `BrandRegionRequiredError` specifically and
+  returns `400` with an actionable message, instead of the generic
+  `500` every other extraction failure gets. The run is marked
+  `failed` with a distinguishing `error_summary.code:
+  'brand_region_required'` rather than a generic message, so it's
+  identifiable later without re-parsing the message text.
+
+**Consciously not done in this phase:**
+- Did not fully collapse `culturalNotes`/`MARKET_FLAGS` (in
+  `lib/market-context.tsx`) onto the `regions` table — those two maps
+  carry genuinely curated content (cultural notes, flag emoji) that
+  isn't derivable from `default_language_code` the way a language
+  *name* is. `resolveLanguageProfile`'s three curated market branches
+  (ES/DE/US) are left as explicit code for the same reason: their
+  seasonality examples are real authored content, not generated data.
+  What's fixed is the *fallback* path for everything NOT explicitly
+  curated — it no longer silently mislabels as Brazil.
+- Did not touch `buildSystemPrompt`'s silent template-resolution
+  fallback (requested template errors → default template → hardcoded
+  `PROMPT_FALLBACK`, no log on either branch) — this is a template
+  resolution concern, not a region resolution one; flagged in
+  `docs/fable-review.md` but not bundled into this phase to keep the
+  diff focused.
+- Did not address `buildKnowledgeContext`/`buildCompetitorContext`'s
+  own silently-collapsed `error` checks beyond the one-line date-format
+  and Russian-fallback fixes made in passing — these are the same
+  cross-cutting "`{data,error}` collapse" pattern Phase 1 fixed in
+  `brand-snapshot.ts`, tracked as its own cross-cutting item in
+  `docs/fable-review.md` rather than duplicated function-by-function
+  across every phase that happens to touch a file.
+
+**Bugs found and fixed along the way (beyond the review's own list):**
+- None new this phase beyond the scope-correcting finding documented
+  above (the ES/DE/US region seeds already being applied).
+
+**Verification performed:**
+- `python3 -m py_compile` on the patch script.
+- Real `tsc --noEmit --strict` against `lib/prompts.ts` with its real
+  transitive dependency graph (`lib/repositories/knowledge-repository.ts`,
+  `lib/knowledge/embeddings.ts`, `lib/amado-config.ts`,
+  `lib/domain/knowledge.ts`, `lib/content-formats.ts`, plus type-accurate
+  stubs for `lib/supabase/client.ts` and `lib/ai-utils.ts`) — zero errors.
+- Real `tsc --noEmit --strict` against the full combined Phase 1A + 1B +
+  Phase 2 change set together (`brand-snapshot.ts`, both
+  `generate-article.ts` iterations, both guideline routes,
+  `guideline-extractor.ts`, `prompts.ts`, all four test files) — zero
+  errors.
+- 14 tests across 3 files run via vitest, 3× for flakiness, order
+  varied between runs (confirmed order-independence, not just repeat-
+  independence) — zero failures throughout:
+  - `lib/prompts.test.ts` (5 new): Brazil default with no
+    `regionContext`; curated ES/DE branches; the core regression test
+    — an uncurated non-Brazil region (Italy) does NOT collapse into
+    Brazil; explicit `pt-BR` locale still resolves to Brazil correctly.
+  - `lib/brand-os/guideline-extractor.test.ts` (3 new):
+    `BrandRegionRequiredError` thrown before any LLM call for a
+    region-less brand (confirmed via a mock assertion that
+    `generateArticleWithFallback` was never called — the fail-fast
+    behavior, not just the error type); the error carries the
+    `brandId` for the caller to act on; a brand WITH a region
+    proceeds normally.
+  - `lib/content-generation/generate-article.test.ts` (6, from Phase
+    1A, unchanged): all still pass against the Phase 2 reorder and
+    `''`-normalization, confirming no regression to "explicit regionId
+    always wins" / "derives region from brand" behavior.
+- Drift-guard correctness check on this delivery itself: initially
+  generated the `generate-article.ts` and
+  `guidelines/import/route.ts` "original" (pre-Phase-2) payloads
+  against the wrong baseline (the true pre-Phase-1 pristine file
+  instead of Phase 1A's/1B's actual output) and separately caught that
+  `guideline-extractor.ts`'s "original" payload had been generated
+  from an already-in-place-edited copy of the file rather than the
+  pristine source — both would have produced a patch script whose
+  drift-guard either falsely rejected an already-Phase-1-patched repo
+  or (worse) silently accepted re-overwriting already-patched content
+  with something else. Caught via explicit `diff` against the correct
+  baseline before packaging, not discovered by the drift-guard itself
+  at apply time — worth calling out since it's exactly the
+  phase-recorded-vs-file-on-disk risk this project's own conventions
+  warn about, this time in the patch-authoring step rather than the
+  target repo.
+- Structural balance checks (braces/parens/brackets/backticks) on all
+  changed files.
+
+**Next steps queued:**
+- Phase 3 (generation reliability: `maxTokens`/`maxOutputTokens` SDK
+  rename, fixed model order instead of `rotateGroup` shuffling,
+  cooldown on timeout/5xx not just quota errors, shared request-scoped
+  deadline, parallelizing `generate-article.ts`'s remaining serial
+  awaits) follows per `docs/fable-review.md`.
