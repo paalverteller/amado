@@ -159,7 +159,7 @@ export default function MarketPage() {
       setInitialLoading(true)
       clearSelection()
       try {
-        const result = await fetchMarketItems(currentRegionId)
+        const result = await fetchMarketItems(currentRegionId!)
         if (!cancelled) { setItems(result.items); setMeta(result.meta); setError(null) }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Не удалось загрузить данные')
