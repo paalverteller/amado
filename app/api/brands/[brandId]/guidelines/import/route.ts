@@ -1,12 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/client'
 import { extractGuidelineRules, calculateExtractionStats } from '@/lib/brand-os/guideline-extractor'
-import type { ExtractionInput } from '@/lib/brand-os/guideline-extractor'
+import type { ExtractionInput, ExtractedRule } from '@/lib/brand-os/guideline-extractor'
+import type { RuleScope } from '@/lib/brand-os/types'
 import { getErrorMessage } from '@/lib/api/error-message'
 import { resolveBrandRegionId } from '@/lib/brand-snapshot'
 import { resolveRegionProfile } from '@/lib/prompts'
 
 export const dynamic = 'force-dynamic'
+
+// Fable review, Phase 1 (confirmed critical bug -- see docs/fable-review.md
+// Phase 1 and "Triage notes"): this used to be built as
+// `{ scope: rule.scope, target: rule.scopeTarget }`, a shape with ZERO
+// fields in common with RuleScope (lib/brand-os/types.ts), which is what
+// precedence.ts's scopeMatches() actually reads. Every rule ever published
+// through this pipeline has therefore scope-matched as fully global,
+// regardless of its intended platform/format/campaign scope. rule.scope is
+// the SCOPE DIMENSION name ('global' | 'platform' | 'format' | 'campaign'),
+// and rule.scopeTarget is the VALUE within that dimension (e.g. 'linkedin'
+// when scope === 'platform') -- so the correct RuleScope is: every field
+// unset for 'global', or exactly one field set to scopeTarget for the
+// other three, keyed by the dimension name itself.
+export function toRuleScope(rule: Pick<ExtractedRule, 'scope' | 'scopeTarget'>): RuleScope {
+  if (rule.scope === 'global' || !rule.scopeTarget) return {}
+  return { [rule.scope]: rule.scopeTarget } as RuleScope
+}
 
 export async function POST(
   request: NextRequest,
@@ -118,6 +136,15 @@ export async function POST(
         safety: 'safety',
       }
       const candidateIdByIndex = new Map<number, string>()
+      // Fable review, Phase 1: the response used to report stats.total
+      // from the extraction result regardless of how many candidates
+      // actually made it into the DB. Track real insert outcomes
+      // separately so a systematic constraint failure (the exact bug
+      // class this project fixed once before) is visible in the
+      // response instead of silently producing "N extracted, 0 in the
+      // review screen, HTTP 201".
+      let insertedCount = 0
+      const insertErrors: string[] = []
 
       for (let i = 0; i < extractionResult.rules.length; i++) {
         const rule = extractionResult.rules[i]
@@ -132,7 +159,7 @@ export async function POST(
             rule_key: `${rule.ruleType}_${rule.scope}`,
             operator: 'must',
             value_json: { instruction: rule.instruction, rationale: rule.rationale },
-            scope_json: { scope: rule.scope, target: rule.scopeTarget },
+            scope_json: toRuleScope(rule),
             confidence: rule.confidence === 'high' ? 1 : rule.confidence === 'medium' ? 0.6 : 0.3,
             rationale_summary: rule.rationale,
             human_decision: 'pending',
@@ -142,9 +169,11 @@ export async function POST(
 
         if (candidateError) {
           console.error('[guideline-import] candidate insert failed:', candidateError.message)
+          insertErrors.push(candidateError.message)
           continue
         }
         candidateIdByIndex.set(i, candidate.id)
+        insertedCount += 1
       }
 
       // Store conflicts.
@@ -188,31 +217,59 @@ export async function POST(
         }
       }
 
-      // Update import run
+      // Fable review, Phase 1: a systematic constraint failure (every
+      // candidate insert fails, e.g. a schema mismatch) used to still
+      // report success with wrong stats. If the extraction found rules
+      // but literally none of them persisted, this run did not actually
+      // produce anything a human can review -- mark it failed instead of
+      // review, with the underlying DB errors attached, so it surfaces
+      // the same way a total extraction failure already does below.
+      const totalExtracted = extractionResult.rules.length
+      const runFailed = totalExtracted > 0 && insertedCount === 0
+      const finalStatus = runFailed ? 'failed' : 'review'
+
       await admin
         .from('guideline_import_runs')
         .update({
-          status: 'review',
+          status: finalStatus,
           extraction_summary: {
             ...importRun.extraction_summary,
             stats,
             summary: extractionResult.summary,
             requiresLegalReview: extractionResult.requiresLegalReview,
           },
-          completed_at: new Date().toISOString(),
+          error_summary: runFailed
+            ? JSON.stringify({ message: `All ${totalExtracted} extracted candidates failed to persist`, insertErrors })
+            : null,
+          // Fable review, Phase 1: only stamp completed_at on the
+          // 'review' path (extraction genuinely finished and produced
+          // something to review). The 'failed' path deliberately mirrors
+          // the catch block below, which never sets completed_at for a
+          // failed run -- completed_at should mean "this run reached a
+          // usable end state", not merely "we stopped touching it".
+          completed_at: runFailed ? null : new Date().toISOString(),
         })
         .eq('id', importRun.id)
 
       return NextResponse.json({
         importRun: {
           id: importRun.id,
-          status: 'review',
+          status: finalStatus,
           documentType: importRun.document_type,
           createdAt: importRun.created_at,
-          stats,
+          stats: {
+            ...stats,
+            // Ground truth: what's actually in the DB, distinct from
+            // `total`/`hardRules`/etc above, which describe what the
+            // extraction agent proposed regardless of persistence outcome.
+            insertedCandidates: insertedCount,
+            failedCandidates: totalExtracted - insertedCount,
+          },
         },
-        message: 'Extraction complete. Review candidates before publishing.',
-      }, { status: 201 })
+        message: runFailed
+          ? `Extraction found ${totalExtracted} candidate rule(s), but none could be saved. See error_summary on the import run.`
+          : 'Extraction complete. Review candidates before publishing.',
+      }, { status: runFailed ? 500 : 201 })
     } catch (extractError) {
       console.error('[guideline-import] extraction failed:', extractError)
       
@@ -220,7 +277,15 @@ export async function POST(
         .from('guideline_import_runs')
         .update({
           status: 'failed',
-          error_summary: { message: getErrorMessage(extractError) },
+          // Fable review, Phase 1 (bonus fix): error_summary is a TEXT
+          // column (see supabase/migrations/033_guideline_compiler.sql),
+          // not JSONB -- writing a plain object here was a pre-existing
+          // bug in this catch block (the object would either fail to
+          // serialize correctly or be coerced to "[object Object]"
+          // depending on the client, silently losing the error detail
+          // this field exists to preserve). JSON.stringify it like the
+          // two other error_summary writes in this route below.
+          error_summary: JSON.stringify({ message: getErrorMessage(extractError) }),
         })
         .eq('id', importRun.id)
 

@@ -971,3 +971,122 @@ touched):**
 - After Phase 1B, Phase 1 is complete; Phase 2 (region-failure ≠
   absence, collapsing the four hand-maintained region maps) follows
   per `docs/fable-review.md`.
+
+<!-- FABLE_REVIEW_PHASE1B_20260906 -->
+
+## Fable review remediation — Phase 1B: guideline import + publish routes (2026-09-06)
+
+**What was done:**
+- `app/api/brands/[brandId]/guidelines/import/route.ts`: fixed the
+  confirmed critical `scope_json` bug. The old code wrote
+  `scope_json: { scope: rule.scope, target: rule.scopeTarget }` — a
+  shape with **zero fields in common** with `RuleScope`
+  (`lib/brand-os/types.ts`), which is what `precedence.ts`'s
+  `scopeMatches()` actually reads at generation time. Every rule ever
+  published through this pipeline therefore scope-matched as fully
+  global regardless of its intended platform/format/campaign scope —
+  this was confirmed as a live, not hypothetical, bug during Phase 0's
+  intake (see `docs/fable-review.md`, "Triage notes"). Added a new
+  exported `toRuleScope()` function: `rule.scope` names the scope
+  *dimension* (`'global' | 'platform' | 'format' | 'campaign'`), and
+  `rule.scopeTarget` is the *value* within that dimension — so the fix
+  keys exactly one `RuleScope` field, by dimension name, to the target
+  value, and returns `{}` (matches everywhere, correctly) for
+  `'global'` or a missing target.
+- Same route: candidate insert failures are now counted
+  (`insertedCount`/`insertErrors`) instead of only logged. If
+  extraction found candidates but literally none of them persisted
+  (the exact bug class this project fixed once before, reachable here
+  via a different constraint), the run is now marked `failed` with
+  `error_summary` instead of `review` with HTTP 201 and a `stats.total`
+  that doesn't reflect what's actually in the database. The response
+  now includes `insertedCandidates`/`failedCandidates` alongside the
+  existing extraction-quality `stats`.
+- `app/api/brands/[brandId]/guidelines/import/[runId]/route.ts`
+  (`PATCH`, the `publish` branch — the actual candidate → `brand_rules`
+  write path, distinct from `.../rule-sets/[ruleSetId]/publish/
+  route.ts` which only flips `brand_rule_sets.status`): the
+  `published: N` count and `success` flag are now ground truth from
+  this request's own `brand_rules` insert loop, not an echo of the
+  `publish` boolean or a count taken from `candidateDecisions` in the
+  request body. If candidates were approved but zero could be saved to
+  `brand_rules`, the run is no longer marked `completed` — it stays in
+  `review` with the failure recorded in `error_summary`, and the
+  response is a `500` with `success: false` instead of a silent
+  `200`. Confirmed via `components/brand/tabs/GuidelineImportTab.tsx`
+  that no frontend code reads `data.published` as a strict boolean
+  (it only reads `data.success` and `res.ok`), so widening that field's
+  type from `boolean` to `number | false` is safe.
+- **Bonus fix found during this phase's cross-checking (not in the
+  original review, which didn't have the DDL to check this):**
+  `guideline_import_runs.error_summary` is a `TEXT` column (confirmed
+  against `supabase/migrations/033_guideline_compiler.sql`), not
+  `JSONB`. Both routes — including the *pre-existing* extraction-
+  failure catch block in the import route, which predates this
+  phase's changes — were writing plain JS objects directly into it.
+  All `error_summary` writes across both routes now `JSON.stringify`
+  first. The `GET` handler in `[runId]/route.ts` now parses it back to
+  an object on read (`parseErrorSummary`), tolerating legacy rows that
+  may hold the old buggy value or a plain string, so a pre-fix run
+  doesn't throw when read after this fix lands.
+- Added `app/api/brands/[brandId]/guidelines/import/route.test.ts`:
+  focused unit tests for `toRuleScope()` covering all three non-global
+  dimensions, the global case (including the defensive case of a
+  global rule with a spuriously-set `scopeTarget`), and a missing-
+  target fallback. This is the single most load-bearing fix in the
+  entire Fable review, so it gets dedicated regression coverage rather
+  than only being exercised indirectly.
+
+**Consciously not done in this phase:**
+- Did not add integration-level tests for either route's full request/
+  response cycle (would require a substantial new Supabase-mocking
+  harness that doesn't exist yet for these routes) — scoped this
+  phase's testing to the pure-function fix (`toRuleScope`) that
+  carries the confirmed-critical bug, which is both the highest-value
+  target and the one actually testable in isolation without new
+  infrastructure.
+- Did not change `rule_key` construction (`${ruleType}_${scope}`,
+  still collision-prone across multiple rules of the same type/scope
+  in one brand book) — the SQL migration from Phase 1A now makes that
+  collision fail loudly at insert instead of silently duplicating, but
+  fixing the collision at the source (e.g. including a stable index or
+  content hash) is a separate design decision not yet made, tracked in
+  `docs/fable-review.md` Phase 1.
+- Did not touch `.../rule-sets/[ruleSetId]/publish/route.ts` (the
+  other, currently-unused-in-practice publish path that only flips
+  `brand_rule_sets.status`) — it doesn't write `brand_rules` at all,
+  so it wasn't in scope for this fix.
+
+**Bugs found and fixed along the way (beyond the review's own list):**
+- The `error_summary` TEXT-vs-object mismatch described above,
+  including in code this phase didn't otherwise need to touch (the
+  extraction-failure catch block in the import route) — fixed while
+  in the area rather than left inconsistent with the new writes.
+
+**Verification performed:**
+- `python3 -m py_compile` on the patch script.
+- Real `tsc --noEmit --strict` against both route files together, plus
+  the real `lib/brand-os/types.ts`, `lib/brand-os/precedence.ts`,
+  `lib/brand-os/guideline-extractor.ts` (unmodified), and Phase 1A's
+  fixed `lib/brand-snapshot.ts` (since the import route calls
+  `resolveBrandRegionId`, exercising both phases' changes together) —
+  zero errors.
+- New `toRuleScope()` unit tests run via vitest: 6/6 pass, run 3× for
+  flakiness, zero failures.
+- Confirmed via direct inspection of
+  `components/brand/tabs/GuidelineImportTab.tsx` that the `published`
+  field's type change is not a breaking change for any current
+  consumer (grepped for `.published` usage — none found; the
+  component only reads `data.success` and `res.ok`).
+- Structural balance checks (braces/parens/brackets/backticks) on both
+  changed route files.
+- Drift-guard: byte-for-byte comparison of each changed route file's
+  full on-disk content against the exact pre-patch content pulled
+  from this session's repomix snapshot, before writing.
+
+**Next steps queued:**
+- Phase 1 is now complete pending your application of both 1A and 1B
+  plus the SQL migration. Phase 2 (region-failure ≠ absence,
+  `resolveLanguageProfile`'s Brazil-default leak for unmapped region
+  codes, collapsing the four hand-maintained region maps onto the
+  `regions` table) follows per `docs/fable-review.md`.

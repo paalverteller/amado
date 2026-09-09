@@ -70,7 +70,13 @@ export async function GET(
         status: importRun.status,
         documentType: importRun.document_type,
         extractionSummary: importRun.extraction_summary,
-        errorSummary: importRun.error_summary,
+        // error_summary is stored as TEXT (JSON.stringify'd -- see the
+        // POST route and this route's PATCH handler); parse it back to
+        // an object for consumers instead of handing back a raw JSON
+        // string. Tolerate legacy rows written before this fix that may
+        // still hold the old (buggy) object-coerced-to-string value or
+        // a plain non-JSON error message.
+        errorSummary: parseErrorSummary(importRun.error_summary),
         timingMs: importRun.timing_ms,
         createdAt: importRun.created_at,
         completedAt: importRun.completed_at,
@@ -82,6 +88,19 @@ export async function GET(
   } catch (err) {
     console.error('[guideline-import-status] error:', err)
     return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
+  }
+}
+
+function parseErrorSummary(raw: string | null): unknown {
+  if (!raw) return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    // Pre-fix rows may hold a plain string (or "[object Object]" from
+    // the original bug this route's PATCH handler fixes) -- surface it
+    // as-is rather than throwing on a run whose only fault is predating
+    // this fix.
+    return { message: raw }
   }
 }
 
@@ -134,6 +153,21 @@ export async function PATCH(
       }
     }
 
+    // Fable review, Phase 1: everything below this point used to report
+    // `published: publish` (a boolean echo of the request flag) plus a
+    // count taken from candidateDecisions in the REQUEST BODY just
+    // PATCHed -- never from how many brand_rules rows actually got
+    // inserted. A publish-only call with candidateDecisions omitted
+    // reported "Published 0 rules" regardless of how many rules were
+    // actually written (or attempted); a systematic brand_rules
+    // constraint failure (console.warn-only, same silent-partial-
+        // failure shape as the import route) was invisible to the caller.
+    // publishedRuleCount/failedRuleInserts below are ground truth from
+    // this request's own insert loop.
+    let publishedRuleCount = 0
+    let failedRuleInserts = 0
+    let publishFailedEntirely = false
+
     // Publish approved candidates to active rule set
     if (publish) {
       const { data: approvedCandidates, error: fetchError } = await admin
@@ -185,6 +219,7 @@ export async function PATCH(
       }
 
       // Insert approved rules
+      const ruleInsertErrors: string[] = []
       for (const candidate of (approvedCandidates || [])) {
         const { error: insertError } = await admin
           .from('brand_rules')
@@ -204,24 +239,49 @@ export async function PATCH(
 
         if (insertError) {
           console.warn('[guideline-import] Failed to insert rule:', insertError.message)
+          ruleInsertErrors.push(insertError.message)
+          failedRuleInserts += 1
+        } else {
+          publishedRuleCount += 1
         }
       }
 
-      // Update import run status
+      const approvedCount = approvedCandidates?.length ?? 0
+      publishFailedEntirely = approvedCount > 0 && publishedRuleCount === 0
+
+      // Update import run status. A publish that approved candidates but
+      // persisted none of them is not a completed publish -- leave the
+      // run visibly not-completed with the failure recorded, instead of
+      // reporting 'completed' with zero actual effect.
       await admin
         .from('guideline_import_runs')
         .update({
-          status: 'completed',
-          completed_at: new Date().toISOString(),
+          status: publishFailedEntirely ? 'review' : 'completed',
+          completed_at: publishFailedEntirely ? null : new Date().toISOString(),
+          // error_summary is TEXT (supabase/migrations/033_guideline_compiler.sql),
+          // not JSONB -- stringify, same fix as the import route.
+          error_summary: publishFailedEntirely
+            ? JSON.stringify({ message: `Publish approved ${approvedCount} candidate(s) but 0 could be saved to brand_rules`, insertErrors: ruleInsertErrors })
+            : (failedRuleInserts > 0 ? JSON.stringify({ message: `${failedRuleInserts} of ${approvedCount} approved rule(s) failed to publish`, insertErrors: ruleInsertErrors }) : null),
         })
         .eq('id', runId)
     }
 
+    if (publishFailedEntirely) {
+      return NextResponse.json({
+        success: false,
+        published: 0,
+        message: `Publish failed: 0 of the approved candidates could be saved to brand_rules.`,
+      }, { status: 500 })
+    }
+
     return NextResponse.json({
       success: true,
-      published: publish,
+      published: publish ? publishedRuleCount : false,
       message: publish
-        ? `Published ${candidateDecisions?.filter((d: { humanDecision: string }) => d.humanDecision === 'approved').length ?? 0} rules`
+        ? (failedRuleInserts > 0
+            ? `Published ${publishedRuleCount} rule(s); ${failedRuleInserts} failed to save.`
+            : `Published ${publishedRuleCount} rule(s)`)
         : 'Decisions saved',
     })
   } catch (err) {
