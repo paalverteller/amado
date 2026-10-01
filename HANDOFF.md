@@ -2791,3 +2791,29 @@ brand_pain_points 7, brand_rule_sets 1, content_formats 12.
 1. Decide and apply the three FKs above (optional; no known bug depends on them).
 2. Investigate item 1 (hydration) first: it affects two delivered features.
 3. ES/DE/US Brand OS content (business decision).
+
+
+<!-- CLOSING_STATE_20260919 -->
+## Closing state of the 2026-09 working session
+
+- **Git:** apply_001..012 are committed and pushed to origin/main (code of 001..010 in 3bc3a9a,
+  011 in 42b4de7, 012 in 740961a). This resolves open item 3 of SESSION_HANDOFF_20260919.
+- **Not recorded here:** the results of `npm test`, `npm run build`, `npm run lint` and the three
+  `scripts/verify-*.mjs` run in Codespaces after the push, and the Vercel deployment status.
+  They were run in a sandbox on a pristine baseline (174/174 tests, build OK, lint baseline
+  6 problems, verifiers 17/17, 29/29, 24/24), never against the real Supabase. First thing next
+  session: confirm the Vercel deployment of 740961a is green and open Settings, `/market/base`
+  and `/brand` once, since the new endpoints were only tested against a local Postgres.
+- **Patch scripts are not in the repository.** `apply_*.py` and `.amado-patch-backups/` are
+  gitignored and local to the operator's machine. The code they changed is in git history; the
+  scripts themselves are archived outside the repo by the operator, not versioned.
+- **Stale snapshots:** a `repomix-output.xml` made before 2026-09-10 predates all of this work.
+  Regenerate it before any analysis, and replace the copy attached to the Claude project.
+- **Open items, in order:**
+  1. Why `evidence_items.full_text` is NULL in every row (see AUDIT_RESULTS_20260919, item 1).
+  2. Optional: the three FKs (re-run audit statement 6 first).
+  3. ES/DE/US Brand OS content (business decision).
+  4. Untouched on purpose: 6 pre-existing lint problems, `SourceHealth` declared in three files,
+     hardcoded Russian under `components/brand/*`, HANDOFF.md size (read the last blocks first).
+- **Starting a new dialog:** read the tail of this file (SESSION_HANDOFF_20260919,
+  AUDIT_RESULTS_20260919, this block) before anything else.
