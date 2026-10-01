@@ -2729,3 +2729,65 @@ sections above hold the detail and the reasoning.
 - The Supabase SQL Editor shows only the last statement's grid and hides NOTICE output: send audit statements one at a time.
 - The sandbox may reset between turns (services and directories disappear): rebuild from the uploaded repomix.
 - Generator scripts: do not backslash-escape apostrophes inside triple-quoted strings (it prints literal backslashes).
+
+
+<!-- AUDIT_RESULTS_20260919 -->
+## Live-schema audit: production results (2026-09-19)
+
+Appended after the audit statements 5 and 6 were run on production. This block
+supersedes the "Production result not reviewed yet" bullet in SESSION_HANDOFF_20260919.
+Classification below is inference from column names, the code, and row counts,
+not proof; each item says what would settle it.
+
+### Statement 6: FK candidates, orphan check
+`orphan_rows = 0` for `brand_claims.product_id -> brand_products`,
+`content_assets.generation_run_id -> generation_runs`,
+`content_packages.policy_snapshot_id -> policy_snapshots`.
+**Not applied yet.** Adding them is a production schema change: run in the Supabase SQL Editor,
+then record it as the next migration file (the repository convention is that migration files
+record SQL that was actually applied). `ON DELETE SET NULL` matches every sibling FK:
+```sql
+ALTER TABLE brand_claims ADD CONSTRAINT brand_claims_product_id_fkey
+  FOREIGN KEY (product_id) REFERENCES brand_products(id) ON DELETE SET NULL;
+ALTER TABLE content_assets ADD CONSTRAINT content_assets_generation_run_id_fkey
+  FOREIGN KEY (generation_run_id) REFERENCES generation_runs(id) ON DELETE SET NULL;
+ALTER TABLE content_packages ADD CONSTRAINT content_packages_policy_snapshot_id_fkey
+  FOREIGN KEY (policy_snapshot_id) REFERENCES policy_snapshots(id) ON DELETE SET NULL;
+```
+Re-run statement 6 immediately before applying (data can change); stop if any `orphan_rows > 0`.
+
+### Statement 5: columns that are NULL in every row (58 columns in 12 tables)
+Row counts at the time: evidence_items 404, rss_items 80, rss_sources 59, briefing_items 131,
+competitors 49, brand_terms 28, brand_content_pillars 15, articles 7, content_requests 7,
+brand_pain_points 7, brand_rule_sets 1, content_formats 12.
+
+1. **Needs investigation: `evidence_items.full_text` is NULL in 404 of 404 rows**
+   (also `full_text_storage_ref`). Code: hydration runs when `AMADO_HYDRATION_ENABLED` is true
+   (default true, `lib/amado-config.ts`) with a budget of 40 per run (`AMADO_MAX_HYDRATION_PER_RUN`).
+   So either the flag is false in the Vercel environment, or every fetch fails. Consequences:
+   the Settings "Полный текст" metric (apply_002/003) reads 0% for every source, and competitor
+   mention matching (apply_008, `generateCompetitorReview`) only ever sees title and summary.
+   To settle it: `SELECT hydration_status, count(*) FROM evidence_items GROUP BY 1;` and check
+   the Vercel env var. Not a code defect found; no fix made.
+2. **Known never-written schema (already recorded earlier):** `evidence_items.region_ids`,
+   `evidence_items.duplicate_of`, `rss_sources.avg_title_length`, `avg_summary_length`,
+   `language_detected`. Also NULL everywhere and plausibly the same kind, not verified against
+   code: `rss_sources.rights_notes`, `rss_sources.type` (there is a separate `source_type`),
+   `evidence_items.entities/topics/raw_item_id/source_author/localized_*`.
+3. **Features with no use in production yet:** `competitors.last_reviewed_at` is NULL for all 49
+   competitors although `app/api/competitors/[id]/review/route.ts` does write it, so no review has
+   completed (the dashboard therefore lists every competitor as stale); `briefing_items.feedback`,
+   `feedback_at`, `sent_to_generation_at` (131 rows); `content_requests.parent_request_id`
+   (no refinements yet); `brand_rule_sets.published_at` (the one rule set has never been published;
+   whether it is `active` was not checked).
+4. **Legacy path:** `rss_items.title_ru`, `summary_ru` NULL in all 80 rows, the older translation
+   step has not populated them.
+5. **Correction to an earlier inference:** the Brand OS tables are not empty in production
+   (`brand_terms` 28, `brand_content_pillars` 15, `brand_pain_points` 7, `brand_rule_sets` 1).
+   The seed-file reading only showed what seeds create. Which brand owns these rows is unknown;
+   `GET /api/brands/os-coverage` per brand still answers "does ES/DE/US have rules".
+
+### Open items after this block
+1. Decide and apply the three FKs above (optional; no known bug depends on them).
+2. Investigate item 1 (hydration) first: it affects two delivered features.
+3. ES/DE/US Brand OS content (business decision).

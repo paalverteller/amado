@@ -195,8 +195,13 @@ consistent in production; three `*_id` columns look like missing FKs
 (`brand_claims.product_id`, `content_assets.generation_run_id`,
 `content_packages.policy_snapshot_id`); no index patch (YAGNI).
 
+**Audit run on production (2026-09-19), see AUDIT_RESULTS_20260919 in HANDOFF.md.**
+`orphan_rows = 0` for all three FK candidates (not yet applied). The biggest finding is
+`evidence_items.full_text` NULL in every row (404/404) although hydration is enabled by default.
+
 **Still open:**
-- Run audit statements 5 and 6 on production; add an FK only where `orphan_rows = 0`.
+- Investigate why no evidence has full text (Vercel env flag vs failing fetches).
+- Optional: apply the three FKs (re-run statement 6 first).
 
 ## Product priorities after Fable remediation
 
