@@ -1,3 +1,7 @@
+/* eslint-disable react-hooks/set-state-in-effect -- guard-clause reset-and-return
+ * on an unready/invalid market is a confirmed false positive, not a
+ * cascading-render bug: see https://github.com/facebook/react/issues/34743
+ * and docs/AMADO_ROADMAP.md item 0. */
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'

@@ -12,6 +12,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local patch-script backups (see .gitignore) — untouched copies of
+    // pre-patch file content, not source. Without this, npm run lint
+    // reports findings from whatever bug a backup snapshot happened to
+    // have at patch time, which is noise, not a real finding.
+    ".amado-patch-backups/**",
   ]),
 ]);
 

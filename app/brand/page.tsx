@@ -1,8 +1,13 @@
+/* eslint-disable react-hooks/set-state-in-effect -- guard-clause reset-and-return
+ * on an unready/invalid market is a confirmed false positive, not a
+ * cascading-render bug: see https://github.com/facebook/react/issues/34743
+ * and docs/AMADO_ROADMAP.md item 0. */
 'use client'
 
 import { useEffect, useState } from 'react'
 import Layout from '@/components/Layout'
 import BrandOsEditor from '@/components/brand/BrandOsEditor'
+import BrandOsCoverageCard from '@/components/brand/BrandOsCoverageCard'
 import { t } from '@/lib/i18n/config'
 import { useMarket } from '@/lib/market-context'
 import OverviewTab from '@/components/brand/tabs/OverviewTab'
@@ -148,6 +153,8 @@ export default function BrandBrainPage() {
             ))}
           </select>
         </div>
+
+        {brandId ? <BrandOsCoverageCard brandId={brandId} /> : null}
 
         <nav className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: 'var(--v2-color-border-default)' }}>
           {TABS.map((tabItem) => (

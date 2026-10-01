@@ -117,6 +117,9 @@ export default function PlatformPlaybooksTab({ brandId }: { brandId: string }) {
   }, [brandId])
 
   useEffect(() => {
+    // Confirmed false positive for "call a memoized async fetcher from an
+    // effect"; see https://github.com/facebook/react/issues/34743
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load()
   }, [load])
 

@@ -21,7 +21,7 @@ export interface CompetitorReviewResult {
   error?: string
 }
 
-interface CompetitorRow {
+export interface CompetitorRow {
   id: string
   brand_id: string | null
   name: string
@@ -52,14 +52,14 @@ function normalizeSource(source: EvidenceRow['source']): EvidenceSource | null {
   return Array.isArray(source) ? source[0] ?? null : source ?? null
 }
 
-function normalizeSearchText(value: string): string {
+export function normalizeSearchText(value: string): string {
   return value
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
 }
 
-function competitorAliases(competitor: CompetitorRow): string[] {
+export function competitorAliases(competitor: CompetitorRow): string[] {
   const aliases = new Set<string>()
   const name = normalizeSearchText(competitor.name).trim()
   if (name) {
@@ -78,8 +78,11 @@ function competitorAliases(competitor: CompetitorRow): string[] {
   return Array.from(aliases).filter((alias) => alias.length >= 3)
 }
 
-function mentionsCompetitor(row: EvidenceRow, aliases: string[]): boolean {
-  const haystack = normalizeSearchText(`${row.source_title ?? ''}\n${row.source_summary ?? ''}\n${row.full_text ?? ''}`)
+export function mentionsCompetitor(
+  text: { source_title?: string | null; source_summary?: string | null; full_text?: string | null },
+  aliases: string[],
+): boolean {
+  const haystack = normalizeSearchText(`${text.source_title ?? ''}\n${text.source_summary ?? ''}\n${text.full_text ?? ''}`)
   return aliases.some((alias) => {
     const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(haystack)
@@ -155,7 +158,7 @@ async function gatherIndependentMentions(competitor: CompetitorRow, regionId: st
   if (error) throw new Error(`Failed to scan market evidence for competitor mentions: ${error.message}`)
 
   return ((data ?? []) as unknown as Omit<EvidenceRow, 'evidenceKind' | 'sourceName'>[])
-    .filter((row) => mentionsCompetitor({ ...row, evidenceKind: 'independent', sourceName: null }, aliases))
+    .filter((row) => mentionsCompetitor(row, aliases))
     .slice(0, MAX_INDEPENDENT_ITEMS)
     .map((row) => ({
       ...row,

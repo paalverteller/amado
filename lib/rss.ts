@@ -107,7 +107,7 @@ async function saveRows(sourceId: string, rows: RssRow[], connectorType: string)
 
   const { data: sourceMeta } = await getSupabaseAdmin()
     .from('rss_sources')
-    .select('source_category')
+    .select('source_category, authority_weight')
     .eq('id', sourceId)
     .maybeSingle()
 
@@ -172,6 +172,7 @@ async function saveRows(sourceId: string, rows: RssRow[], connectorType: string)
       sourceLanguage: row.source_language ?? 'pt-BR',
       publishedAt: row.published_at,
       fullText,
+      sourceAuthority: sourceMeta?.authority_weight ?? undefined,
     })
   }))
 
@@ -462,6 +463,12 @@ export async function saveManualItem(sourceId: string, input: ManualItemInput): 
   if (!title) throw new Error('title is required')
   if (!content) throw new Error('content is required')
 
+  const { data: sourceMeta } = await getSupabaseAdmin()
+    .from('rss_sources')
+    .select('authority_weight')
+    .eq('id', sourceId)
+    .maybeSingle()
+
   const snippet = content.slice(0, MAX_DESC_CHARS)
   // rss_items.link is UNIQUE but nullable; without a real URL, use a
   // synthetic one so this item still shows up in the legacy /api/market
@@ -491,6 +498,7 @@ export async function saveManualItem(sourceId: string, input: ManualItemInput): 
     publishedAt: new Date().toISOString(),
     fullText: content,
     hydrationStatus: 'full_text',
+    sourceAuthority: sourceMeta?.authority_weight ?? undefined,
   })
 
   await recordIngestionRun({

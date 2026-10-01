@@ -80,13 +80,30 @@ check(
 
 const aiCheck = read('app/api/ai-check/route.ts')
 const generatePage = read('app/generate/page.tsx')
+// Scope the caller-side check to the actual /api/ai-check fetch call, not
+// the whole file -- generatePage also has an unrelated fetch('/api/generate'
+// ...) call that independently sends regionId: currentRegionId, so a
+// file-wide .includes()/regex would pass even if the ai-check call itself
+// stopped sending regionId.
+const aiCheckFetchMatch = generatePage.match(/fetch\('\/api\/ai-check',\s*\{[\s\S]*?\n {6}\}\)/)
+const aiCheckFetchBlock = aiCheckFetchMatch ? aiCheckFetchMatch[0] : ''
 check(
+  // Checks behavior (resolves the region from the request body, feeds the
+  // resolved profile's own fields into the judge prompt, never hardcodes a
+  // single market, and the specific /api/ai-check call site sends a
+  // regionId tied to currentRegionId) rather than one exact source
+  // expression. A prior version of this check asserted
+  // generatePage.includes('regionId: currentRegionId || undefined'), which
+  // broke when the call site was written as plain
+  // 'regionId: currentRegionId' -- functionally identical (regionId was
+  // already string | null there), but a different literal string. See
+  // HANDOFF.md.
   'AI check follows selected market',
   aiCheck.includes('resolveRegionProfile(body.regionId)') &&
     aiCheck.includes('regionProfile.locale') &&
     aiCheck.includes('regionProfile.languageName') &&
     aiCheck.includes('regionProfile.name') &&
-    generatePage.includes('regionId: currentRegionId || undefined') &&
+    /regionId:\s*currentRegionId\b/.test(aiCheckFetchBlock) &&
     !aiCheck.includes('marketing digital no Brasil') &&
     !aiCheck.includes('Adequação ao público brasileiro'),
 )

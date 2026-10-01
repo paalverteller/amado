@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { confirmAction } from '@/components/ui/AugustFeedback'
+import { t } from '@/lib/i18n/config'
+import type { SourceObservability } from '@/lib/domain/observability'
 
 interface SourceHealth {
   status: string
@@ -25,6 +27,7 @@ interface SourceCardProps {
     last_fetched_at?: string | null
   }
   health?: SourceHealth
+  observability?: SourceObservability
   onToggleActive: (id: string, currentStatus: boolean) => Promise<void>
   onDelete?: (id: string) => Promise<void>
 }
@@ -43,7 +46,13 @@ const HEALTH_BADGE_STYLE: Record<string, { background: string; color: string }> 
   unknown: { background: 'var(--aug-neutral-bg)', color: 'var(--aug-neutral-fg)' },
 }
 
-export default function SourceCard({ source, health, onToggleActive, onDelete }: SourceCardProps) {
+function formatDaysAgo(days: number | null): string {
+  if (days === null) return t('settings.observability_no_data')
+  if (days <= 0) return t('settings.observability_today')
+  return `${days} ${t('settings.observability_days_ago')}`
+}
+
+export default function SourceCard({ source, health, observability, onToggleActive, onDelete }: SourceCardProps) {
   const [loading, setLoading] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<string | null>(null)
@@ -183,6 +192,30 @@ export default function SourceCard({ source, health, onToggleActive, onDelete }:
             Подряд неудач: {health.consecutiveFailures}
             {health.successRate24h !== null && ` · за 24ч успешно: ${health.successRate24h}%`}
           </p>
+        ) : null}
+
+        {observability ? (
+          <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg bg-surface-container-high/60 px-3 py-2 text-[11px] text-on-surface-variant">
+            <span>
+              {t('settings.observability_freshness')}: {formatDaysAgo(observability.freshness.daysSinceLastEvidence)}
+            </span>
+            <span>
+              {t('settings.observability_yield')}: {observability.yield.evidenceCount}
+            </span>
+            <span>
+              {t('settings.observability_extraction')}:{' '}
+              {observability.extraction.successRate !== null ? `${observability.extraction.successRate}%` : '—'}
+            </span>
+            <span>
+              {t('settings.observability_refetch')}:{' '}
+              {observability.duplication.refetchRate !== null ? `${observability.duplication.refetchRate}%` : '—'}
+            </span>
+            {observability.duplication.fingerprintDuplicateCount > 0 ? (
+              <span className="col-span-2 text-[10px] text-on-surface-variant/80">
+                {t('settings.observability_duplicates')}: {observability.duplication.fingerprintDuplicateCount}
+              </span>
+            ) : null}
+          </div>
         ) : null}
 
         {testResult && (

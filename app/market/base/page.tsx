@@ -1,8 +1,13 @@
+/* eslint-disable react-hooks/set-state-in-effect -- guard-clause reset-and-return
+ * on an unready/invalid market is a confirmed false positive, not a
+ * cascading-render bug: see https://github.com/facebook/react/issues/34743
+ * and docs/AMADO_ROADMAP.md item 0. */
 'use client'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Layout from '@/components/Layout'
+import { useMarket } from '@/lib/market-context'
 
 type BaseItem = {
   id: string
@@ -22,15 +27,44 @@ function formatDate(value: string | null): string {
 }
 
 export default function MarketBasePage() {
+  const { currentRegion, ready: marketReady, error: marketError } = useMarket()
+  const currentRegionId = currentRegion?.id ?? null
   const [items, setItems] = useState<BaseItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/market/base', { cache: 'no-store' })
-      .then((r) => r.json())
+    if (!marketReady || !currentRegionId) {
+      setItems([])
+      setLoading(true)
+      return
+    }
+
+    const controller = new AbortController()
+    setLoading(true)
+    setError(null)
+
+    fetch(`/api/market/base?region_id=${encodeURIComponent(currentRegionId)}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({})) as { items?: BaseItem[]; error?: string }
+        if (!r.ok) throw new Error(d.error ?? 'Не удалось загрузить базу рынка')
+        return d
+      })
       .then((d) => setItems(d.items ?? []))
-      .finally(() => setLoading(false))
-  }, [])
+      .catch((loadError) => {
+        if (!controller.signal.aborted) {
+          setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить базу рынка')
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+
+    return () => controller.abort()
+  }, [currentRegionId, marketReady])
 
   return (
     <Layout>
@@ -52,7 +86,23 @@ export default function MarketBasePage() {
           </div>
         </div>
 
-        {loading ? <div className="m3-card p-6 text-sm text-on-surface-variant">Загрузка…</div> : null}
+        {(error || marketError) && (
+          <div className="m3-card p-5">
+            <p className="text-sm text-error">{error || marketError}</p>
+          </div>
+        )}
+
+        {(loading || !marketReady) && !error && !marketError ? (
+          <div className="m3-card p-6 text-sm text-on-surface-variant">Загрузка…</div>
+        ) : null}
+
+        {!loading && marketReady && items.length === 0 && !error && !marketError ? (
+          <div className="m3-card p-6 text-center">
+            <p className="text-sm text-on-surface-variant">
+              Материалов для выбранного рынка пока нет.
+            </p>
+          </div>
+        ) : null}
 
         <div className="grid min-w-0 grid-cols-1 gap-4">
           {items.map((item) => (

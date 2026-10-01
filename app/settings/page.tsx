@@ -1,13 +1,21 @@
+/* eslint-disable react-hooks/set-state-in-effect -- guard-clause reset-and-return
+ * on an unready/invalid market is a confirmed false positive, not a
+ * cascading-render bug: see https://github.com/facebook/react/issues/34743
+ * and docs/AMADO_ROADMAP.md item 0. */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import Layout from '@/components/Layout'
 import TemplateCard from '@/components/settings/TemplateCard'
 import SourceCard from '@/components/settings/SourceCard'
+import RegionCoverageCard from '@/components/settings/RegionCoverageCard'
+import LowValueSourcesPanel from '@/components/settings/LowValueSourcesPanel'
+import CompetitorMentionsCard from '@/components/settings/CompetitorMentionsCard'
 import PromptStudio from '@/components/settings/PromptStudio'
 import { PromptTemplate } from '@/lib/domain/prompt-template'
 import { RssSource } from '@/lib/domain/rss'
 import { BrandProfile } from '@/lib/domain/brand-profile'
+import type { SourceObservability, RegionCoverage, CompetitorMentionSource } from '@/lib/domain/observability'
 import { t } from '@/lib/i18n/config'
 import { useMarket } from '@/lib/market-context'
 import { toast } from '@/components/ui/AugustFeedback'
@@ -41,6 +49,9 @@ export default function SettingsPage() {
     lastErrorMessage: string | null
     successRate24h: number | null
   }>>({})
+  const [sourceObservability, setSourceObservability] = useState<Record<string, SourceObservability>>({})
+  const [regionCoverage, setRegionCoverage] = useState<RegionCoverage | undefined>(undefined)
+  const [competitorMentions, setCompetitorMentions] = useState<{ sources: CompetitorMentionSource[]; competitorsScanned: number; windowDays: number }>({ sources: [], competitorsScanned: 0, windowDays: 30 })
   const [brandProfiles, setBrandProfiles] = useState<BrandProfile[]>([])
   const [regions, setRegions] = useState<{ id: string; code: string; name: string }[]>([])
   
@@ -80,7 +91,13 @@ export default function SettingsPage() {
       }),
       fetch('/api/regions').then((response) => response.json()),
       fetch('/api/sources/health').then((response) => response.json()),
-    ]).then(([templateData, sourceData, brandData, regionData, healthData]) => {
+      fetch(`/api/sources/observability?region_id=${regionParam}`, { cache: 'no-store' })
+        .then((response) => response.json())
+        .catch(() => null),
+      fetch(`/api/sources/competitor-mentions?region_id=${regionParam}`, { cache: 'no-store' })
+        .then((response) => response.json())
+        .catch(() => null),
+    ]).then(([templateData, sourceData, brandData, regionData, healthData, observabilityData, competitorMentionsData]) => {
       setTemplates(templateData.templates || [])
       setSources(sourceData.sources || [])
       setBrandProfiles(brandData.profiles || [])
@@ -88,6 +105,34 @@ export default function SettingsPage() {
       const bySourceId: typeof sourceHealth = {}
       for (const source of healthData.sources || []) bySourceId[source.id] = source.health
       setSourceHealth(bySourceId)
+
+      if (observabilityData && !observabilityData.error) {
+        const byId: Record<string, SourceObservability> = {}
+        for (const s of observabilityData.sources || []) {
+          byId[s.id] = {
+            freshness: s.freshness,
+            yield: s.yield,
+            extraction: s.extraction,
+            duplication: s.duplication,
+          }
+        }
+        setSourceObservability(byId)
+        const coverage: RegionCoverage[] = observabilityData.regionCoverage || []
+        setRegionCoverage(coverage.find((r) => r.regionId === currentMarket.id))
+      } else {
+        setSourceObservability({})
+        setRegionCoverage(undefined)
+      }
+
+      if (competitorMentionsData && !competitorMentionsData.error) {
+        setCompetitorMentions({
+          sources: competitorMentionsData.sources || [],
+          competitorsScanned: competitorMentionsData.competitorsScanned ?? 0,
+          windowDays: competitorMentionsData.windowDays ?? 30,
+        })
+      } else {
+        setCompetitorMentions({ sources: [], competitorsScanned: 0, windowDays: 30 })
+      }
     }).catch((error) => toast.error(error instanceof Error ? error.message : 'Не удалось загрузить настройки', 'Настройки'))
   }, [currentMarket, marketReady])
 
@@ -98,6 +143,21 @@ export default function SettingsPage() {
   useEffect(() => {
     if (currentMarket?.id) setNewBrandRegion(currentMarket.id)
   }, [currentMarket?.id])
+
+  const handleDisableLowValueSources = async (ids: string[]) => {
+    for (const id of ids) {
+      const response = await fetch(`/api/rss/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: false }),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data?.error ?? 'Не удалось отключить источник')
+      }
+    }
+    reloadData()
+  }
 
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -188,7 +248,21 @@ export default function SettingsPage() {
 
         <section className="space-y-4">
           <h2 className="text-xl font-semibold text-on-surface">{t('settings.sources')}</h2>
-          
+
+          <RegionCoverageCard coverage={regionCoverage} />
+
+          <LowValueSourcesPanel
+            sources={sources}
+            observability={sourceObservability}
+            onDisable={handleDisableLowValueSources}
+          />
+
+          <CompetitorMentionsCard
+            sources={competitorMentions.sources}
+            competitorsScanned={competitorMentions.competitorsScanned}
+            windowDays={competitorMentions.windowDays}
+          />
+
           <form onSubmit={handleAddSource} className="m3-card flex flex-col sm:flex-row gap-3 p-4 items-center">
             <input
               value={newSourceName}
@@ -228,6 +302,7 @@ export default function SettingsPage() {
               <SourceCard 
                 key={s.id} source={s} 
                 health={sourceHealth[s.id]}
+                observability={sourceObservability[s.id]}
                 onToggleActive={async (id, a) => {
                   await fetch(`/api/rss/${id}`, { method: 'PATCH', body: JSON.stringify({ active: !a }) })
                   reloadData()
