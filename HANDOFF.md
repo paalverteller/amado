@@ -1603,3 +1603,1129 @@ Supabase production rule:
 Delivery convention:
 - The operator uploads patch/SQL/delivery files to the repository root.
 - Automation/patch scripts must assume root-first delivery and move files to canonical paths themselves when required.
+
+
+<!-- MARKET_BASE_REGION_FIX_20260910 -->
+## Audit + fix — `/market/base` ignored the selected market (2026-09-10)
+
+Audit scope: full market-selection path (`lib/market-context.tsx`,
+`MarketSwitcher.tsx`, `/api/regions`, `/api/market`,
+`/api/market/refresh`, `/api/market/deep-analysis`, `app/market/page.tsx`,
+`app/market/analysis/page.tsx`, `app/ideas/page.tsx`) plus the
+`evidence_items` vs. legacy `rss_items` schema history. Fable Phases 5 and
+6 were confirmed already correctly implemented in the audited snapshot;
+`useMarket()`, the region switcher, `/api/market`, `/api/market/deep-analysis`
+and `/api/ideas` all wait for `ready` and filter by `region_id` with the
+established tolerant rule (a source with no `region_id` is pre-multi-market
+and stays visible in every market rather than being hidden everywhere).
+
+**Confirmed bug:** `app/api/market/base/route.ts` ("База рынка", reachable
+from the secondary button on `/market`) was never migrated off the legacy
+`rss_items` table during the Stage-2 evidence-layer pivot, and had no
+`region_id` filtering at all. `app/market/base/page.tsx` never sent a
+`region_id`. Result: the page showed the same 50 global items regardless
+of the selected market.
+
+**Fix:**
+- `app/api/market/base/route.ts` now accepts `?region_id=`, joins
+  `region_id` through `source:source_id(...)` exactly like
+  `/api/market/route.ts`, and applies the same tolerant filter (null
+  `region_id` = visible everywhere). Over-fetches 400 rows pre-filter,
+  slices to the existing 50-item cap after. Wrapped in try/catch using
+  `getErrorMessage` for consistency with sibling routes (previously had no
+  try/catch).
+- `app/market/base/page.tsx` now waits on `useMarket().ready` before
+  fetching, passes `region_id`, and surfaces loading/error/empty states
+  consistent with `/market` and `/ideas`.
+
+**Verification performed (isolated repo, real install):**
+- `npm install` (triggers `next build` via `postinstall`) — passed, clean
+  baseline before touching any file.
+- `npx tsc --noEmit --strict` — zero errors, before and after the patch.
+- `npx next build` — passed after the patch.
+- `npx vitest run` — 174/174 tests passed, run 3× for flakiness — stable
+  all three runs.
+- `node scripts/verify-amado-chain.mjs` — 17/17 passed.
+- `node scripts/verify-market-intelligence-sprint.mjs` — 29/29 passed.
+- `node scripts/verify-multimarket-localization.mjs` — 23/24, unchanged
+  from baseline (see below — pre-existing, unrelated to this patch).
+- `node scripts/verify-august-ui.mjs` — fails only on missing binary PNG
+  icons (`amado-icon-192.png` etc.), which cannot exist in a text-only
+  repomix snapshot; not a regression from this patch.
+- `npx eslint` on both changed files: the page produces one
+  `react-hooks/set-state-in-effect` error. Confirmed via full-repo
+  `npm run lint` that this rule already fires on 9 other files already in
+  production (`app/market/page.tsx`, `app/ideas/page.tsx`,
+  `app/brand/page.tsx`, `app/competitors/page.tsx`,
+  `app/generate/seo/page.tsx`, `app/localize/page.tsx`,
+  `app/settings/page.tsx`, `components/MarketSwitcher.tsx`,
+  `components/brand/tabs/PlatformPlaybooksTab.tsx`) — same early-return
+  guard-clause shape. `market/base/page.tsx` follows the identical
+  established pattern; not introduced by this patch, not fixed by it
+  either (separate, repo-wide cleanup — see roadmap).
+
+**Two adjacent findings, not fixed in this patch (out of scope):**
+1. `regions.search_domain` column (migration 023) has zero code consumers
+   anywhere in the repository — dead schema, not a bug.
+2. `scripts/verify-multimarket-localization.mjs`'s "AI check follows
+   selected market" assertion fails on a brittle exact-string match
+   (`generatePage.includes('regionId: currentRegionId || undefined')`)
+   against code that actually reads `regionId: currentRegionId` — the
+   route itself (`app/api/ai-check/route.ts`) is correctly region-aware
+   via `resolveRegionProfile(body.regionId)`. Confirmed pre-existing on
+   the unmodified baseline, unrelated to `/market/base`. HANDOFF.md's own
+   stated principle is not to assert brittle implementation detail in a
+   verifier — this check should be loosened, not the source code changed.
+
+**Verification contract for this patch:**
+`npm test`, `npm run build`, `node scripts/verify-amado-chain.mjs`,
+`node scripts/verify-market-intelligence-sprint.mjs`, and `git diff --check`
+must pass before commit/push.
+
+**Next:** proceed to `docs/AMADO_ROADMAP.md` items (source quality /
+observability, Brand OS depth by market), per operator direction.
+
+
+<!-- SOURCE_OBSERVABILITY_PHASE1_20260910 -->
+## Source quality & observability — Phase 1 (backend) (2026-09-10)
+
+Scope: roadmap item 1 ("Source quality and observability"), backend half
+only. Settings UI to surface this is a separate, not-yet-delivered phase
+(see roadmap item 1, "Still open").
+
+### What was built
+
+`GET /api/sources/observability` (optional `?region_id=` query param,
+same tolerant filter as every other region-scoped route: a source with no
+`region_id` is pre-multi-market and included regardless of the requested
+region).
+
+For each source, over a trailing 30-day window (`evidence_items.discovered_at`):
+- **Availability** — passthrough of the existing `rss_sources.health_status`
+  / `consecutive_failures` / `last_success_at` / `last_failure_at`. Not
+  recomputed; this was already correct and lives in `source_health_events`
+  via the existing `/api/sources/health` route.
+- **Freshness** — days since the most recent `evidence_items.discovered_at`
+  for that source. A source can show `health_status: healthy` (last fetch
+  succeeded) while still being "freshness-stale" (the fetch succeeded but
+  found nothing new) — these are deliberately different signals.
+- **Yield** — count of `evidence_items` discovered in the window.
+- **Extraction success** — share of window items with
+  `hydration_status = 'full_text'` vs `snippet`/`failed`.
+- **Duplication** — two honestly-separate signals, not one blended number:
+  - `refetchRate` — % of window items where `updated_at` trails
+    `created_at` by more than 60s, meaning `saveEvidence()`'s update path
+    (not insert path) fired — the same canonical URL was seen again.
+  - `fingerprintDuplicateCount` — count of same-source items sharing a
+    `content_fingerprint` (title+summary hash) under different URLs — a
+    fuzzy same-story signal. **Not** read from
+    `evidence_items.duplicate_of`, because nothing in the codebase writes
+    that column (confirmed via full-repo grep) — it's dead schema.
+
+Also returns a `regionCoverage` array (one row per active region):
+`totalSources`, `activeSources`, `healthySources`,
+`evidenceYield30d`. Sources with no `region_id` are excluded from this
+rollup (they don't belong to a single region), matching the exclusion
+rule used elsewhere. Response includes `unscopedSourceCount` so that
+exclusion is visible rather than silently dropped.
+
+### Bug found and fixed: `rss_sources.region_id` had no FK
+
+While building the region-coverage rollup, a real PostgreSQL 16 instance
+was stood up from the actual `supabase/migrations/*.sql` files (not a
+mocked schema) to validate the observability queries. This surfaced:
+`rss_sources.region_id` is `TEXT`, not `UUID`, and has **no foreign key**
+to `regions(id)` — unlike `articles.region_id` and
+`brand_profiles.region_id`, which are both correctly `UUID` + FK.
+
+Root cause: `022_amado_baseline.sql` created the column as `TEXT` first.
+`023_regions_brands_i18n.sql`'s `ALTER TABLE rss_sources ADD COLUMN IF NOT
+EXISTS region_id UUID REFERENCES regions(id)` ran after and silently
+no-op'd because the column name already existed — `IF NOT EXISTS` checks
+the column's presence, not its type. `articles` and `brand_profiles` got
+the correct treatment because those `region_id` columns didn't already
+exist when `023` ran.
+
+In practice this was never a data-correctness bug — every seed file and
+every application write path already resolves a real `regions.id` UUID
+before storing it as a string — but it was a live integrity gap: nothing
+at the database level would have caught a bad write (typo, stale region
+code, accidental non-UUID value), and it would have failed silently
+exactly the way `/market/base`'s missing region filter did.
+
+**Fix:** `supabase/migrations/048_rss_sources_region_id_uuid.sql`.
+Idempotent and defensive:
+1. A pre-flight `SELECT` surfaces any row that wouldn't survive the cast
+   (malformed value, or a UUID that doesn't match any real region) —
+   guarded so it's a no-op once the column is already `UUID`, rather than
+   erroring on the text-only `!~*` operator on a second run.
+2. The migration body nulls out (never drops the row for) anything that
+   wouldn't survive the cast, then does
+   `ALTER COLUMN region_id TYPE UUID USING region_id::uuid` and adds
+   `rss_sources_region_id_fkey`.
+3. A verify `SELECT` at the end confirms the resulting column type and FK.
+
+**Validated directly against PostgreSQL 16** (not text pattern matching):
+- Applied against a schema built from `000`, `022`, `023`, `024`, `039`,
+  `041` with realistic seed-shaped data (some sources with a real region,
+  some with `NULL` — matching production's legacy/global sources) —
+  succeeded, column became `uuid`, FK constraint present.
+- Re-ran 3× for idempotency — no errors, correctly detects the
+  already-migrated state and no-ops.
+- Ran again against deliberately injected bad data (a non-UUID string and
+  an orphaned UUID not matching any region) — pre-flight correctly
+  surfaced both rows, the defensive path nulled exactly those two rows
+  (confirmed via follow-up `SELECT`, not just NOTICE text) and left every
+  other row untouched, migration completed without aborting.
+- Hand-verified the observability route's actual query logic (per-source
+  yield/freshness/extraction/refetch/fingerprint-duplicate counts, and
+  the region-coverage rollup) as raw SQL against seeded realistic data —
+  results matched expectations exactly.
+
+### Other dead-schema findings, not touched by this patch
+
+Consistent with the `search_domain` finding from the previous patch —
+these exist in migrations but have zero application code writing or
+reading them:
+- `rss_sources.items_count`, `avg_title_length`, `avg_summary_length`,
+  `language_detected`, `authority_weight`
+- `evidence_items.region_ids` (written as `null` always — the real region
+  path is `source_id → rss_sources.region_id`; `duplicate_of` likewise
+  unpopulated)
+
+None of these block anything currently working; noted for awareness, not
+remediated here — removing dead columns is a separate decision the
+operator should make deliberately, not a side effect of an observability
+patch.
+
+### Verification performed
+
+- Built a combined verification tree on top of the already-applied
+  `MARKET_BASE_REGION_FIX_20260910` patch (this patch assumes that one is
+  already applied, since it edits the same `docs/AMADO_ROADMAP.md` header
+  section that patch rewrote).
+- `npx tsc --noEmit --strict` — 0 errors.
+- `npx next build` — passed, `/api/sources/observability` registered as a
+  dynamic route.
+- `npx vitest run` — 174/174, ×3 for flakiness — stable all three runs.
+- `npx eslint app/api/sources/observability/route.ts` — clean, no errors
+  or warnings.
+- `node scripts/verify-amado-chain.mjs` — 17/17.
+- `node scripts/verify-market-intelligence-sprint.mjs` — 29/29.
+- `048_rss_sources_region_id_uuid.sql` validated against a real
+  PostgreSQL 16 instance as described above (this is a genuine DB
+  validation, not a text-based SQL syntax check).
+
+**Verification contract for this patch:**
+`npm test`, `npm run build`, `node scripts/verify-amado-chain.mjs`,
+`node scripts/verify-market-intelligence-sprint.mjs` must pass before
+commit/push. The SQL migration must be run in the Supabase SQL Editor
+**before** or independently of the code patch (they're not
+interdependent — the route works whether `region_id` is `text` or `uuid`,
+since the TypeScript layer already treats it as an untyped string; the
+migration is a data-integrity fix, not a functional prerequisite for the
+new route).
+
+**Next:** Settings UI (Phase B) to surface this data per source and per
+region; then the remaining roadmap items (competitor-mention source
+observability, source authority vs. actual generation use, Brand OS depth
+by market).
+
+
+<!-- SETTINGS_OBSERVABILITY_UI_20260910 -->
+## Source observability — Settings UI (Phase B) + roadmap correction (2026-09-10)
+
+Scope: roadmap item 1's "Still open: Settings UI" bullet, plus a
+correction to a bug in `apply_001_market_base_region_fix.py`'s own
+`docs/AMADO_ROADMAP.md` edit, found while preparing this delivery.
+
+### Bug found in Patch 1's roadmap edit (not previously caught)
+
+While building this phase, a full read of `docs/AMADO_ROADMAP.md` (not
+just the structural checks used in Patch 1/2's own `--verify` steps)
+found that Patch 1 left the file with duplicated content: the original
+item 1 bullets and an entire second copy of "### 2. Brand OS depth by
+market" survived, sitting immediately after the new item 1/2 content
+Patch 1 inserted.
+
+**Root cause:** Patch 1's anchor string for the roadmap header replace
+matched only through the "### 1. Source quality and observability"
+heading and its bullet list. It did not also consume the "### 2. Brand OS
+depth by market" section that immediately followed in the original file,
+even though Patch 1's own replacement text already included a full copy
+of that "### 2." section. The result: the replace correctly inserted the
+new content, but the original file's own item-1 bullets and item-2
+section were never removed — they just ended up duplicated after the new
+block.
+
+Patch 1's own `--verify` step did not catch this because it only checked
+for a marker string (`"Last consolidated: 2026-09-10."`), not full
+content correctness — an example of exactly the "recorded as complete but
+didn't fully land" failure mode this project has hit before. Patch 2
+inherited this pre-existing duplication unchanged; the bug is Patch 1's,
+not Patch 2's.
+
+This patch script removes the duplicated block (the orphaned bullets plus
+the second "### 2." header and its two lines) if present, leaving the
+single correct "### 2. Brand OS depth by market" section that Patch 1's
+new header text already supplied. It is idempotent-safe: if the
+duplication is not present (e.g. Patch 1 hasn't been run, or this
+correction has already been applied), the removal step is a no-op rather
+than an error.
+
+**If you already ran `apply_001_market_base_region_fix.py`** in
+Codespaces, your `docs/AMADO_ROADMAP.md` currently has this duplication.
+This patch fixes it as part of its normal `--apply` step — no separate
+action needed.
+
+### What was built (Settings UI)
+
+- `components/settings/SourceCard.tsx` — new optional `observability`
+  prop. When present, renders a compact metrics block (freshness, 30-day
+  yield, extraction success rate, re-fetch rate, and a fingerprint-
+  duplicate count when non-zero) between the existing availability/health
+  display and the card footer. Fully backward compatible — renders
+  nothing when `observability` is `undefined`, so existing callers that
+  don't pass it are unaffected.
+- `components/settings/RegionCoverageCard.tsx` — new component. Shows
+  total/active/healthy source counts and 30-day evidence yield for the
+  currently selected region. Renders nothing (`null`) if no coverage data
+  is available for that region, rather than an empty card.
+- `app/settings/page.tsx` — `reloadData` now also fetches
+  `/api/sources/observability?region_id=...` alongside the existing
+  calls. Failure of this one fetch is caught and treated as "no
+  observability data" (falls back to `undefined`/empty state) rather than
+  failing the whole Settings page load, since it's additive information,
+  not a page-blocking dependency. `RegionCoverageCard` is rendered at the
+  top of the Sources section; `SourceCard` now receives the matching
+  per-source observability object.
+- `lib/i18n/config.ts` — added 15 new keys under `settings.*` in the `ru`
+  dictionary only (`observability_*`, `region_coverage_*`). Not added to
+  the `pt-BR`/`en` dictionaries: `setLocale()` hardcodes `ru` regardless
+  of what's passed, and `t()`'s own fallback logic already returns the
+  `ru` string for any key missing from a non-`ru` locale (see the
+  "UI is Russian-only" comment already in that file) — those two
+  dictionaries are vestigial for the fallback mechanism, not live, so
+  adding dead keys to them would be pure noise.
+
+### Verification performed
+
+- Built on top of the combined Patch 1 + Patch 2 state.
+- `npx tsc --noEmit --strict` — 0 errors.
+- `npx next build` — passed.
+- `npx eslint` on all four changed/added files — clean. (Confirmed the
+  one pre-existing `react-hooks/set-state-in-effect` error and one
+  pre-existing unused-var warning already tracked in roadmap items 0 and
+  the `setLocale` signature are unchanged from the pre-patch baseline —
+  not introduced by this patch.)
+- `npx vitest run` — 174/174, ×3 for flakiness — stable all three runs.
+- `node scripts/verify-amado-chain.mjs` — 17/17.
+- `node scripts/verify-market-intelligence-sprint.mjs` — 29/29.
+- Full read-through of the resulting `docs/AMADO_ROADMAP.md` (not just a
+  structural marker check) to confirm no duplication remains after the
+  correction — this is the check that was missing from Patch 1's own
+  verification and caused the bug documented above.
+
+**Verification contract for this patch:**
+`npm test`, `npm run build`, `node scripts/verify-amado-chain.mjs`,
+`node scripts/verify-market-intelligence-sprint.mjs` must pass before
+commit/push. No SQL block for this patch — UI and docs only.
+
+**Next:** a "disable/remove low-value source" workflow surfaced by the
+new observability data; source-authority-vs-actual-use comparison;
+competitor-mention source observability; Brand OS depth by market.
+
+
+<!-- SET_STATE_IN_EFFECT_CLEANUP_20260912 -->
+## Repo-wide `react-hooks/set-state-in-effect` cleanup (2026-09-12)
+
+Scope: roadmap item 0, tracked since the `/market/base` region fix first
+surfaced it as a pre-existing, repo-wide finding.
+
+### What the rule actually flags, and why a restructure wasn't the fix
+
+Every one of the 10 affected files (9 with the guard-clause shape, 1 —
+`PlatformPlaybooksTab.tsx` — calling a memoized async loader from an
+effect) has this in common: `useState`/`useEffect` used to load
+market/brand-scoped data, with a guard clause that resets state and
+returns early when the market or brand isn't ready yet
+(`if (!marketReady || !currentRegionId) { setItems([]); setLoading(true); return }`).
+
+`eslint-plugin-react-hooks@7.1.1`'s `set-state-in-effect` rule flags any
+`setState` call reachable synchronously from an effect body, on the
+premise that it should instead be "derived during render." That premise
+holds for pure derivations (its own docs example:
+`const selected = items.find(...)` computed inline). It does not hold
+here: the state in question is fetched asynchronously from the network:
+there is nothing to derive during render, since the very thing being
+reset **is** the trigger for a fetch that hasn't happened yet.
+
+Checked before deciding not to restructure: the rule's own reference page
+(react.dev/reference/eslint-plugin-react-hooks/lints/set-state-in-effect)
+offers no valid pattern for this shape, only pure-derivation examples.
+The open upstream thread
+([facebook/react#34743](https://github.com/facebook/react/issues/34743))
+confirms this is a known, unresolved gap — commenters' suggested
+workarounds (`startTransition()`, `requestAnimationFrame()`, `setTimeout()`)
+are explicitly described in that same thread, including by people close
+to the React Compiler team, as feeling "wrong, like a code smell or
+'tricking the lint rule.'" Multiple newer GitHub issues against the same
+rule (#35276, #34858, #35377) report further false positives as of
+December 2025, meaning this is still actively unsettled upstream, not a
+solved problem this codebase is behind on.
+
+**Decision:** do not contort 10 files' data-loading logic to satisfy a
+rule with no working alternative pattern for this shape. Use the
+convention this codebase had already independently arrived at and proven
+in production: `app/generate/page.tsx` already carries a file-level
+`/* eslint-disable react-hooks/set-state-in-effect */` for exactly this
+reason, and 8 files under `components/brand/tabs/` (`ExamplesTab.tsx`,
+`ProductsClaimsTab.tsx`, `VoiceVocabularyTab.tsx`, `AudiencePainsTab.tsx`,
+`ContentPillarsTab.tsx`, `OverviewTab.tsx`, `ComplianceTab.tsx`,
+`VersionsTab.tsx`) plus `app/knowledge/page.tsx` already carry a
+documented per-line disable for the "call a memoized async fetcher from
+an effect" shape. This patch extends the same two conventions rather than
+inventing a third.
+
+### Bug found while verifying this patch: `.amado-patch-backups/` was not excluded from lint
+
+While confirming this patch's own before/after `npm run lint` diff, the
+raw run reported 13 `set-state-in-effect` occurrences instead of the
+expected 0 (source clean) + 1 (the pre-existing, unrelated
+`app/analytics/page.tsx` warning). Traced to `.amado-patch-backups/`:
+every `apply_*.py` script since `apply_001` writes untouched pre-patch
+file copies there before editing, and `eslint.config.mjs`'s
+`globalIgnores` only excluded `.next/**`, `out/**`, `build/**`, and
+`next-env.d.ts` — not this directory. `.gitignore` already excludes
+`.amado-patch-backups/` for git purposes (with a comment saying exactly
+that), but ESLint's flat config does not read `.gitignore`
+automatically — the two ignore lists are separate and had drifted apart.
+Confirmed this was not introduced by this patch: re-running lint against
+`apply_003`'s own backup directory on an otherwise unmodified checkout
+reproduces the same false findings.
+
+**Fix:** added `".amado-patch-backups/**"` to `eslint.config.mjs`'s
+`globalIgnores`, matching the intent already stated in `.gitignore`'s own
+comment. Confirmed via `npm run lint` before/after: 13 → 1 occurrence
+(the one remaining is the pre-existing, unrelated `app/analytics/page.tsx`
+warning). This means running `npm run lint` locally in Codespaces after
+any previous patch's `--apply` would have shown the same false noise —
+this fix benefits all four patches applied so far, not just this one.
+
+### What was changed
+
+**File-level disable** (9 files — each effect body's guard clause directly
+calls `setState`, matching `generate/page.tsx`'s shape exactly):
+`app/brand/page.tsx`, `app/competitors/page.tsx`,
+`app/generate/seo/page.tsx`, `app/ideas/page.tsx`, `app/localize/page.tsx`,
+`app/market/base/page.tsx`, `app/market/page.tsx`, `app/settings/page.tsx`,
+`components/MarketSwitcher.tsx`. Each gets:
+```
+/* eslint-disable react-hooks/set-state-in-effect -- guard-clause reset-and-return
+ * on an unready/invalid market is a confirmed false positive, not a
+ * cascading-render bug: see https://github.com/facebook/react/issues/34743
+ * and docs/AMADO_ROADMAP.md item 0. */
+```
+placed before `'use client'`, matching `generate/page.tsx`'s exact byte
+layout (disable comment, then `'use client'`, then the file's original
+first blank line — nothing else in the file reordered).
+
+**Per-line disable** (1 file — only one effect, calling a memoized loader,
+matching the `ExamplesTab.tsx`-style shape rather than the guard-clause
+shape): `components/brand/tabs/PlatformPlaybooksTab.tsx`. Added the same
+two-line comment + `eslint-disable-next-line` immediately above
+`void load()`, matching the exact wording already used in
+`ExamplesTab.tsx`.
+
+Before applying either fix, every file's full effect list was read (not
+just the flagged line) to confirm a file-level disable would not mask an
+unrelated, legitimately-catchable issue elsewhere in the same file. All
+10 files' other effects (template fetches inside `.then()`, interval
+timers, localStorage sync, `.then()`-wrapped async calls) do not have a
+synchronous `setState` reachable from the effect body and would not be
+flagged regardless — confirmed by diffing the full `npm run lint` output
+before and after: the only findings that disappeared are the 11 targeted
+ones (`market/page.tsx` and `competitors/page.tsx` each had two), and the
+8 pre-existing, unrelated findings elsewhere in the repo
+(`app/analytics/page.tsx`'s unused-disable-directive warning,
+`app/api/prompts/route.ts`, `app/api/rss/route.ts`,
+`components/ui/AugustDialog.tsx`, `lib/i18n/config.ts`'s unused-param
+warning, and one unrelated `react-hooks/exhaustive-deps` warning already
+present on `app/market/page.tsx`) are byte-for-byte unchanged.
+
+### Verification performed
+
+- Full `npm run lint` before and after, diffed line-by-line (not just a
+  pass/fail count) to confirm exactly the 11 targeted findings disappeared
+  and the `.amado-patch-backups/` false-positive source (see above) is
+  also resolved.
+  and nothing else moved.
+- `npx tsc --noEmit --strict` — 0 errors.
+- `npx next build` — passed.
+- `npx vitest run` — 174/174, ×3 for flakiness — stable all three runs.
+- `node scripts/verify-amado-chain.mjs` — 17/17.
+- `node scripts/verify-market-intelligence-sprint.mjs` — 29/29.
+- `node scripts/verify-multimarket-localization.mjs` — 23/24, unchanged
+  from the pre-existing baseline (roadmap item 0b).
+
+**Verification contract for this patch:**
+`npm test`, `npm run build`, `node scripts/verify-amado-chain.mjs`,
+`node scripts/verify-market-intelligence-sprint.mjs` must pass before
+commit/push. No SQL block — lint/docs only, no runtime behavior change.
+
+**Next:** roadmap item 0b (loosen the brittle AI-check verifier
+assertion); a "disable/remove low-value source" workflow; source-
+authority-vs-actual-use comparison; competitor-mention source
+observability; Brand OS depth by market.
+
+
+<!-- VERIFIER_AI_CHECK_ASSERTION_FIX_20260913 -->
+## Loosen the brittle "AI check follows selected market" verifier assertion (2026-09-13)
+
+Scope: roadmap item 0b.
+
+### The problem
+
+`scripts/verify-multimarket-localization.mjs`'s "AI check follows
+selected market" check string-matched
+`generatePage.includes('regionId: currentRegionId || undefined')`
+against the whole `app/generate/page.tsx` file. The real call site sends
+`regionId: currentRegionId` (no `|| undefined`) — functionally identical,
+since `currentRegionId` was already typed `string | null` there — but a
+different literal string, so the check failed even though
+`app/api/ai-check/route.ts` is genuinely, correctly region-aware via
+`resolveRegionProfile(body.regionId)`. This violates the verifier
+discipline already stated elsewhere in this file: don't assert brittle
+implementation detail.
+
+### The fix, and the mistake caught while building it
+
+First attempt: replace the exact-string match with
+`/regionId:\s*currentRegionId\b/.test(generatePage)` — checking the whole
+file for the pattern's presence anywhere. This looked reasonable and
+initially returned 24/24. Before shipping it, this was deliberately
+stress-tested by injecting a regression (hardcoding the ai-check call's
+`regionId` to a fixed string) — and the check **still passed**, because
+`app/generate/page.tsx` has a second, unrelated call site
+(`fetch('/api/generate', ...)`, the main content-generation request) that
+independently sends `regionId: currentRegionId`. A file-wide check would
+stay green even if the ai-check call itself completely stopped being
+region-aware — replacing one brittle-but-at-least-specific check with a
+meaningless one would have been worse than leaving the original bug.
+
+**Final fix:** scope the regex to only the `fetch('/api/ai-check', ...)`
+block via
+`generatePage.match(/fetch\('\/api\/ai-check',\s*\{[\s\S]*?\n {6}\}\)/)`,
+then test the pattern only within that extracted block. Verified in both
+directions:
+- Runs clean (24/24) against the current, correct code.
+- Re-ran the same injected regression (hardcoding `regionId` inside just
+  the ai-check fetch block, leaving the generation call untouched) —
+  correctly fails (23/24) this time.
+- Restored the file and re-confirmed 24/24 afterward.
+
+The route-side assertions (`resolveRegionProfile(body.regionId)`,
+`regionProfile.locale`/`languageName`/`name` used in the prompt, no
+hardcoded Brazil-only judge text) were already behavior-based and
+unchanged.
+
+### Verification performed
+
+- `node --check scripts/verify-multimarket-localization.mjs` — valid
+  syntax.
+- Brace/paren/bracket balance check — even.
+- Ran the verifier directly (not through `npm test`/`tsc`/`next build` —
+  `scripts/` is excluded from `tsconfig.json` and isn't part of the app
+  build, so this change has zero effect on those; confirmed by the
+  `exclude` list in `tsconfig.json`).
+- Both directions of the regression test described above.
+
+**Verification contract for this patch:**
+`node scripts/verify-multimarket-localization.mjs` must report 24/24
+before commit/push. No SQL block, no app code touched — verifier script
+and docs only.
+
+**Next:** a "disable/remove low-value source" workflow; source-authority-
+vs-actual-use comparison; competitor-mention source observability; Brand
+OS depth by market.
+
+
+<!-- LOW_VALUE_SOURCES_WORKFLOW_20260914 -->
+## "Disable low-value sources" workflow (2026-09-14)
+
+Scope: roadmap item 1's "Still open: a remove/disable low-value sources
+workflow" bullet, built on top of the observability data from
+`SOURCE_OBSERVABILITY_PHASE1_20260910` and its Settings UI.
+
+### What "low-value" means here, deliberately
+
+A source is flagged when it is `active` **and** its observability
+`yield.evidenceCount` is exactly `0` for the current window (30 days, per
+`/api/sources/observability`). Nothing else feeds into the threshold:
+
+- Extraction success rate and duplicate/re-fetch rate were deliberately
+  left out. Those measure the quality of what came in; this threshold
+  answers a narrower, unambiguous question — did anything come in at
+  all. Combining them would turn one clear signal into a fuzzy score
+  that's harder to trust and explain at a glance.
+- A source with no observability entry yet (data still loading, or the
+  `/api/sources/observability` fetch failed) is never flagged. The
+  alternative — treating "no data" as "zero yield" — would produce false
+  positives on every page load before the fetch resolves.
+- An already-inactive source is never flagged (nothing to disable).
+
+Verified with 5 direct unit-style test cases covering exactly these
+edges (active+zero → flagged, active+nonzero → not flagged,
+inactive+zero → not flagged, no-data → not flagged, `is_active` field
+variant → flagged) before wiring it into the UI.
+
+### What was built
+
+- `components/settings/LowValueSourcesPanel.tsx` (new). Renders nothing
+  (`null`) if no sources currently qualify — this is deliberately not a
+  permanent fixture of the Sources section, only appears when there's
+  something to act on. When sources do qualify: a danger-toned panel (a
+  reused `--aug-danger-bg`/`--aug-danger-fg`, the same tokens
+  `SourceCard.tsx` already uses for its unhealthy state) listing each
+  flagged source with a checkbox, a "select all" toggle, and a "disable
+  selected" button that confirms via the existing `confirmAction` dialog
+  before acting.
+- `app/settings/page.tsx` — renders the panel above `RegionCoverageCard`
+  in the Sources section (the more actionable item comes first). Bulk
+  disable is implemented as a sequential loop over
+  `PATCH /api/rss/{id}` with `{ active: false }` — reusing the existing
+  single-source endpoint rather than adding a new bulk one, matching
+  `reloadData`'s own existing `Promise.all`-of-individual-fetches style
+  elsewhere in this file. On any failure, the loop throws with the
+  server's own error message rather than silently continuing.
+- `lib/i18n/config.ts` — 9 new `ru`-only keys under `settings.*`
+  (`low_value_*`), same rationale as prior i18n additions: the UI is
+  Russian-only, so `pt-BR`/`en` entries would be dead weight.
+
+Disabling never deletes evidence or the source record — sources can be
+re-enabled at any time from their existing `SourceCard` active/inactive
+toggle, which was already there before this patch.
+
+### Verification performed
+
+- `npx tsc --noEmit --strict` — 0 errors.
+- `npx next build` — passed.
+- `npx eslint` on all three changed/added files — clean (confirmed the
+  one pre-existing `lib/i18n/config.ts` unused-param warning is
+  unchanged from baseline).
+- `npx vitest run` — 174/174, ×3 for flakiness — stable all three runs.
+- `node scripts/verify-amado-chain.mjs` — 17/17.
+- `node scripts/verify-market-intelligence-sprint.mjs` — 29/29.
+- `node scripts/verify-multimarket-localization.mjs` — 24/24 (the item 0b
+  fix from the prior patch holds).
+- 5 direct test cases against the `isLowValue` selection logic in
+  isolation, covering the edge cases described above, before wiring it
+  into the component.
+
+**Verification contract for this patch:**
+`npm test`, `npm run build`, `node scripts/verify-amado-chain.mjs`,
+`node scripts/verify-market-intelligence-sprint.mjs` must pass before
+commit/push. No SQL block — UI and docs only, no schema change.
+
+**Next:** compare source authority (`rss_sources.authority_weight`, a
+dead column) with actual use in briefing/generation; competitor-mention
+source observability; Brand OS depth by market.
+
+
+<!-- SOURCE_AUTHORITY_RANKING_FIX_20260915 -->
+## Source authority vs. actual use — a correction and a fix (2026-09-15)
+
+Scope: roadmap item 1's "compare source authority with actual use in
+briefing and generation" bullet.
+
+### Correcting an earlier characterization
+
+The `SOURCE_OBSERVABILITY_PHASE1_20260910` entry above characterized
+`rss_sources.authority_weight` as "dead, never-written," in the same
+category as `items_count`, `avg_title_length`, `search_domain`, and
+`evidence_items.region_ids`/`duplicate_of`. That was wrong in one
+important respect, found while actually investigating "compare with
+actual use" rather than assuming the prior note was complete: the column
+is correctly identified as never *read* by any application code
+(confirmed again here via a full-repo grep), but it **is** written —
+every seed file (`001_brazil_sources.sql`, `006_spain_market_and_brand.sql`,
+`008_de_us_sources.sql`, `009_market_intelligence_sprint_20260909.sql`,
+`002_mvp_brazil_saas.sql`, `003_final_workspaces.sql`) populates it with
+real, deliberately-differentiated per-source values (1.0 to 1.4 observed)
+— someone genuinely ranked these sources by editorial trust when writing
+the seeds. This is not corrected retroactively in the earlier entry
+(history isn't rewritten), but is corrected here since the earlier
+"dead" label was inaccurate and would have misdirected anyone reading it
+looking for this exact task.
+
+### The actual gap, and the fix
+
+`lib/briefing.ts`'s `selectCandidates()` — the very first stage of
+briefing generation — already ranks candidates by
+`.order('source_authority', { ascending: false, nullsFirst: false })`
+against `evidence_items.source_authority`. That column exists
+(`024_evidence_layer.sql`), is written on every `saveEvidence()` call in
+`lib/evidence.ts` (`source_authority: input.sourceAuthority ?? 1.0`), and
+the ranking query is correctly wired. The break was one step further
+back: neither of `lib/rss.ts`'s two `saveEvidence()` call sites
+(`saveRows()`, used by every RSS/PubMed/HTML-fallback ingestion path, and
+`saveManualItem()`) ever passed `sourceAuthority`. Every evidence item,
+regardless of which source it came from, was saved with `source_authority`
+hardcoded to `1.0` — the ranking machinery ran on every briefing, but
+operated on a constant. A source seeded at `1.4` and one seeded at `1.0`
+were indistinguishable to the query; the actual sort order fell through
+entirely to the secondary key (`published_at`), meaning authority never
+influenced which evidence briefing considered first.
+
+**Fix:**
+- `saveRows()` already queried `rss_sources` once per batch for
+  `source_category` (to apply market-eligibility filtering). Extended
+  that same query to also select `authority_weight`, and passed it as
+  `sourceAuthority` into the existing `saveEvidence()` call — no new
+  query added.
+- `saveManualItem()` had no existing `rss_sources` query; added one
+  (`select('authority_weight')`) and passed it through the same way.
+- Both call sites fall back to `undefined` when `authority_weight` is
+  null (a source with no explicit weight), which `saveEvidence()` already
+  defaults to `1.0` — unweighted sources behave exactly as before.
+
+### Verification performed
+
+- `npx tsc --noEmit --strict` — 0 errors.
+- `npx next build` — passed.
+- `npx eslint lib/rss.ts` — clean.
+- **Verified against a real PostgreSQL 16 instance**, not just a
+  structural check: seeded two sources with differentiated
+  `authority_weight` (1.4 vs 1.0) and two evidence items with identical
+  `published_at` timestamps (the realistic worst case: without correct
+  authority weighting, the secondary sort key also ties, so ordering
+  would be arbitrary/insertion-order-dependent). Ran
+  `selectCandidates()`'s exact query
+  (`ORDER BY source_authority DESC NULLS LAST, published_at DESC NULLS LAST`)
+  — the higher-authority item correctly sorted first.
+- `npx vitest run` — 174/174, ×3 for flakiness — stable all three runs
+  (no existing test covers this path; confirmed no regression elsewhere).
+- `node scripts/verify-amado-chain.mjs` — 17/17.
+- `node scripts/verify-market-intelligence-sprint.mjs` — 29/29.
+- `node scripts/verify-multimarket-localization.mjs` — 24/24.
+
+**Verification contract for this patch:**
+`npm test`, `npm run build`, `node scripts/verify-amado-chain.mjs`,
+`node scripts/verify-market-intelligence-sprint.mjs` must pass before
+commit/push. No SQL migration needed — this is a write-path fix, not a
+schema change; both columns (`rss_sources.authority_weight`,
+`evidence_items.source_authority`) already exist and are correctly
+typed. Newly-ingested evidence will carry real authority from the next
+ingestion run onward; existing `evidence_items` rows already saved with
+`source_authority = 1.0` are not backfilled by this patch (a backfill
+would need to join back to `rss_sources` by `source_id` and is a
+reasonable follow-up if Paal wants historical briefing candidates
+re-ranked too, but wasn't assumed here since it's a data change, not a
+code fix, and existing evidence ages out of the briefing window over
+time regardless).
+
+**Next:** source-level observability for independent competitor
+mentions; Brand OS depth by market.
+
+
+<!-- COMPETITOR_MENTION_OBSERVABILITY_20260916 -->
+## Competitor-mention source observability (2026-09-16)
+
+Scope: roadmap item 1's last remaining "Still open" bullet — source-level
+observability for independent competitor mentions.
+
+### What existed already, and what was missing
+
+`lib/competitor-review.ts`'s `generateCompetitorReview()` already scans
+active, non-competitor market sources for evidence text matching a
+competitor's name/website-derived aliases (`gatherIndependentMentions()`),
+distinguishing "official" (the competitor's own tracked sources) from
+"independent" (third-party market sources that happen to mention them).
+This is real, working detection logic — but it only ran on demand, per
+competitor, per review request, and discarded the per-source breakdown
+after feeding it into the AI review prompt. There was no way to see,
+across all sources in a market, which ones actually tend to surface
+competitive signal versus which ones never do.
+
+### What was built
+
+- `lib/competitor-review.ts` — exported `competitorAliases`,
+  `mentionsCompetitor`, and the `CompetitorRow` type it depends on,
+  rather than reimplementing the same matching logic a second time (which
+  would have let the two drift apart over time). `mentionsCompetitor`
+  was also narrowed from taking a full `EvidenceRow` to taking just the
+  three text fields it actually reads (`source_title`, `source_summary`,
+  `full_text`) — a cleaner, more honest signature for a function being
+  reused outside its original call site. The one internal call site was
+  updated to match; behavior is unchanged (confirmed via `tsc --strict`
+  and the direct alias/matching test cases below).
+- `app/api/sources/competitor-mentions/route.ts` (new). Given
+  `?region_id=`: resolves that region's brands → active competitors →
+  alias lists, resolves the region's active non-competitor sources, scans
+  their evidence over a 30-day window (matching
+  `generateCompetitorReview()`'s own review window), and returns per
+  source: total mention count and count of distinct competitors covered
+  at least once. Both numbers are tracked separately deliberately —
+  volume and breadth answer different questions about a source's value
+  ("how often does this source mention *a* competitor" vs. "how many of
+  our competitors does this source ever cover").
+- `components/settings/CompetitorMentionsCard.tsx` (new). Renders nothing
+  when no competitors exist for the region (nothing to scan for). Shows
+  the top 5 sources by mention count when at least one source has
+  mentions; otherwise a plain "none found yet" line.
+- `app/settings/page.tsx` — fetches the new endpoint alongside the
+  existing observability calls; a failed fetch degrades to an empty
+  state rather than blocking the page.
+- `lib/i18n/config.ts` — 3 new `ru`-only keys.
+
+### Verification performed
+
+- `npx tsc --noEmit --strict` — 0 errors (this also validated the
+  `mentionsCompetitor` signature narrowing didn't break the existing
+  internal call site).
+- `npx next build` — passed.
+- `npx eslint` on all changed/added files — clean.
+- `npx vitest run` — 174/174, ×3 for flakiness — stable all three runs
+  (no existing test covers `competitor-review.ts`; confirmed no
+  regression elsewhere).
+- Direct unit-style test of `competitorAliases`/`mentionsCompetitor` in
+  isolation with 5 cases, including the two that matter most for a
+  false-positive-prone name-matching feature: a source mentioning an
+  unrelated word that happens to share a competitor's name ("Monday.com"
+  vs. a source just saying "segunda-feira") correctly does not match, and
+  a word-boundary case ("Trellodev" should not match "Trello") correctly
+  does not match.
+- **Verified the full pipeline end-to-end against a real PostgreSQL 16
+  instance**, not just structurally: seeded a brand with two active
+  competitors (one with a name that only appears via its website-derived
+  alias, not literally in its own name, to exercise that code path) and
+  two market sources — one whose evidence mentions both competitors, one
+  whose evidence mentions neither. Ran each step of the route's query
+  sequence (brands in region → competitors → aliases → active
+  non-competitor sources → evidence in window) as raw SQL, then applied
+  the actual matching/aggregation logic to the returned rows in Node.
+  Result matched expectations exactly: the relevant source showed
+  `mentionCount: 2, competitorsCovered: 2`; the irrelevant source showed
+  `0, 0`.
+- `node scripts/verify-amado-chain.mjs` — 17/17.
+- `node scripts/verify-market-intelligence-sprint.mjs` — 29/29.
+- `node scripts/verify-multimarket-localization.mjs` — 24/24.
+
+**Verification contract for this patch:**
+`npm test`, `npm run build`, `node scripts/verify-amado-chain.mjs`,
+`node scripts/verify-market-intelligence-sprint.mjs` must pass before
+commit/push. No SQL block — read-only aggregation over existing tables,
+no schema change.
+
+**Next:** Brand OS depth by market — the last open item on the roadmap.
+
+
+<!-- BRAND_OS_COVERAGE_DIAGNOSTIC_20260917 -->
+## Brand OS depth by market — diagnostic tooling, not content (2026-09-17)
+
+Scope: roadmap item 2, "Brand OS depth by market." Read this entry
+carefully before assuming the roadmap item is closed — it is not; only
+the diagnostic half of it is done here, deliberately.
+
+### Why this patch does not contain ES/DE/US brand content
+
+Real positioning, voice, approved claims, forbidden terms and content
+pillars for Spain, Germany and the US are business decisions that
+someone at Amado needs to actually make and approve — not something to
+invent from general knowledge of those markets and present as if it were
+decided. The Spain and DE/US seed files
+(`supabase/seeds/006_spain_market_and_brand.sql`,
+`supabase/seeds/007_germany_us_locales.sql`) already say this explicitly
+in their own comments when they were written, and this patch honors that
+same judgment rather than overriding it.
+
+### What was actually built: a coverage diagnostic
+
+Before this patch, "Brand OS depth by market" was a vague, unquantified
+concern. What was missing, precisely, was unknown. This patch makes the
+gap concrete and measurable:
+
+- `app/api/brands/os-coverage/route.ts` (new, optional `?region_id=`):
+  for each active brand, checks all 16 free-text `brand_profiles` fields
+  for emptiness, and gets a row count from every structured table
+  `lib/brand-snapshot.ts`'s `buildBrandSnapshot()` actually queries at
+  generation time (`brand_audiences`, `brand_pain_points`,
+  `brand_products`, `brand_claims`, `brand_terms`,
+  `brand_content_pillars`), plus whether the brand has an active
+  `brand_rule_sets` row. The table list is not a separately-invented
+  checklist — it's read directly from `brand-snapshot.ts`'s own query,
+  so this report reflects exactly what generation does or doesn't see
+  for a given brand, not an approximation of it.
+- A field counts as "filled" if it's non-empty after trimming — a
+  placeholder string like `"PLACEHOLDER — ..."` still counts as filled.
+  This endpoint reports structural completeness, not content quality;
+  judging whether filled text is still a placeholder is for a human
+  reading it in `BrandOsEditor`, not something string content alone can
+  determine.
+- `components/brand/BrandOsCoverageCard.tsx` (new): renders on the Brand
+  page next to the existing `BrandOsEditor`, showing empty field names,
+  which structured tables have zero rows, and whether there's no active
+  rule set — but only when the selected brand actually has gaps
+  (`null` otherwise, so a fully-built-out brand shows nothing extra).
+
+### What this confirmed, concretely, that was previously just assumed
+
+Tracing `lib/brand-snapshot.ts`'s `buildBrandSnapshot()` (the function
+every generation call uses to assemble brand context) showed that **every
+block is conditional on row count** — a brand with zero `brand_claims`
+simply gets no approved/forbidden claims guidance in its prompt, silently,
+by design (confirmed as the correct, safe behavior — not a bug). Combined
+with the seed files: for every market including Brazil, none of the seeds
+populate `brand_claims`, `brand_terms`, `brand_content_pillars`, or an
+active `brand_rule_sets` row. Whether this has since changed through live
+edits in `BrandOsEditor` cannot be determined from this repository
+snapshot (repomix and local files don't reflect live Supabase state — see
+this file's own standing caution about that). The concrete, previously
+unquantified risk this surfaces: ES/DE/US generation may currently be
+running with zero compliance rules and zero approved/forbidden claims
+enforcement, relying only on a placeholder voice description. Running
+`GET /api/brands/os-coverage` against the live database will show exactly
+where each brand actually stands today.
+
+### Verification performed
+
+- `npx tsc --noEmit --strict` — 0 errors.
+- `npx next build` — passed.
+- `npx eslint` on all three changed/added files — clean after adding the
+  same file-level `set-state-in-effect` disable documented in the
+  `SET_STATE_IN_EFFECT_CLEANUP_20260912` entry above (same guard-clause
+  false positive, same established convention — a brand-not-yet-selected
+  guard in `BrandOsCoverageCard.tsx`).
+- Confirmed via full `npm run lint` diff that the baseline `6 problems`
+  is unchanged, all pre-existing.
+- `npx vitest run` — 174/174, ×3 for flakiness — stable all three runs.
+- **Verified the coverage-counting logic against a real PostgreSQL 16
+  instance**, not just structurally: seeded one brand with real content
+  (`voice_description`, `positioning`, `target_audience` filled, 2
+  `brand_audiences` rows) and one placeholder brand (only
+  `voice_description = 'PLACEHOLDER'`, everything else empty, zero
+  `brand_audiences` rows). Ran the equivalent count/emptiness queries —
+  results matched expectations exactly, including confirming
+  `'PLACEHOLDER'` correctly counts as "filled" per this endpoint's
+  deliberate structural-completeness-only definition.
+- `node scripts/verify-amado-chain.mjs` — 17/17.
+- `node scripts/verify-market-intelligence-sprint.mjs` — 29/29.
+- `node scripts/verify-multimarket-localization.mjs` — 24/24.
+
+**Verification contract for this patch:**
+`npm test`, `npm run build`, `npm run lint`,
+`node scripts/verify-amado-chain.mjs`,
+`node scripts/verify-market-intelligence-sprint.mjs` must pass before
+commit/push. No SQL block — read-only aggregation over existing tables,
+no schema change.
+
+**Next:** run `GET /api/brands/os-coverage` against the live database
+once this patch is deployed to see the real, current gap per brand
+(this repository's seed-file view may be stale relative to any live
+edits already made through `BrandOsEditor`). Then: real positioning,
+voice, claims and an active rule set for ES/DE/US, entered through the
+existing editor — a content and business-decision task, not a further
+engineering patch. This closes out every item on the roadmap except that
+content work itself.
+
+
+<!-- POST_SPRINT_AUDIT_CLEANUP_20260918 -->
+## Post-sprint audit: KISS/YAGNI/DRY review of Patches 1-9 (2026-09-18)
+
+Scope: a full independent re-read of every file touched by
+`apply_001` through `apply_009` (not a re-verification of the earlier
+patches' own claims — a fresh read, deliberately skeptical of them),
+specifically hunting for DRY/KISS/YAGNI issues and correctness bugs
+introduced along the way. Found four real issues; three were code
+problems and fixed, one was investigated and correctly left alone after
+the investigation itself changed the right answer.
+
+### 1. Fixed: stale selection state in `LowValueSourcesPanel.tsx`
+
+The `selected` `Set<string>` of checked source ids was never filtered
+against the current `lowValueSources` list. If a source's observability
+data refreshed between renders and it dropped off the low-value list
+(picked up evidence since the last fetch), its id could remain in
+`selected` with no row left to uncheck it from, and the "select all"
+checkbox's `checked` state (compared by `.size`) could be wrong as a
+result. Fixed by deriving `validSelected` — `selected` filtered to ids
+still present in `lowValueSources` — on every render, and using it
+everywhere the component reads selection state instead of the raw
+`selected` set. Verified directly: a Node-level test with a
+deliberately stale id in the selection set confirmed `validSelected`
+correctly excludes it and reports the right size.
+
+### 2. Fixed: `SourceObservability`, `RegionCoverage`, `CompetitorMentionSource` each redeclared 2-3 times
+
+Patches 2, 3, 6 and 8 each independently wrote out the same three
+response-shape interfaces in every file that needed them, rather than
+following this codebase's own established convention — shared types in
+`lib/domain/*.ts`, already used for `RssSource`, `BrandProfile`,
+`PromptTemplate` (visible in `app/settings/page.tsx`'s own import list,
+right next to the ad-hoc interfaces that didn't follow it). Not a
+correctness bug (the three copies hadn't drifted from each other yet),
+but exactly the kind of duplication that silently drifts the next time
+someone adds a field to one copy and forgets the others — TypeScript
+gives no warning across separately-declared, structurally-identical
+interfaces in different files.
+
+Fixed by adding `lib/domain/observability.ts` with the three shared
+interfaces, and updating every consumer (`SourceCard.tsx`,
+`LowValueSourcesPanel.tsx`, `RegionCoverageCard.tsx`,
+`CompetitorMentionsCard.tsx`, `app/settings/page.tsx`) to import from it
+instead. `SourceHealth` was *not* moved — it turned out to already be
+independently duplicated in `app/analytics/page.tsx` and
+`lib/ingestion/types.ts`, both pre-existing and untouched by any of my
+patches; fixing that is a separate, larger pre-existing cleanup outside
+this audit's scope, not something to fold in silently here.
+
+### 3. Fixed: `/api/sources/observability`'s `regionCoverage` ignored its own `region_id` filter
+
+The `sources` array in the response was correctly scoped to the
+requested region, but `regionCoverage` always computed and returned
+coverage for every active region regardless of the `region_id`
+parameter — and the only caller (`app/settings/page.tsx`) immediately
+did `coverage.find((r) => r.regionId === currentMarket.id)` and
+discarded the rest. Every request computed three markets' worth of
+coverage aggregation to use one. Fixed in both response branches (the
+normal path and the early-return-on-no-sources path): `regionCoverage`
+now only includes the requested region when `region_id` is present,
+matching the scoping `sources` already had. Verified directly: a
+Node-level test with two mock regions confirmed a scoped request returns
+exactly one coverage row and an unscoped request returns both.
+
+### 4. Investigated, left alone: hardcoded Russian strings in `BrandOsCoverageCard.tsx`
+
+Initially flagged as a violation of the project's "use `t()`, don't add
+new hardcoded Russian strings" rule. Before patching it, checked whether
+`t()` is actually the live convention on the page this component lives
+on — it is not. `components/brand/BrandOsEditor.tsx` (the pre-existing,
+already-shipped component this card sits directly beside) and all 10
+files under `components/brand/tabs/` have zero `t()` usage between them;
+every one of them hardcodes Russian throughout. That's not an oversight
+in one file — it's a consistent, uniform pattern across this entire
+subtree, distinct from `app/settings/*`'s consistent use of `t()`.
+Converting just the new card to `t()` would make it the odd one out
+relative to its actual neighbors, not fix an inconsistency; converting
+all 11 files is a real but separate and much larger cleanup, out of
+scope for a point-fix patch and not something to do silently as a side
+effect of an unrelated audit. Left as-is. This is noted here rather than
+silently dropped so the project's own history reflects that the
+question was asked and answered, not missed.
+
+### 5. Fixed alongside #3, opportunistically: `/api/brands/os-coverage` over-fetched every brand
+
+While fixing `BrandOsCoverageCard.tsx`'s data flow for issue #4's
+investigation, noticed it fetched `/api/brands/os-coverage` with no
+filter at all — downloading and computing coverage for every active
+brand across every region just to pick out one with a client-side
+`.find()`. The route already supported `?region_id=`; added the same
+`?brand_id=` pattern and updated the card to pass it, so the response is
+scoped to the one brand the card actually renders. Verified the
+underlying filter query against the same seeded PostgreSQL data used to
+validate the original endpoint (`CoverageTest Filled Brand` /
+`CoverageTest Placeholder Brand` from the `BRAND_OS_COVERAGE_DIAGNOSTIC_20260917`
+entry above) — confirmed the equivalent SQL returns exactly one row.
+
+### What did NOT need fixing
+
+Re-read the SQL migration (`048_rss_sources_region_id_uuid.sql`), the
+verifier fix (`verify-multimarket-localization.mjs`), all 9 file-level
+`set-state-in-effect` disables, `lib/rss.ts`'s authority-weight
+threading, `lib/competitor-review.ts`'s export refactor, and the
+`competitor-mentions` route with the same skeptical eye. Found nothing
+worth changing in any of them — the SQL migration's three-section
+structure earns its complexity for an irreversible schema change; the
+verifier's regex-scoping is more complex than its sibling checks but
+justified by a concrete false-negative it was built specifically to
+catch (documented in that entry above); the lint disables are
+byte-identical and correctly placed across all 9 files; the
+authority-weight and competitor-review changes are narrow, correctly
+scoped, and don't duplicate anything.
+
+Also confirmed, while diffing the final repository state: two files that
+appeared in an early diff of this working tree —
+`.gitignore` and a stray `apply_003_settings_observability_ui.py` —
+are artifacts of this audit's own test-copy process (a shell glob
+quirk from an early dry-run setup, not anything any `apply_*.py` script
+writes) and do not appear in any of the real patch payloads. Confirmed
+by grep across every `apply_*.py` script: none reference `.gitignore`,
+and none write an `apply_*.py` file. Not a concern for the real
+repository.
+
+### Verification performed
+
+- `npx tsc --noEmit --strict` — 0 errors, after every individual edit
+  and again on the complete set.
+- `npx next build` — passed.
+- `npx eslint` on all 9 touched/added files — clean.
+- Full `npm run lint` — the same 6 pre-existing, unrelated problems as
+  every prior patch checkpoint; nothing new.
+- `npx vitest run` — 174/174, ×3 for flakiness — stable all three runs.
+- Two direct Node-level tests of the specific logic changed (the
+  stale-selection filter, and the region-scoping filter) — see #1 and
+  #3 above.
+- A raw-SQL check against the real PostgreSQL 16 instance already
+  seeded for the `BRAND_OS_COVERAGE_DIAGNOSTIC_20260917` entry, for the
+  new `brand_id` filter.
+- `node scripts/verify-amado-chain.mjs` — 17/17.
+- `node scripts/verify-market-intelligence-sprint.mjs` — 29/29.
+- `node scripts/verify-multimarket-localization.mjs` — 24/24.
+
+**Verification contract for this patch:**
+`npm test`, `npm run build`, `npm run lint`,
+`node scripts/verify-amado-chain.mjs`,
+`node scripts/verify-market-intelligence-sprint.mjs` must pass before
+commit/push. No SQL block — all nine touched files are application code
+only, no schema change.
+
+**Next:** the roadmap's only remaining open item is the ES/DE/US Brand
+OS content itself (not an engineering task — see the
+`BRAND_OS_COVERAGE_DIAGNOSTIC_20260917` entry above). No further
+engineering work is queued after this patch unless new findings come up.
+
+
+<!-- SESSION_HANDOFF_20260919 -->
+## Session handoff: state after apply_001 .. apply_011 (2026-09-19)
+
+Read this block first when starting a new dialog. It is a summary; the tagged
+sections above hold the detail and the reasoning.
+
+### Delivered (each patch = one apply_NNN_*.py, tag in this file)
+- 001 `/market/base` now respects the selected market (was reading legacy `rss_items`, no region filter).
+- 002 `/api/sources/observability` (yield/freshness/extraction/duplicate signals) + migration 048 (`rss_sources.region_id` -> uuid + FK).
+- 003 Settings UI for observability + a roadmap de-duplication fix (bug in 001's roadmap edit).
+- 004 `set-state-in-effect` lint finding resolved by documented disables + `.amado-patch-backups/**` added to eslint ignores.
+- 005 verifier assertion for the AI check scoped to its own fetch block.
+- 006 "disable low-value sources" workflow.
+- 007 `rss_sources.authority_weight` now flows into `evidence_items.source_authority` (briefing ranking was running on a constant 1.0).
+- 008 competitor-mention observability per source.
+- 009 Brand OS coverage diagnostic (`/api/brands/os-coverage`). Diagnostic only; no ES/DE/US content.
+- 010 post-sprint KISS/YAGNI/DRY cleanup (shared types in `lib/domain/observability.ts`, region/brand scoping, stale-selection bug).
+- 011 this handoff, `supabase/audit/001_schema_audit.sql`, migration 048 text aligned with production.
+
+### Production database facts (from the live audit, 2026-09-19)
+- **Production differs from `supabase/migrations`.** Example: `articles`, `brand_profiles`, `policy_snapshots` region_id FKs are ON DELETE SET NULL in production but NO ACTION per the files. Treat the audit queries as the source of truth, not the files and not a repomix snapshot.
+- **region_id**: all 8 tables (articles, brand_audiences, brand_claims, brand_products, brand_profiles, content_requests, policy_snapshots, rss_sources) are uuid + FK ON DELETE SET NULL.
+- **Correction of an earlier statement:** after running migration 048 the FK read back as SET NULL although the original text had no ON DELETE. This was first explained as Supabase platform behavior. That explanation had no evidence. The better-supported reading (see the previous bullet) is that production already had the FK, so 048 was probably a no-op there. Not provable from one readback; the repo file now states SET NULL explicitly either way.
+- **RLS**: enabled with exactly one policy on all 56 public tables. Consistent with the service-role-only architecture. Nothing to fix.
+- **`*_id` columns without FK (17)**: classified, not blindly "fixed".
+  - Intentional: `content_requests.thread_id` (grouping id, own index).
+  - No target table exists in the schema: `workspace_id` (several tables), `brief_id`, `signal_id`, `opportunity_id`, `qa_findings.evaluation_run_id`, the `*_document_id` columns.
+  - **Real FK candidates (target exists, no FK):** `brand_claims.product_id`, `content_assets.generation_run_id`, `content_packages.policy_snapshot_id` (note `content_assets.policy_snapshot_id` in the same migration does have one). Not changed: adding an FK on live data needs the orphan check first (audit statement 6).
+- **FK columns without an index (30)**: a static scan of `app/` and `lib/` (every `.eq/.in` filter, matched to the nearest `.from()`; a heuristic, not a proof) found no filter on any of them. Every hit was an indexed column (`brand_profiles`, `content_requests`, `rss_sources`) or a same-named column on another table. Deliberately no index patch (YAGNI). Revisit if a table grows large or deletes of a parent row become slow.
+- **Always-NULL columns (statement 5)**: the first run used a DO block whose NOTICE output the Supabase grid does not show ("Success. No rows returned" meant nothing). The audit file now returns a grid. **Production result not reviewed yet.** On a local seed-only copy the list was `rss_sources.avg_title_length/avg_summary_length/language_detected/language_code/rights_notes` and `content_formats.max_words`; the health timestamps will differ in production.
+
+### Open items
+1. Run audit statements 5 and 6 on production; if `orphan_rows = 0` for a candidate, ship a small patch adding that FK (ON DELETE SET NULL, matching siblings).
+2. ES/DE/US Brand OS content (business decision, not an engineering task). Run `GET /api/brands/os-coverage` on the live database first to see the real gap.
+3. Confirm which of apply_001..011 are already pushed and deployed. This session could not see the repository, only its own dry runs.
+4. Known, deliberately untouched: 6 pre-existing lint problems; `SourceHealth` declared in three files; `components/brand/*` uses hardcoded Russian (no `t()`) while `app/settings/*` uses `t()`; HANDOFF.md is large.
+
+### Working conventions and lessons (for whoever continues)
+- Deliver as `apply_NNN_*.py` with `--check/--apply/--verify/--commit/--push`; all SQL only via the Supabase SQL Editor; never `supabase db push`.
+- `run_all_patches.sh` (delivered next to the patches, not committed) with no arguments runs 001..011 and **stops at the first failing step**. An already-applied patch makes its own `--check` fail, so the chain stops there. Earlier notes said already-applied patches are skipped; that was wrong. To run a subset pass the numbers: `bash run_all_patches.sh 011`.
+- Test a patch chain from a freshly extracted pristine baseline. A long-lived working copy once carried an early draft edit in one file and produced a false failure.
+- The Supabase SQL Editor shows only the last statement's grid and hides NOTICE output: send audit statements one at a time.
+- The sandbox may reset between turns (services and directories disappear): rebuild from the uploaded repomix.
+- Generator scripts: do not backslash-escape apostrophes inside triple-quoted strings (it prints literal backslashes).
